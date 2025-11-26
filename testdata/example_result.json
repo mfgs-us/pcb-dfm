@@ -1,0 +1,179 @@
+{
+  "schema_version": "1.0.0",
+  "run": {
+    "id": "dfm-run-0001",
+    "generated_at": "2025-11-26T19:00:00Z",
+    "tool": "pcb-dfm-engine",
+    "tool_version": "0.1.0"
+  },
+  "ruleset": {
+    "name": "Standard FR4 2 layer",
+    "version": "0.1.0"
+  },
+  "design": {
+    "name": "demo_board",
+    "revision": "A1",
+    "source_files": [
+      "input/top_copper.gbr",
+      "input/bottom_copper.gbr",
+      "input/drills.xln"
+    ],
+    "stackup_layers": 2,
+    "board_size_mm": {
+      "width": 50.0,
+      "height": 30.0
+    }
+  },
+  "summary": {
+    "overall_score": 87.5,
+    "status": "warning",
+    "violations_total": 3,
+    "violations_by_severity": {
+      "info": 0,
+      "warning": 2,
+      "error": 1,
+      "critical": 0
+    }
+  },
+  "categories": [
+    {
+      "category_id": "copper_geometry",
+      "name": "Copper geometry",
+      "score": 82.0,
+      "status": "warning",
+      "violations_count": 2,
+      "checks": [
+        {
+          "check_id": "min_trace_width",
+          "name": "Minimum trace width",
+          "category_id": "copper_geometry",
+          "status": "pass",
+          "severity": "error",
+          "score": 100.0,
+          "metric": {
+            "kind": "distance",
+            "units": "um",
+            "measured_value": 110.0,
+            "target": 100.0,
+            "limit_low": 75.0,
+            "limit_high": null,
+            "margin_to_limit": 35.0
+          },
+          "violations": []
+        },
+        {
+          "check_id": "min_trace_spacing",
+          "name": "Minimum trace spacing",
+          "category_id": "copper_geometry",
+          "status": "fail",
+          "severity": "error",
+          "score": 60.0,
+          "metric": {
+            "kind": "distance",
+            "units": "um",
+            "measured_value": 70.0,
+            "target": 100.0,
+            "limit_low": 75.0,
+            "limit_high": null,
+            "margin_to_limit": -5.0
+          },
+          "violations": [
+            {
+              "message": "Trace spacing 70 um below limit 75 um between nets USB_D+ and USB_D- on top layer.",
+              "severity": "error",
+              "location": {
+                "layer": "Top",
+                "x_mm": 23.4,
+                "y_mm": 12.7,
+                "width_mm": 3.0,
+                "height_mm": 0.5,
+                "net": "USB_D+",
+                "component": null
+              },
+              "extra": {
+                "other_net": "USB_D-"
+              }
+            },
+            {
+              "message": "Trace spacing 72 um below recommended target 100 um on top layer near U1.",
+              "severity": "warning",
+              "location": {
+                "layer": "Top",
+                "x_mm": 10.1,
+                "y_mm": 8.2,
+                "width_mm": 1.5,
+                "height_mm": 0.4,
+                "net": "U1_IO0",
+                "component": "U1"
+              },
+              "extra": {}
+            }
+          ]
+        }
+      ]
+    },
+    {
+      "category_id": "drill_via_integrity",
+      "name": "Drill and via integrity",
+      "score": 93.0,
+      "status": "warning",
+      "violations_count": 1,
+      "checks": [
+        {
+          "check_id": "min_drill_size",
+          "name": "Minimum drill size",
+          "category_id": "drill_via_integrity",
+          "status": "pass",
+          "severity": "error",
+          "score": 100.0,
+          "metric": {
+            "kind": "distance",
+            "units": "um",
+            "measured_value": 220.0,
+            "target": 200.0,
+            "limit_low": 150.0,
+            "limit_high": null,
+            "margin_to_limit": 70.0
+          },
+          "violations": []
+        },
+        {
+          "check_id": "drill_aspect_ratio",
+          "name": "Drill aspect ratio",
+          "category_id": "drill_via_integrity",
+          "status": "warning",
+          "severity": "warning",
+          "score": 80.0,
+          "metric": {
+            "kind": "ratio",
+            "units": ":1",
+            "measured_value": 9.0,
+            "target": 8.0,
+            "limit_low": null,
+            "limit_high": 10.0,
+            "margin_to_limit": 1.0
+          },
+          "violations": [
+            {
+              "message": "Aspect ratio 9:1 exceeds target 8:1 for via pattern near J1.",
+              "severity": "warning",
+              "location": {
+                "layer": "Through",
+                "x_mm": 5.0,
+                "y_mm": 25.0,
+                "width_mm": 0.25,
+                "height_mm": 0.25,
+                "net": "GND",
+                "component": "J1"
+              },
+              "extra": {
+                "board_thickness_mm": 1.6,
+                "drill_diameter_mm": 0.18
+              }
+            }
+          ]
+        }
+      ]
+    }
+  ]
+}

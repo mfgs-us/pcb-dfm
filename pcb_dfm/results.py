@@ -39,7 +39,8 @@ class SummaryCounts(BaseModel):
 
 class ResultSummary(BaseModel):
     overall_score: float = Field(ge=0, le=100)
-    status: str = Field(regex="^(pass|warning|fail)$")
+    # pydantic v2: use pattern instead of regex
+    status: str = Field(pattern="^(pass|warning|fail)$")
     violations_total: int = 0
     violations_by_severity: SummaryCounts = Field(default_factory=SummaryCounts)
 
@@ -56,7 +57,7 @@ class ViolationLocation(BaseModel):
 
 class Violation(BaseModel):
     message: str
-    severity: str = Field(regex="^(info|warning|error|critical)$")
+    severity: str = Field(pattern="^(info|warning|error|critical)$")
     location: Optional[ViolationLocation] = None
     extra: Dict[str, Any] = Field(default_factory=dict)
 
@@ -76,8 +77,8 @@ class CheckResult(BaseModel):
     name: Optional[str] = None
     category_id: Optional[str] = None
 
-    status: str = Field(regex="^(pass|warning|fail|not_applicable)$")
-    severity: str = Field(regex="^(info|warning|error|critical)$")
+    status: str = Field(pattern="^(pass|warning|fail|not_applicable)$")
+    severity: str = Field(pattern="^(info|warning|error|critical)$")
 
     score: Optional[float] = Field(default=None, ge=0, le=100)
     metric: Optional[MetricResult] = None
@@ -89,7 +90,7 @@ class CategoryResult(BaseModel):
     name: Optional[str] = None
 
     score: Optional[float] = Field(default=None, ge=0, le=100)
-    status: Optional[str] = Field(default=None, regex="^(pass|warning|fail)$")
+    status: Optional[str] = Field(default=None, pattern="^(pass|warning|fail)$")
     violations_count: int = 0
 
     checks: List[CheckResult] = Field(default_factory=list)

@@ -1,0 +1,32 @@
+[build-system]
+requires = ["setuptools>=61", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pcb-dfm"
+version = "0.1.0"
+description = "Open DFM rule and report schemas and tooling for PCB manufacturing."
+readme = "README.md"
+requires-python = ">=3.9"
+license = { text = "MIT" }
+
+authors = [
+  { name = "Vincent", email = "vincent@asappcb.com" }
+]
+
+dependencies = [
+  "pydantic>=2.8,<3.0"
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.0",
+  "mypy>=1.8"
+]
+
+[project.urls]
+Homepage = "https://github.com/mfgs-us/pcb-dfm"
+
+[tool.setuptools.packages.find]
+include = ["pcb_dfm"]
+exclude = ["tests*", "scripts*", "schemas*", "checks*", "testdata*"]

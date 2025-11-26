@@ -1,0 +1,171 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mfgs.org/schemas/pcb-dfm/dfm-result.schema.json",
+  "title": "pcb-dfm DFM Result",
+  "type": "object",
+  "required": ["schema_version", "run", "ruleset", "design", "summary", "categories"],
+  "properties": {
+    "schema_version": { "type": "string" },
+
+    "run": {
+      "type": "object",
+      "required": ["id", "generated_at"],
+      "properties": {
+        "id": { "type": "string" },
+        "generated_at": { "type": "string", "format": "date-time" },
+        "tool": { "type": "string" },
+        "tool_version": { "type": "string" }
+      }
+    },
+
+    "ruleset": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": "string" }
+      }
+    },
+
+    "design": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string" },
+        "revision": { "type": "string" },
+        "source_files": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "stackup_layers": { "type": "integer" },
+        "board_size_mm": {
+          "type": "object",
+          "properties": {
+            "width": { "type": "number" },
+            "height": { "type": "number" }
+          }
+        }
+      }
+    },
+
+    "summary": {
+      "type": "object",
+      "required": ["overall_score", "status"],
+      "properties": {
+        "overall_score": { "type": "number", "minimum": 0, "maximum": 100 },
+        "status": { "type": "string", "enum": ["pass", "warning", "fail"] },
+        "violations_total": { "type": "integer" },
+        "violations_by_severity": {
+          "type": "object",
+          "properties": {
+            "info": { "type": "integer" },
+            "warning": { "type": "integer" },
+            "error": { "type": "integer" },
+            "critical": { "type": "integer" }
+          }
+        }
+      }
+    },
+
+    "categories": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["category_id", "name", "score", "checks"],
+        "properties": {
+          "category_id": { "type": "string" },
+          "name": { "type": "string" },
+          "score": { "type": "number", "minimum": 0, "maximum": 100 },
+          "status": { "type": "string", "enum": ["pass", "warning", "fail"] },
+          "violations_count": { "type": "integer" },
+          "checks": {
+            "type": "array",
+            "items": { "$ref": "#/$defs/check_result" }
+          }
+        }
+      }
+    }
+  },
+
+  "$defs": {
+    "check_result": {
+      "type": "object",
+      "required": ["check_id", "status"],
+      "properties": {
+        "check_id": { "type": "string" },
+        "name": { "type": "string" },
+        "category_id": { "type": "string" },
+
+        "status": {
+          "type": "string",
+          "enum": ["pass", "warning", "fail", "not_applicable"]
+        },
+
+        "severity": {
+          "type": "string",
+          "enum": ["info", "warning", "error", "critical"]
+        },
+
+        "score": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 100
+        },
+
+        "metric": {
+          "type": "object",
+          "properties": {
+            "kind": { "type": "string" },
+            "units": { "type": "string" },
+            "measured_value": { "type": ["number", "boolean", "null"] },
+            "target": { "type": ["number", "boolean", "null"] },
+            "limit_low": { "type": ["number", "null"] },
+            "limit_high": { "type": ["number", "null"] },
+            "margin_to_limit": { "type": ["number", "null"] }
+          }
+        },
+
+        "violations": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/violation" }
+        }
+      }
+    },
+
+    "violation": {
+      "type": "object",
+      "required": ["message"],
+      "properties": {
+        "message": { "type": "string" },
+
+        "severity": {
+          "type": "string",
+          "enum": ["info", "warning", "error", "critical"]
+        },
+
+        "location": {
+          "type": "object",
+          "properties": {
+            "layer": { "type": "string" },
+            "x_mm": { "type": "number" },
+            "y_mm": { "type": "number" },
+            "extent_mm": {
+              "type": "object",
+              "properties": {
+                "width": { "type": "number" },
+                "height": { "type": "number" }
+              }
+            },
+            "net": { "type": "string" },
+            "component": { "type": "string" }
+          }
+        },
+
+        "extra": {
+          "type": "object",
+          "additionalProperties": true
+        }
+      }
+    }
+  }
+}

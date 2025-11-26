@@ -1,60 +1,231 @@
 {
   "schema_version": "1.0.0",
-  "generated": "manual",
+  "generated": "scripts/build_index.py",
   "checks": [
-    { "id": "min_trace_width", "category_id": "copper_geometry", "filename": "min_trace_width.json" },
-    { "id": "min_trace_spacing", "category_id": "copper_geometry", "filename": "min_trace_spacing.json" },
-    { "id": "min_annular_ring", "category_id": "copper_geometry", "filename": "min_annular_ring.json" },
-    { "id": "acid_trap_angle", "category_id": "copper_geometry", "filename": "acid_trap_angle.json" },
-    { "id": "copper_density_balance", "category_id": "copper_geometry", "filename": "copper_density_balance.json" },
-    { "id": "copper_sliver_width", "category_id": "copper_geometry", "filename": "copper_sliver_width.json" },
-
-    { "id": "min_drill_size", "category_id": "drill_via_integrity", "filename": "min_drill_size.json" },
-    { "id": "drill_aspect_ratio", "category_id": "drill_via_integrity", "filename": "drill_aspect_ratio.json" },
-    { "id": "via_to_copper_clearance", "category_id": "drill_via_integrity", "filename": "via_to_copper_clearance.json" },
-    { "id": "drill_to_drill_spacing", "category_id": "drill_via_integrity", "filename": "drill_to_drill_spacing.json" },
-    { "id": "backdrill_stub_length", "category_id": "drill_via_integrity", "filename": "backdrill_stub_length.json" },
-    { "id": "via_tenting", "category_id": "drill_via_integrity", "filename": "via_tenting.json" },
-
-    { "id": "solder_mask_web", "category_id": "solder_mask_silkscreen", "filename": "solder_mask_web.json" },
-    { "id": "solder_mask_expansion", "category_id": "solder_mask_silkscreen", "filename": "solder_mask_expansion.json" },
-    { "id": "mask_to_trace_clearance", "category_id": "solder_mask_silkscreen", "filename": "mask_to_trace_clearance.json" },
-    { "id": "silkscreen_on_copper", "category_id": "solder_mask_silkscreen", "filename": "silkscreen_on_copper.json" },
-    { "id": "silkscreen_min_width", "category_id": "solder_mask_silkscreen", "filename": "silkscreen_min_width.json" },
-
-    { "id": "impedance_control", "category_id": "fabrication_stackup", "filename": "impedance_control.json" },
-    { "id": "dielectric_thickness_uniformity", "category_id": "fabrication_stackup", "filename": "dielectric_thickness_uniformity.json" },
-    { "id": "layer_registration_margin", "category_id": "fabrication_stackup", "filename": "layer_registration_margin.json" },
-    { "id": "copper_to_edge_distance", "category_id": "fabrication_stackup", "filename": "copper_to_edge_distance.json" },
-
-    { "id": "min_slot_width", "category_id": "mechanical_outline", "filename": "min_slot_width.json" },
-    { "id": "fillet_radius_milling", "category_id": "mechanical_outline", "filename": "fillet_radius_milling.json" },
-    { "id": "tab_routing_mousebites", "category_id": "mechanical_outline", "filename": "tab_routing_mousebites.json" },
-
-    { "id": "component_to_component_spacing", "category_id": "assembly", "filename": "component_to_component_spacing.json" },
-    { "id": "tombstoning_risk", "category_id": "assembly", "filename": "tombstoning_risk.json" },
-    { "id": "solder_paste_area_coverage", "category_id": "assembly", "filename": "solder_paste_area_coverage.json" },
-    { "id": "polarity_marking_consistency", "category_id": "assembly", "filename": "polarity_marking_consistency.json" },
-    { "id": "wave_solder_shadowing", "category_id": "assembly", "filename": "wave_solder_shadowing.json" },
-
-    { "id": "thermal_relief_spoke_width", "category_id": "thermal_power", "filename": "thermal_relief_spoke_width.json" },
-    { "id": "copper_thermal_area", "category_id": "thermal_power", "filename": "copper_thermal_area.json" },
-    { "id": "via_in_pad_thermal_balance", "category_id": "thermal_power", "filename": "via_in_pad_thermal_balance.json" },
-    { "id": "plane_fragmentation", "category_id": "thermal_power", "filename": "plane_fragmentation.json" },
-
-    { "id": "diff_pair_spacing", "category_id": "high_speed_si", "filename": "diff_pair_spacing.json" },
-    { "id": "diff_pair_skew", "category_id": "high_speed_si", "filename": "diff_pair_skew.json" },
-    { "id": "return_path_interruptions", "category_id": "high_speed_si", "filename": "return_path_interruptions.json" },
-    { "id": "highspeed_stub_length", "category_id": "high_speed_si", "filename": "highspeed_stub_length.json" },
-    { "id": "crosstalk_estimate", "category_id": "high_speed_si", "filename": "crosstalk_estimate.json" },
-
-    { "id": "missing_tooling_holes", "category_id": "fab_process_compatibility", "filename": "missing_tooling_holes.json" },
-    { "id": "silkscreen_over_mask_defined_pads", "category_id": "fab_process_compatibility", "filename": "silkscreen_over_mask_defined_pads.json" },
-    { "id": "unsupported_hole_types", "category_id": "fab_process_compatibility", "filename": "unsupported_hole_types.json" },
-    { "id": "aperture_definition_errors", "category_id": "fab_process_compatibility", "filename": "aperture_definition_errors.json" },
-
-    { "id": "etch_compensation_margin", "category_id": "yield_prediction", "filename": "etch_compensation_margin.json" },
-    { "id": "drill_wander_budget", "category_id": "yield_prediction", "filename": "drill_wander_budget.json" },
-    { "id": "plating_uniformity", "category_id": "yield_prediction", "filename": "plating_uniformity.json" }
+    {
+      "id": "component_to_component_spacing",
+      "category_id": "assembly",
+      "filename": "component_to_component_spacing.json"
+    },
+    {
+      "id": "polarity_marking_consistency",
+      "category_id": "assembly",
+      "filename": "polarity_marking_consistency.json"
+    },
+    {
+      "id": "solder_paste_area_coverage",
+      "category_id": "assembly",
+      "filename": "solder_paste_area_coverage.json"
+    },
+    {
+      "id": "tombstoning_risk",
+      "category_id": "assembly",
+      "filename": "tombstoning_risk.json"
+    },
+    {
+      "id": "wave_solder_shadowing",
+      "category_id": "assembly",
+      "filename": "wave_solder_shadowing.json"
+    },
+    {
+      "id": "acid_trap_angle",
+      "category_id": "copper_geometry",
+      "filename": "acid_trap_angle.json"
+    },
+    {
+      "id": "copper_density_balance",
+      "category_id": "copper_geometry",
+      "filename": "copper_density_balance.json"
+    },
+    {
+      "id": "copper_sliver_width",
+      "category_id": "copper_geometry",
+      "filename": "copper_sliver_width.json"
+    },
+    {
+      "id": "min_annular_ring",
+      "category_id": "copper_geometry",
+      "filename": "min_annular_ring.json"
+    },
+    {
+      "id": "min_trace_spacing",
+      "category_id": "copper_geometry",
+      "filename": "min_trace_spacing.json"
+    },
+    {
+      "id": "min_trace_width",
+      "category_id": "copper_geometry",
+      "filename": "min_trace_width.json"
+    },
+    {
+      "id": "backdrill_stub_length",
+      "category_id": "drill_via_integrity",
+      "filename": "backdrill_stub_length.json"
+    },
+    {
+      "id": "drill_aspect_ratio",
+      "category_id": "drill_via_integrity",
+      "filename": "drill_aspect_ratio.json"
+    },
+    {
+      "id": "drill_to_drill_spacing",
+      "category_id": "drill_via_integrity",
+      "filename": "drill_to_drill_spacing.json"
+    },
+    {
+      "id": "min_drill_size",
+      "category_id": "drill_via_integrity",
+      "filename": "min_drill_size.json"
+    },
+    {
+      "id": "via_tenting",
+      "category_id": "drill_via_integrity",
+      "filename": "via_tenting.json"
+    },
+    {
+      "id": "via_to_copper_clearance",
+      "category_id": "drill_via_integrity",
+      "filename": "via_to_copper_clearance.json"
+    },
+    {
+      "id": "aperture_definition_errors",
+      "category_id": "fab_process_compatibility",
+      "filename": "aperture_definition_errors.json"
+    },
+    {
+      "id": "missing_tooling_holes",
+      "category_id": "fab_process_compatibility",
+      "filename": "missing_tooling_holes.json"
+    },
+    {
+      "id": "silkscreen_over_mask_defined_pads",
+      "category_id": "fab_process_compatibility",
+      "filename": "silkscreen_over_mask_defined_pads.json"
+    },
+    {
+      "id": "unsupported_hole_types",
+      "category_id": "fab_process_compatibility",
+      "filename": "unsupported_hole_types.json"
+    },
+    {
+      "id": "copper_to_edge_distance",
+      "category_id": "fabrication_stackup",
+      "filename": "copper_to_edge_distance.json"
+    },
+    {
+      "id": "dielectric_thickness_uniformity",
+      "category_id": "fabrication_stackup",
+      "filename": "dielectric_thickness_uniformity.json"
+    },
+    {
+      "id": "impedance_control",
+      "category_id": "fabrication_stackup",
+      "filename": "impedance_control.json"
+    },
+    {
+      "id": "layer_registration_margin",
+      "category_id": "fabrication_stackup",
+      "filename": "layer_registration_margin.json"
+    },
+    {
+      "id": "crosstalk_estimate",
+      "category_id": "high_speed_si",
+      "filename": "crosstalk_estimate.json"
+    },
+    {
+      "id": "diff_pair_skew",
+      "category_id": "high_speed_si",
+      "filename": "diff_pair_skew.json"
+    },
+    {
+      "id": "diff_pair_spacing",
+      "category_id": "high_speed_si",
+      "filename": "diff_pair_spacing.json"
+    },
+    {
+      "id": "highspeed_stub_length",
+      "category_id": "high_speed_si",
+      "filename": "highspeed_stub_length.json"
+    },
+    {
+      "id": "return_path_interruptions",
+      "category_id": "high_speed_si",
+      "filename": "return_path_interruptions.json"
+    },
+    {
+      "id": "fillet_radius_milling",
+      "category_id": "mechanical_outline",
+      "filename": "fillet_radius_milling.json"
+    },
+    {
+      "id": "min_slot_width",
+      "category_id": "mechanical_outline",
+      "filename": "min_slot_width.json"
+    },
+    {
+      "id": "tab_routing_mousebites",
+      "category_id": "mechanical_outline",
+      "filename": "tab_routing_mousebites.json"
+    },
+    {
+      "id": "mask_to_trace_clearance",
+      "category_id": "solder_mask_silkscreen",
+      "filename": "mask_to_trace_clearance.json"
+    },
+    {
+      "id": "silkscreen_min_width",
+      "category_id": "solder_mask_silkscreen",
+      "filename": "silkscreen_min_width.json"
+    },
+    {
+      "id": "silkscreen_on_copper",
+      "category_id": "solder_mask_silkscreen",
+      "filename": "silkscreen_on_copper.json"
+    },
+    {
+      "id": "solder_mask_expansion",
+      "category_id": "solder_mask_silkscreen",
+      "filename": "solder_mask_expansion.json"
+    },
+    {
+      "id": "solder_mask_web",
+      "category_id": "solder_mask_silkscreen",
+      "filename": "solder_mask_web.json"
+    },
+    {
+      "id": "copper_thermal_area",
+      "category_id": "thermal_power",
+      "filename": "copper_thermal_area.json"
+    },
+    {
+      "id": "plane_fragmentation",
+      "category_id": "thermal_power",
+      "filename": "plane_fragmentation.json"
+    },
+    {
+      "id": "thermal_relief_spoke_width",
+      "category_id": "thermal_power",
+      "filename": "thermal_relief_spoke_width.json"
+    },
+    {
+      "id": "via_in_pad_thermal_balance",
+      "category_id": "thermal_power",
+      "filename": "via_in_pad_thermal_balance.json"
+    },
+    {
+      "id": "drill_wander_budget",
+      "category_id": "yield_prediction",
+      "filename": "drill_wander_budget.json"
+    },
+    {
+      "id": "etch_compensation_margin",
+      "category_id": "yield_prediction",
+      "filename": "etch_compensation_margin.json"
+    },
+    {
+      "id": "plating_uniformity",
+      "category_id": "yield_prediction",
+      "filename": "plating_uniformity.json"
+    }
   ]
 }

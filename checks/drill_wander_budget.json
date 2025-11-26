@@ -1,0 +1,24 @@
+{
+  "id": "drill_wander_budget",
+  "category_id": "yield_prediction",
+  "name": "Drill wander budget",
+  "description": "Estimate remaining tolerance before drill wander causes breakout or annular ring violations.",
+  "what_it_measures": "Minimum additional radial displacement allowed before drill breakout would occur.",
+  "metric": {
+    "kind": "distance",
+    "units": "um",
+    "preferred_direction": "maximize",
+    "target": { "min": 50.0 },
+    "limits": { "min": 25.0 },
+    "scale_min": 0.0,
+    "scale_max": 100.0
+  },
+  "severity_default": "info",
+  "applies_to": ["via", "pad_tht", "drill"],
+  "scoring": {
+    "enabled": true,
+    "strategy": "linear",
+    "pass_threshold": 80,
+    "weight": 0.9
+  }
+}

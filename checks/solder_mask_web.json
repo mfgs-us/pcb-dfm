@@ -1,0 +1,24 @@
+{
+  "id": "solder_mask_web",
+  "category_id": "solder_mask_silkscreen",
+  "name": "Solder mask web",
+  "description": "Check minimum solder mask web between adjacent copper openings.",
+  "what_it_measures": "Narrowest solder mask web between any two exposed copper pads or features.",
+  "metric": {
+    "kind": "distance",
+    "units": "um",
+    "preferred_direction": "maximize",
+    "target": { "min": 75.0 },
+    "limits": { "min": 50.0 },
+    "scale_min": 25.0,
+    "scale_max": 150.0
+  },
+  "severity_default": "error",
+  "applies_to": ["solder_mask", "pad_smt", "pad_tht", "via"],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 1.0
+  }
+}

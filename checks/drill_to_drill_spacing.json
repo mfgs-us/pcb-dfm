@@ -1,0 +1,24 @@
+{
+  "id": "drill_to_drill_spacing",
+  "category_id": "drill_via_integrity",
+  "name": "Drill to drill spacing",
+  "description": "Check minimum spacing between drilled holes to avoid breakout and tool wander issues.",
+  "what_it_measures": "Smallest edge to edge distance between any two holes.",
+  "metric": {
+    "kind": "distance",
+    "units": "um",
+    "preferred_direction": "maximize",
+    "target": { "min": 200.0 },
+    "limits": { "min": 150.0 },
+    "scale_min": 100.0,
+    "scale_max": 400.0
+  },
+  "severity_default": "warning",
+  "applies_to": ["drill", "via", "pad_tht"],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 0.8
+  }
+}

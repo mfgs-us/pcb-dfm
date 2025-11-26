@@ -1,0 +1,21 @@
+{
+  "id": "unsupported_hole_types",
+  "category_id": "fab_process_compatibility",
+  "name": "Unsupported hole types",
+  "description": "Flag blind, buried, or special hole types that are not supported by the selected process.",
+  "what_it_measures": "Presence of hole type definitions outside the allowed set for this fabrication process.",
+  "metric": {
+    "kind": "boolean",
+    "preferred_direction": "target_range",
+    "target": false,
+    "limits": false
+  },
+  "severity_default": "error",
+  "applies_to": ["drill", "stackup"],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 1.0
+  }
+}

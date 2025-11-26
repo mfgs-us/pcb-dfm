@@ -1,0 +1,24 @@
+{
+  "id": "copper_thermal_area",
+  "category_id": "thermal_power",
+  "name": "Copper thermal area",
+  "description": "Ensure heat generating components have enough copper area for dissipation.",
+  "what_it_measures": "Total copper area connected to each thermally significant pad or component.",
+  "metric": {
+    "kind": "area",
+    "units": "mm2",
+    "preferred_direction": "maximize",
+    "target": { "min": 50.0 },
+    "limits": { "min": 20.0 },
+    "scale_min": 0.0,
+    "scale_max": 200.0
+  },
+  "severity_default": "info",
+  "applies_to": ["component", "pad_smt", "plane"],
+  "scoring": {
+    "enabled": true,
+    "strategy": "linear",
+    "pass_threshold": 80,
+    "weight": 0.5
+  }
+}

@@ -1,0 +1,21 @@
+{
+  "id": "missing_tooling_holes",
+  "category_id": "fab_process_compatibility",
+  "name": "Missing tooling holes",
+  "description": "Verify presence and placement of required tooling holes for fabrication and assembly processes.",
+  "what_it_measures": "Whether required tooling holes are present and correctly positioned on the panel or board.",
+  "metric": {
+    "kind": "boolean",
+    "preferred_direction": "target_range",
+    "target": true,
+    "limits": true
+  },
+  "severity_default": "warning",
+  "applies_to": ["mechanical", "board_outline", "drill"],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 0.8
+  }
+}

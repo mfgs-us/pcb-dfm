@@ -1,0 +1,24 @@
+{
+  "id": "fillet_radius_milling",
+  "category_id": "mechanical_outline",
+  "name": "Internal corner radius for milling",
+  "description": "Check that internal corners respect the minimum corner radius dictated by milling tools.",
+  "what_it_measures": "Smallest internal corner radius along routed board outlines and cutouts.",
+  "metric": {
+    "kind": "distance",
+    "units": "mm",
+    "preferred_direction": "maximize",
+    "target": { "min": 0.4 },
+    "limits": { "min": 0.3 },
+    "scale_min": 0.2,
+    "scale_max": 1.0
+  },
+  "severity_default": "info",
+  "applies_to": ["board_outline", "mechanical"],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 0.4
+  }
+}

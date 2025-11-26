@@ -1,0 +1,24 @@
+{
+  "id": "via_in_pad_thermal_balance",
+  "category_id": "thermal_power",
+  "name": "Via in pad thermal balance",
+  "description": "Evaluate via count and distribution in thermal pads to avoid excessive solder wicking.",
+  "what_it_measures": "Deviation of via in pad pattern from recommended via count and fill for thermal pads.",
+  "metric": {
+    "kind": "percent",
+    "units": "%",
+    "preferred_direction": "minimize",
+    "target": { "max": 20.0 },
+    "limits": { "max": 40.0 },
+    "scale_min": 0.0,
+    "scale_max": 100.0
+  },
+  "severity_default": "warning",
+  "applies_to": ["pad_smt", "via", "plane"],
+  "scoring": {
+    "enabled": true,
+    "strategy": "linear",
+    "pass_threshold": 80,
+    "weight": 0.6
+  }
+}

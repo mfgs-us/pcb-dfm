@@ -1,0 +1,24 @@
+{
+  "id": "backdrill_stub_length",
+  "category_id": "drill_via_integrity",
+  "name": "Backdrill stub length",
+  "description": "Limit remaining via stubs after backdrilling on high speed nets.",
+  "what_it_measures": "Maximum residual stub length on backdrilled vias.",
+  "metric": {
+    "kind": "distance",
+    "units": "mm",
+    "preferred_direction": "minimize",
+    "target": { "max": 0.3 },
+    "limits": { "max": 0.5 },
+    "scale_min": 0.0,
+    "scale_max": 1.0
+  },
+  "severity_default": "warning",
+  "applies_to": ["via", "net"],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 0.6
+  }
+}

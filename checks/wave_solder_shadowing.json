@@ -1,0 +1,24 @@
+{
+  "id": "wave_solder_shadowing",
+  "category_id": "assembly",
+  "name": "Wave solder shadowing risk",
+  "description": "Detect component arrangements likely to shadow through hole pins during wave solder.",
+  "what_it_measures": "Estimated degree of solder wave shadowing based on component geometry and orientation.",
+  "metric": {
+    "kind": "percent",
+    "units": "%",
+    "preferred_direction": "minimize",
+    "target": { "max": 10.0 },
+    "limits": { "max": 30.0 },
+    "scale_min": 0.0,
+    "scale_max": 100.0
+  },
+  "severity_default": "info",
+  "applies_to": ["component", "pad_tht"],
+  "scoring": {
+    "enabled": true,
+    "strategy": "linear",
+    "pass_threshold": 80,
+    "weight": 0.4
+  }
+}

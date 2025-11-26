@@ -1,0 +1,24 @@
+{
+  "id": "component_to_component_spacing",
+  "category_id": "assembly",
+  "name": "Component to component spacing",
+  "description": "Ensure enough clearance between components for placement, soldering, and rework.",
+  "what_it_measures": "Minimum body to body distance between any two components.",
+  "metric": {
+    "kind": "distance",
+    "units": "mm",
+    "preferred_direction": "maximize",
+    "target": { "min": 0.5 },
+    "limits": { "min": 0.3 },
+    "scale_min": 0.1,
+    "scale_max": 2.0
+  },
+  "severity_default": "warning",
+  "applies_to": ["component"],
+  "scoring": {
+    "enabled": true,
+    "strategy": "linear",
+    "pass_threshold": 80,
+    "weight": 1.0
+  }
+}

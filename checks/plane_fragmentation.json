@@ -1,0 +1,24 @@
+{
+  "id": "plane_fragmentation",
+  "category_id": "thermal_power",
+  "name": "Plane fragmentation",
+  "description": "Detect fragmented power and ground planes that can cause hot spots and IR drop.",
+  "what_it_measures": "Number and size of isolated copper islands on power and ground layers.",
+  "metric": {
+    "kind": "count",
+    "units": "islands",
+    "preferred_direction": "minimize",
+    "target": { "max": 0.0 },
+    "limits": { "max": 10.0 },
+    "scale_min": 0.0,
+    "scale_max": 50.0
+  },
+  "severity_default": "warning",
+  "applies_to": ["plane"],
+  "scoring": {
+    "enabled": true,
+    "strategy": "linear",
+    "pass_threshold": 80,
+    "weight": 0.9
+  }
+}

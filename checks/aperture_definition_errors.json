@@ -1,0 +1,24 @@
+{
+  "id": "aperture_definition_errors",
+  "category_id": "fab_process_compatibility",
+  "name": "Aperture definition errors",
+  "description": "Detect missing, ambiguous, or conflicting aperture definitions in Gerber or artwork data.",
+  "what_it_measures": "Count of aperture related errors detected in the image data.",
+  "metric": {
+    "kind": "count",
+    "units": "errors",
+    "preferred_direction": "minimize",
+    "target": { "max": 0.0 },
+    "limits": { "max": 1.0 },
+    "scale_min": 0.0,
+    "scale_max": 10.0
+  },
+  "severity_default": "error",
+  "applies_to": ["other"],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 1.0
+  }
+}

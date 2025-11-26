@@ -1,0 +1,24 @@
+{
+  "id": "copper_to_edge_distance",
+  "category_id": "fabrication_stackup",
+  "name": "Copper to edge distance",
+  "description": "Verify that copper features are sufficiently pulled back from the board outline.",
+  "what_it_measures": "Smallest distance from any copper feature to the final routed board edge.",
+  "metric": {
+    "kind": "distance",
+    "units": "um",
+    "preferred_direction": "maximize",
+    "target": { "min": 250.0 },
+    "limits": { "min": 200.0 },
+    "scale_min": 100.0,
+    "scale_max": 500.0
+  },
+  "severity_default": "error",
+  "applies_to": ["trace", "plane", "pad_smt", "pad_tht"],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 1.0
+  }
+}

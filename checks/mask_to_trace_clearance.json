@@ -1,0 +1,24 @@
+{
+  "id": "mask_to_trace_clearance",
+  "category_id": "solder_mask_silkscreen",
+  "name": "Mask to trace clearance",
+  "description": "Ensure solder mask does not unintentionally expose or encroach on traces.",
+  "what_it_measures": "Minimum distance from solder mask openings to neighboring traces.",
+  "metric": {
+    "kind": "distance",
+    "units": "um",
+    "preferred_direction": "maximize",
+    "target": { "min": 50.0 },
+    "limits": { "min": 25.0 },
+    "scale_min": 10.0,
+    "scale_max": 150.0
+  },
+  "severity_default": "warning",
+  "applies_to": ["solder_mask", "trace"],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 0.7
+  }
+}

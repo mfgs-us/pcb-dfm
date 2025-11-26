@@ -1,0 +1,21 @@
+{
+  "id": "via_tenting",
+  "category_id": "drill_via_integrity",
+  "name": "Via tenting",
+  "description": "Check that vias specified as tented or untented match the solder mask geometry.",
+  "what_it_measures": "Consistency between via pad size and solder mask opening for tented or plugged vias.",
+  "metric": {
+    "kind": "boolean",
+    "preferred_direction": "target_range",
+    "target": true,
+    "limits": true
+  },
+  "severity_default": "info",
+  "applies_to": ["via", "solder_mask"],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 0.3
+  }
+}

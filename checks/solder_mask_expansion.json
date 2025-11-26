@@ -1,0 +1,24 @@
+{
+  "id": "solder_mask_expansion",
+  "category_id": "solder_mask_silkscreen",
+  "name": "Solder mask expansion",
+  "description": "Verify that solder mask openings are properly expanded or contracted relative to pad sizes.",
+  "what_it_measures": "Difference between pad copper diameter and mask opening diameter or outline.",
+  "metric": {
+    "kind": "distance",
+    "units": "um",
+    "preferred_direction": "target_range",
+    "target": { "min": 25.0, "max": 100.0 },
+    "limits": { "min": 0.0, "max": 150.0 },
+    "scale_min": -50.0,
+    "scale_max": 200.0
+  },
+  "severity_default": "warning",
+  "applies_to": ["solder_mask", "pad_smt", "pad_tht"],
+  "scoring": {
+    "enabled": true,
+    "strategy": "linear",
+    "pass_threshold": 80,
+    "weight": 0.8
+  }
+}

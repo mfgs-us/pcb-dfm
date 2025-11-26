@@ -1,0 +1,24 @@
+{
+  "id": "crosstalk_estimate",
+  "category_id": "high_speed_si",
+  "name": "Crosstalk risk estimate",
+  "description": "Estimate near end and far end crosstalk risk based on parallelism and spacing between sensitive nets.",
+  "what_it_measures": "Estimated coupling coefficient or risk percentage for critical net pairs.",
+  "metric": {
+    "kind": "percent",
+    "units": "%",
+    "preferred_direction": "minimize",
+    "target": { "max": 10.0 },
+    "limits": { "max": 25.0 },
+    "scale_min": 0.0,
+    "scale_max": 100.0
+  },
+  "severity_default": "info",
+  "applies_to": ["trace", "net"],
+  "scoring": {
+    "enabled": true,
+    "strategy": "linear",
+    "pass_threshold": 80,
+    "weight": 0.7
+  }
+}

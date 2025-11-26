@@ -1,0 +1,24 @@
+{
+  "id": "solder_paste_area_coverage",
+  "category_id": "assembly",
+  "name": "Solder paste area coverage",
+  "description": "Check that stencil apertures provide adequate solder paste coverage for each pad.",
+  "what_it_measures": "Ratio of stencil aperture area to pad area for each paste defined pad.",
+  "metric": {
+    "kind": "percent",
+    "units": "%",
+    "preferred_direction": "target_range",
+    "target": { "min": 50.0, "max": 120.0 },
+    "limits": { "min": 30.0, "max": 150.0 },
+    "scale_min": 0.0,
+    "scale_max": 200.0
+  },
+  "severity_default": "warning",
+  "applies_to": ["pad_smt", "mechanical"],
+  "scoring": {
+    "enabled": true,
+    "strategy": "linear",
+    "pass_threshold": 80,
+    "weight": 0.9
+  }
+}

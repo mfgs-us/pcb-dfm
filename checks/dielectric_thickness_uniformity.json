@@ -1,0 +1,24 @@
+{
+  "id": "dielectric_thickness_uniformity",
+  "category_id": "fabrication_stackup",
+  "name": "Dielectric thickness uniformity",
+  "description": "Check deviation between designed and nominal dielectric thicknesses.",
+  "what_it_measures": "Deviation of dielectric thickness from target for each core or prepreg layer.",
+  "metric": {
+    "kind": "distance",
+    "units": "um",
+    "preferred_direction": "minimize",
+    "target": { "max": 10.0 },
+    "limits": { "max": 25.0 },
+    "scale_min": 0.0,
+    "scale_max": 50.0
+  },
+  "severity_default": "info",
+  "applies_to": ["stackup"],
+  "scoring": {
+    "enabled": true,
+    "strategy": "linear",
+    "pass_threshold": 80,
+    "weight": 0.5
+  }
+}

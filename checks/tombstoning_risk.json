@@ -1,0 +1,24 @@
+{
+  "id": "tombstoning_risk",
+  "category_id": "assembly",
+  "name": "Tombstoning risk",
+  "description": "Evaluate pad and thermal symmetry for small passive components to reduce tombstoning.",
+  "what_it_measures": "Imbalance in pad size and thermal connection between the two pads of small passives.",
+  "metric": {
+    "kind": "percent",
+    "units": "%",
+    "preferred_direction": "minimize",
+    "target": { "max": 10.0 },
+    "limits": { "max": 25.0 },
+    "scale_min": 0.0,
+    "scale_max": 50.0
+  },
+  "severity_default": "warning",
+  "applies_to": ["component", "pad_smt", "plane"],
+  "scoring": {
+    "enabled": true,
+    "strategy": "linear",
+    "pass_threshold": 80,
+    "weight": 0.8
+  }
+}

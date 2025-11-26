@@ -1,0 +1,24 @@
+{
+  "id": "layer_registration_margin",
+  "category_id": "fabrication_stackup",
+  "name": "Layer registration margin",
+  "description": "Ensure enough copper margin for expected layer to layer registration error.",
+  "what_it_measures": "Minimum additional copper margin that remains if layers misregister by the specified tolerance.",
+  "metric": {
+    "kind": "distance",
+    "units": "um",
+    "preferred_direction": "maximize",
+    "target": { "min": 50.0 },
+    "limits": { "min": 25.0 },
+    "scale_min": 0.0,
+    "scale_max": 100.0
+  },
+  "severity_default": "warning",
+  "applies_to": ["via", "pad_tht", "stackup"],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 0.8
+  }
+}

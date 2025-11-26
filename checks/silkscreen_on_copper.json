@@ -1,0 +1,24 @@
+{
+  "id": "silkscreen_on_copper",
+  "category_id": "solder_mask_silkscreen",
+  "name": "Silkscreen on exposed copper",
+  "description": "Detect silkscreen ink printing directly on exposed copper pads.",
+  "what_it_measures": "Total overlap area between silkscreen objects and exposed copper areas.",
+  "metric": {
+    "kind": "area",
+    "units": "mm2",
+    "preferred_direction": "minimize",
+    "target": { "max": 0.0 },
+    "limits": { "max": 0.5 },
+    "scale_min": 0.0,
+    "scale_max": 5.0
+  },
+  "severity_default": "warning",
+  "applies_to": ["silkscreen", "pad_smt", "pad_tht"],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 0.6
+  }
+}

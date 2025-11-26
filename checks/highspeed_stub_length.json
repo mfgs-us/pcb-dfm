@@ -1,0 +1,24 @@
+{
+  "id": "highspeed_stub_length",
+  "category_id": "high_speed_si",
+  "name": "High speed stub length",
+  "description": "Check that stubs on high speed nets are short enough to avoid significant reflections.",
+  "what_it_measures": "Maximum length of unterminated stubs on nets classified as high speed.",
+  "metric": {
+    "kind": "distance",
+    "units": "mm",
+    "preferred_direction": "minimize",
+    "target": { "max": 5.0 },
+    "limits": { "max": 10.0 },
+    "scale_min": 0.0,
+    "scale_max": 20.0
+  },
+  "severity_default": "warning",
+  "applies_to": ["trace", "net"],
+  "scoring": {
+    "enabled": true,
+    "strategy": "linear",
+    "pass_threshold": 80,
+    "weight": 0.9
+  }
+}

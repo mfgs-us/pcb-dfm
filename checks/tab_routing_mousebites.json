@@ -1,0 +1,24 @@
+{
+  "id": "tab_routing_mousebites",
+  "category_id": "mechanical_outline",
+  "name": "Tab routing and mousebites",
+  "description": "Verify that breakaway tabs and mousebites follow recommended drill sizes and spacing.",
+  "what_it_measures": "Deviation of mousebite drill patterns and web thickness from recommended values.",
+  "metric": {
+    "kind": "percent",
+    "units": "%",
+    "preferred_direction": "minimize",
+    "target": { "max": 0.0 },
+    "limits": { "max": 20.0 },
+    "scale_min": 0.0,
+    "scale_max": 50.0
+  },
+  "severity_default": "info",
+  "applies_to": ["mechanical", "drill", "board_outline"],
+  "scoring": {
+    "enabled": true,
+    "strategy": "linear",
+    "pass_threshold": 80,
+    "weight": 0.3
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "id": "silkscreen_min_width",
+  "category_id": "solder_mask_silkscreen",
+  "name": "Silkscreen minimum width",
+  "description": "Check that silkscreen strokes and text are thick enough to print reliably.",
+  "what_it_measures": "Smallest silkscreen line or font stroke width on each side.",
+  "metric": {
+    "kind": "distance",
+    "units": "um",
+    "preferred_direction": "maximize",
+    "target": { "min": 100.0 },
+    "limits": { "min": 80.0 },
+    "scale_min": 50.0,
+    "scale_max": 200.0
+  },
+  "severity_default": "info",
+  "applies_to": ["silkscreen"],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 0.3
+  }
+}

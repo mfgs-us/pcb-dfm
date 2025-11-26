@@ -1,0 +1,24 @@
+{
+  "id": "diff_pair_spacing",
+  "category_id": "high_speed_si",
+  "name": "Differential pair spacing",
+  "description": "Check that differential pairs maintain their specified intra pair spacing.",
+  "what_it_measures": "Deviation of actual gap between paired traces from the nominal design spacing.",
+  "metric": {
+    "kind": "distance",
+    "units": "um",
+    "preferred_direction": "minimize",
+    "target": { "max": 25.0 },
+    "limits": { "max": 50.0 },
+    "scale_min": 0.0,
+    "scale_max": 100.0
+  },
+  "severity_default": "warning",
+  "applies_to": ["trace", "net"],
+  "scoring": {
+    "enabled": true,
+    "strategy": "linear",
+    "pass_threshold": 80,
+    "weight": 0.8
+  }
+}

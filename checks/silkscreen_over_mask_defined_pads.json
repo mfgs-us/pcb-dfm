@@ -1,0 +1,24 @@
+{
+  "id": "silkscreen_over_mask_defined_pads",
+  "category_id": "fab_process_compatibility",
+  "name": "Silkscreen over mask defined pads",
+  "description": "Detect silkscreen touching mask defined pads where process rules forbid ink overlap.",
+  "what_it_measures": "Overlap between silkscreen features and mask defined pad boundaries.",
+  "metric": {
+    "kind": "area",
+    "units": "mm2",
+    "preferred_direction": "minimize",
+    "target": { "max": 0.0 },
+    "limits": { "max": 0.2 },
+    "scale_min": 0.0,
+    "scale_max": 2.0
+  },
+  "severity_default": "warning",
+  "applies_to": ["silkscreen", "solder_mask", "pad_smt"],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 0.6
+  }
+}

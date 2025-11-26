@@ -1,0 +1,24 @@
+{
+  "id": "thermal_relief_spoke_width",
+  "category_id": "thermal_power",
+  "name": "Thermal relief spoke width",
+  "description": "Check that thermal relief spokes provide both solderability and current carrying capacity.",
+  "what_it_measures": "Minimum width of thermal relief spokes connecting pads to planes.",
+  "metric": {
+    "kind": "distance",
+    "units": "um",
+    "preferred_direction": "target_range",
+    "target": { "min": 150.0, "max": 300.0 },
+    "limits": { "min": 100.0, "max": 400.0 },
+    "scale_min": 50.0,
+    "scale_max": 500.0
+  },
+  "severity_default": "warning",
+  "applies_to": ["pad_tht", "pad_smt", "plane"],
+  "scoring": {
+    "enabled": true,
+    "strategy": "linear",
+    "pass_threshold": 80,
+    "weight": 0.7
+  }
+}

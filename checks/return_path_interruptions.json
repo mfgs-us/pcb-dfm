@@ -1,0 +1,24 @@
+{
+  "id": "return_path_interruptions",
+  "category_id": "high_speed_si",
+  "name": "Return path interruptions",
+  "description": "Detect slots, gaps, or splits that interrupt the reference plane beneath high speed traces.",
+  "what_it_measures": "Total length of high speed traces that cross plane gaps or splits without nearby stitching vias.",
+  "metric": {
+    "kind": "distance",
+    "units": "mm",
+    "preferred_direction": "minimize",
+    "target": { "max": 0.0 },
+    "limits": { "max": 10.0 },
+    "scale_min": 0.0,
+    "scale_max": 50.0
+  },
+  "severity_default": "error",
+  "applies_to": ["trace", "plane", "net"],
+  "scoring": {
+    "enabled": true,
+    "strategy": "linear",
+    "pass_threshold": 90,
+    "weight": 1.0
+  }
+}

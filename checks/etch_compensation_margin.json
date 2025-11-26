@@ -1,0 +1,24 @@
+{
+  "id": "etch_compensation_margin",
+  "category_id": "yield_prediction",
+  "name": "Etch compensation margin",
+  "description": "Estimate margin between copper feature sizes and the minimum etch process capability.",
+  "what_it_measures": "Average and worst case margin between actual feature widths or spaces and the process limit values.",
+  "metric": {
+    "kind": "percent",
+    "units": "%",
+    "preferred_direction": "maximize",
+    "target": { "min": 20.0 },
+    "limits": { "min": 0.0 },
+    "scale_min": -20.0,
+    "scale_max": 50.0
+  },
+  "severity_default": "info",
+  "applies_to": ["trace", "plane", "pad_smt", "pad_tht"],
+  "scoring": {
+    "enabled": true,
+    "strategy": "linear",
+    "pass_threshold": 80,
+    "weight": 1.0
+  }
+}

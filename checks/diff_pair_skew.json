@@ -1,0 +1,24 @@
+{
+  "id": "diff_pair_skew",
+  "category_id": "high_speed_si",
+  "name": "Differential pair skew",
+  "description": "Limit length mismatch between members of each differential pair.",
+  "what_it_measures": "Maximum length difference between traces in each diff pair.",
+  "metric": {
+    "kind": "distance",
+    "units": "mm",
+    "preferred_direction": "minimize",
+    "target": { "max": 0.5 },
+    "limits": { "max": 1.0 },
+    "scale_min": 0.0,
+    "scale_max": 2.0
+  },
+  "severity_default": "warning",
+  "applies_to": ["trace", "net"],
+  "scoring": {
+    "enabled": true,
+    "strategy": "linear",
+    "pass_threshold": 80,
+    "weight": 1.0
+  }
+}

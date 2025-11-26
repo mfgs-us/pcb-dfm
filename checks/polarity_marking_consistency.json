@@ -1,0 +1,21 @@
+{
+  "id": "polarity_marking_consistency",
+  "category_id": "assembly",
+  "name": "Polarity marking consistency",
+  "description": "Verify that component polarity markings and silkscreen indicators are present and aligned.",
+  "what_it_measures": "Presence and alignment consistency between schematic polarity, footprint pads, and silkscreen markings.",
+  "metric": {
+    "kind": "boolean",
+    "preferred_direction": "target_range",
+    "target": true,
+    "limits": true
+  },
+  "severity_default": "warning",
+  "applies_to": ["component", "silkscreen", "pad_smt", "net"],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 0.7
+  }
+}

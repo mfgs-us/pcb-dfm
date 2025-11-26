@@ -1,0 +1,24 @@
+{
+  "id": "drill_aspect_ratio",
+  "category_id": "drill_via_integrity",
+  "name": "Drill aspect ratio",
+  "description": "Limit the aspect ratio of plated through holes for reliable plating.",
+  "what_it_measures": "Maximum board_thickness / drill_diameter across all plated holes.",
+  "metric": {
+    "kind": "ratio",
+    "units": ":1",
+    "preferred_direction": "minimize",
+    "target": { "max": 8.0 },
+    "limits": { "max": 10.0 },
+    "scale_min": 4.0,
+    "scale_max": 12.0
+  },
+  "severity_default": "error",
+  "applies_to": ["via", "pad_tht"],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 1.0
+  }
+}

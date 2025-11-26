@@ -1,0 +1,273 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mfgs.org/schemas/pcb-dfm/ruleset.schema.json",
+  "title": "pcb-dfm Rule Set",
+  "description": "Schema for describing PCB DFM rule sets for the MFGS pcb-dfm project.",
+  "type": "object",
+  "required": ["schema_version", "metadata", "categories"],
+  "properties": {
+    "schema_version": {
+      "type": "string",
+      "description": "Semantic version of this ruleset format, for example 1.0.0."
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Metadata about this DFM ruleset.",
+      "required": ["name", "version"],
+      "properties": {
+        "name": {
+          "type": "string",
+          "description": "Human readable name of this ruleset, for example 'Standard FR4 4 layer' or 'HDI v1'."
+        },
+        "version": {
+          "type": "string",
+          "description": "Semantic version for this ruleset instance, for example 0.1.0."
+        },
+        "organization": {
+          "type": "string",
+          "description": "Maintaining organization, for example 'MFGS'."
+        },
+        "process_notes": {
+          "type": "string",
+          "description": "Freeform notes on the manufacturing process window this ruleset targets."
+        }
+      },
+      "additionalProperties": false
+    },
+    "categories": {
+      "type": "array",
+      "description": "Top level DFM categories, such as 'Copper geometry' or 'Drill and via integrity'.",
+      "items": {
+        "$ref": "#/$defs/category"
+      },
+      "minItems": 1
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "category": {
+      "type": "object",
+      "required": ["id", "name", "checks"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Stable identifier for the category, for example 'copper_geometry'.",
+          "pattern": "^[a-zA-Z0-9_.-]+$"
+        },
+        "name": {
+          "type": "string",
+          "description": "Human readable category name."
+        },
+        "description": {
+          "type": "string",
+          "description": "Description of what this category covers."
+        },
+        "checks": {
+          "type": "array",
+          "description": "DFM checks that belong to this category.",
+          "items": {
+            "$ref": "#/$defs/check"
+          },
+          "minItems": 1
+        }
+      },
+      "additionalProperties": false
+    },
+    "check": {
+      "type": "object",
+      "description": "Single DFM check definition.",
+      "required": ["id", "name", "metric"],
+      "properties": {
+        "id": {
+          "type": "string",
+          "description": "Stable identifier for the check, for example 'min_trace_width' or 'annular_ring'.",
+          "pattern": "^[a-zA-Z0-9_.-]+$"
+        },
+        "name": {
+          "type": "string",
+          "description": "Human readable name, for example 'Minimum trace width'."
+        },
+        "description": {
+          "type": "string",
+          "description": "Description of the rule and why it exists."
+        },
+        "what_it_measures": {
+          "type": "string",
+          "description": "Short description of the underlying physical quantity this check measures, for example 'Thinnest copper feature per layer'."
+        },
+        "metric": {
+          "$ref": "#/$defs/metric_spec"
+        },
+        "severity_default": {
+          "type": "string",
+          "description": "Default severity if the check fails.",
+          "enum": ["info", "warning", "error", "critical"]
+        },
+        "applies_to": {
+          "type": "array",
+          "description": "Optional hints about which PCB objects this check applies to.",
+          "items": {
+            "type": "string",
+            "enum": [
+              "trace",
+              "pad_smt",
+              "pad_tht",
+              "via",
+              "plane",
+              "silkscreen",
+              "solder_mask",
+              "drill",
+              "board_outline",
+              "mechanical",
+              "component",
+              "net",
+              "stackup",
+              "other"
+            ]
+          }
+        },
+        "tags": {
+          "type": "array",
+          "description": "Freeform tags for grouping or filtering rules.",
+          "items": {
+            "type": "string"
+          }
+        },
+        "scoring": {
+          "$ref": "#/$defs/scoring_spec"
+        }
+      },
+      "additionalProperties": false
+    },
+    "metric_spec": {
+      "type": "object",
+      "description": "Definition of how this check is measured and scaled.",
+      "required": ["kind"],
+      "properties": {
+        "kind": {
+          "type": "string",
+          "description": "Abstract type of metric.",
+          "enum": [
+            "distance",
+            "percent",
+            "ratio",
+            "boolean",
+            "count",
+            "area",
+            "angle",
+            "impedance",
+            "thickness",
+            "time",
+            "score"
+          ]
+        },
+        "units": {
+          "type": "string",
+          "description": "Human readable unit symbol when applicable, for example 'um', 'mm', 'mil', 'percent', 'ohm'."
+        },
+        "scale_min": {
+          "type": "number",
+          "description": "Minimum of the expected raw measurement scale. Useful for mapping to 0 to 100 scores."
+        },
+        "scale_max": {
+          "type": "number",
+          "description": "Maximum of the expected raw measurement scale."
+        },
+        "preferred_direction": {
+          "type": "string",
+          "description": "Whether smaller, larger, or in range values are better.",
+          "enum": ["minimize", "maximize", "target_range"]
+        },
+        "target": {
+          "description": "Target value or range for optimal manufacturing.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/range"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            }
+          ]
+        },
+        "limits": {
+          "description": "Hard process limits for this metric. Values outside this are not fabricable.",
+          "anyOf": [
+            {
+              "$ref": "#/$defs/range"
+            },
+            {
+              "type": "number"
+            },
+            {
+              "type": "boolean"
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "range": {
+      "type": "object",
+      "description": "Numeric range with inclusive or exclusive endpoints.",
+      "properties": {
+        "min": {
+          "type": "number",
+          "description": "Lower bound."
+        },
+        "max": {
+          "type": "number",
+          "description": "Upper bound."
+        },
+        "inclusive_min": {
+          "type": "boolean",
+          "description": "Whether the lower bound is inclusive.",
+          "default": true
+        },
+        "inclusive_max": {
+          "type": "boolean",
+          "description": "Whether the upper bound is inclusive.",
+          "default": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "scoring_spec": {
+      "type": "object",
+      "description": "Optional mapping from raw measurement to a 0 to 100 score.",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": false
+        },
+        "strategy": {
+          "type": "string",
+          "description": "How to map raw values to scores.",
+          "enum": ["binary", "linear", "piecewise", "log", "custom"]
+        },
+        "good_range": {
+          "$ref": "#/$defs/range",
+          "description": "Range that should map to scores near 100."
+        },
+        "bad_range": {
+          "$ref": "#/$defs/range",
+          "description": "Range that should map to scores near 0."
+        },
+        "pass_threshold": {
+          "type": "number",
+          "description": "Score threshold that counts as a pass, usually 100 for strict binary or something like 80 for graded.",
+          "minimum": 0,
+          "maximum": 100
+        },
+        "weight": {
+          "type": "number",
+          "description": "Relative weight when aggregating this check into a composite DFM score.",
+          "minimum": 0
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

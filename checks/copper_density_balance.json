@@ -1,0 +1,24 @@
+{
+  "id": "copper_density_balance",
+  "category_id": "copper_geometry",
+  "name": "Copper density balance",
+  "description": "Check for large copper density variations that can cause warp, bow, or etch non uniformity.",
+  "what_it_measures": "Copper fill percentage in sliding windows across each layer.",
+  "metric": {
+    "kind": "percent",
+    "units": "%",
+    "preferred_direction": "target_range",
+    "target": { "min": 30.0, "max": 70.0 },
+    "limits": { "min": 10.0, "max": 90.0 },
+    "scale_min": 0.0,
+    "scale_max": 100.0
+  },
+  "severity_default": "warning",
+  "applies_to": ["plane", "trace"],
+  "scoring": {
+    "enabled": true,
+    "strategy": "linear",
+    "pass_threshold": 80,
+    "weight": 1.0
+  }
+}

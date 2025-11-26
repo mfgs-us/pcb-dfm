@@ -1,0 +1,24 @@
+{
+  "id": "acid_trap_angle",
+  "category_id": "copper_geometry",
+  "name": "Minimum copper corner angle",
+  "description": "Detect acute copper angles that could create acid traps during etching.",
+  "what_it_measures": "Smallest internal copper corner angle found in traces and pours.",
+  "metric": {
+    "kind": "angle",
+    "units": "deg",
+    "preferred_direction": "maximize",
+    "target": { "min": 90.0 },
+    "limits": { "min": 60.0 },
+    "scale_min": 45.0,
+    "scale_max": 135.0
+  },
+  "severity_default": "warning",
+  "applies_to": ["trace", "plane"],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 0.5
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "id": "min_drill_size",
+  "category_id": "drill_via_integrity",
+  "name": "Minimum drill size",
+  "description": "Verify that the smallest specified drill is manufacturable.",
+  "what_it_measures": "Smallest finished drill diameter across all mechanical and plated holes.",
+  "metric": {
+    "kind": "distance",
+    "units": "um",
+    "preferred_direction": "maximize",
+    "target": { "min": 200.0 },
+    "limits": { "min": 150.0 },
+    "scale_min": 100.0,
+    "scale_max": 400.0
+  },
+  "severity_default": "error",
+  "applies_to": ["drill", "via", "pad_tht"],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 1.0
+  }
+}

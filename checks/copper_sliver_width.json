@@ -1,0 +1,24 @@
+{
+  "id": "copper_sliver_width",
+  "category_id": "copper_geometry",
+  "name": "Copper sliver width",
+  "description": "Detect very thin isolated copper slivers that may peel or over etch.",
+  "what_it_measures": "Narrowest width of isolated copper islands or spokes.",
+  "metric": {
+    "kind": "distance",
+    "units": "um",
+    "preferred_direction": "maximize",
+    "target": { "min": 150.0 },
+    "limits": { "min": 100.0 },
+    "scale_min": 50.0,
+    "scale_max": 250.0
+  },
+  "severity_default": "warning",
+  "applies_to": ["trace", "plane"],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 0.7
+  }
+}

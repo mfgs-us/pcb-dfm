@@ -1,0 +1,24 @@
+{
+  "id": "min_annular_ring",
+  "category_id": "copper_geometry",
+  "name": "Minimum annular ring",
+  "description": "Ensure sufficient copper land around drilled holes for reliable plating and registration tolerance.",
+  "what_it_measures": "Narrowest copper ring width around any plated through hole or via.",
+  "metric": {
+    "kind": "distance",
+    "units": "um",
+    "preferred_direction": "maximize",
+    "target": { "min": 125.0 },
+    "limits": { "min": 100.0 },
+    "scale_min": 75.0,
+    "scale_max": 200.0
+  },
+  "severity_default": "error",
+  "applies_to": ["via", "pad_tht"],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 1.0
+  }
+}

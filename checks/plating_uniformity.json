@@ -1,0 +1,24 @@
+{
+  "id": "plating_uniformity",
+  "category_id": "yield_prediction",
+  "name": "Plating thickness uniformity",
+  "description": "Estimate the variation in copper plating thickness in holes and on surfaces.",
+  "what_it_measures": "Predicted or measured deviation of plating thickness from nominal across the panel.",
+  "metric": {
+    "kind": "percent",
+    "units": "%",
+    "preferred_direction": "minimize",
+    "target": { "max": 10.0 },
+    "limits": { "max": 20.0 },
+    "scale_min": 0.0,
+    "scale_max": 40.0
+  },
+  "severity_default": "info",
+  "applies_to": ["via", "pad_tht", "trace", "plane"],
+  "scoring": {
+    "enabled": true,
+    "strategy": "linear",
+    "pass_threshold": 80,
+    "weight": 0.8
+  }
+}

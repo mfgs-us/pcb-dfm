@@ -1,0 +1,55 @@
+{
+  "schema_version": "1.0.0",
+  "categories": [
+    {
+      "id": "copper_geometry",
+      "name": "Copper geometry",
+      "description": "Trace widths, clearances, annular rings, copper balancing, slivers and general photolithography or etch related constraints."
+    },
+    {
+      "id": "drill_via_integrity",
+      "name": "Drill and via integrity",
+      "description": "Drill sizes, via annular rings, aspect ratio, spacing, tenting, and other drill process constraints."
+    },
+    {
+      "id": "solder_mask_silkscreen",
+      "name": "Solder mask and silkscreen",
+      "description": "Mask openings, mask clearance, mask webbing, silkscreen printability, and mask defined pad constraints."
+    },
+    {
+      "id": "fabrication_stackup",
+      "name": "Fabrication stackup",
+      "description": "Dielectric thickness, material specs, layer registration, impedance controlled structures, and copper to edge constraints."
+    },
+    {
+      "id": "mechanical_outline",
+      "name": "Mechanical and outline",
+      "description": "Board outline, milling, slots, corner radii, tabs, mousebites, and mechanical drill features."
+    },
+    {
+      "id": "assembly",
+      "name": "Assembly",
+      "description": "Component spacing, polarity, reflow considerations, paste area, tombstoning, and wave solder constraints."
+    },
+    {
+      "id": "thermal_power",
+      "name": "Thermal and power integrity",
+      "description": "Thermal reliefs, copper areas for heat dissipation, plane fragmentation, and via in pad thermal management."
+    },
+    {
+      "id": "high_speed_si",
+      "name": "High speed and signal integrity",
+      "description": "Differential pair spacing and skew, return path continuity, stub length, and crosstalk prediction."
+    },
+    {
+      "id": "fab_process_compatibility",
+      "name": "Fabrication process compatibility",
+      "description": "Non standard hole types, missing tooling, silkscreen issues, and aperture definition errors."
+    },
+    {
+      "id": "yield_prediction",
+      "name": "Yield prediction",
+      "description": "Quantitative estimates of etch margin, drill wander tolerance, and plating thickness uniformity."
+    }
+  ]
+}

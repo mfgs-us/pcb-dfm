@@ -9,6 +9,10 @@ from .definitions import (
 # Import implemented checks so they register themselves
 from . import impl_copper_to_edge_distance  # noqa: F401
 from . import impl_min_drill_size  # noqa: F401
+from . import impl_min_trace_spacing  # noqa: F401
+from . import impl_min_trace_width  # noqa: F401
+from . import impl_via_to_copper_clearance  # noqa: F401
+from . import impl_drill_aspect_ratio  # noqa: F401
 
 __all__ = [
     "CheckDefinition",

@@ -12,16 +12,16 @@
 - [ ] copper_density_balance
 - [ ] copper_sliver_width
 - [ ] min_annular_ring
-- [ ] min_trace_spacing
-- [ ] min_trace_width
+- [x] min_trace_spacing
+- [x] min_trace_width
 
 ## drill_via_integrity
 - [ ] backdrill_stub_length
-- [ ] drill_aspect_ratio
+- [x] drill_aspect_ratio
 - [ ] drill_to_drill_spacing
 - [x] min_drill_size
 - [ ] via_tenting
-- [ ] via_to_copper_clearance
+- [x] via_to_copper_clearance
 
 ## fab_process_compatibility
 - [ ] aperture_definition_errors

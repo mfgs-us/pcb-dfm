@@ -15,7 +15,8 @@ authors = [
 ]
 
 dependencies = [
-  "pydantic>=2.8,<3.0"
+  "pydantic>=2.8,<3.0",
+  "pcb-tools>=0.8.0"
 ]
 
 [project.optional-dependencies]

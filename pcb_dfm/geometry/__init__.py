@@ -3,6 +3,7 @@
 from .primitives import Point2D, Bounds, Polygon
 from .layer_model import BoardLayer, BoardGeometry
 from .gerber_parser import build_board_geometry
+from . import queries as queries
 
 __all__ = [
     "Point2D",
@@ -11,4 +12,5 @@ __all__ = [
     "BoardLayer",
     "BoardGeometry",
     "build_board_geometry",
+    "queries",
 ]

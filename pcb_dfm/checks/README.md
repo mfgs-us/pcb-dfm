@@ -10,15 +10,15 @@
 ## copper_geometry
 - [ ] acid_trap_angle
 - [ ] copper_density_balance
-- [ ] copper_sliver_width
-- [ ] min_annular_ring
+- [x] copper_sliver_width
+- [x] min_annular_ring
 - [x] min_trace_spacing
 - [x] min_trace_width
 
 ## drill_via_integrity
 - [ ] backdrill_stub_length
 - [x] drill_aspect_ratio
-- [ ] drill_to_drill_spacing
+- [x] drill_to_drill_spacing
 - [x] min_drill_size
 - [ ] via_tenting
 - [x] via_to_copper_clearance
@@ -48,9 +48,9 @@
 - [ ] tab_routing_mousebites
 
 ## solder_mask_silkscreen
-- [ ] mask_to_trace_clearance
+- [x] mask_to_trace_clearance
 - [ ] silkscreen_min_width
-- [ ] silkscreen_on_copper
+- [x] silkscreen_on_copper
 - [ ] solder_mask_expansion
 - [ ] solder_mask_web
 

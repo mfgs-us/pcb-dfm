@@ -57,7 +57,7 @@
 ## thermal_power
 - [ ] copper_thermal_area
 - [ ] plane_fragmentation
-- [ ] thermal_relief_spoke_width
+- [~] thermal_relief_spoke_width
 - [ ] via_in_pad_thermal_balance
 
 ## yield_prediction

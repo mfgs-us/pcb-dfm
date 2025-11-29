@@ -18,6 +18,10 @@ from . import impl_drill_to_drill_spacing
 from . import impl_mask_to_trace_clearance
 from . import impl_min_annular_ring
 from . import impl_silkscreen_on_copper
+from . import impl_component_to_component_spacing
+from . import impl_copper_density_balance
+from . import impl_plane_fragmentation
+from . import impl_thermal_relief_spoke_width
 
 __all__ = [
     "CheckDefinition",

@@ -1,15 +1,15 @@
 # PCB-DFM Check Implementation Tracker
 
 ## assembly
-- [ ] component_to_component_spacing
+- [x] component_to_component_spacing
 - [ ] polarity_marking_consistency
 - [ ] solder_paste_area_coverage
 - [ ] tombstoning_risk
 - [ ] wave_solder_shadowing
 
 ## copper_geometry
-- [ ] acid_trap_angle
-- [ ] copper_density_balance
+- [x] acid_trap_angle
+- [x] copper_density_balance
 - [x] copper_sliver_width
 - [x] min_annular_ring
 - [x] min_trace_spacing
@@ -24,8 +24,8 @@
 - [x] via_to_copper_clearance
 
 ## fab_process_compatibility
-- [ ] aperture_definition_errors
-- [ ] missing_tooling_holes
+- [x] aperture_definition_errors
+- [x] missing_tooling_holes
 - [x] silkscreen_over_mask_defined_pads
 - [ ] unsupported_hole_types
 
@@ -55,10 +55,10 @@
 - [x] solder_mask_web
 
 ## thermal_power
-- [ ] copper_thermal_area
+- [x] copper_thermal_area
 - [ ] plane_fragmentation
 - [~] thermal_relief_spoke_width
-- [ ] via_in_pad_thermal_balance
+- [x] via_in_pad_thermal_balance
 
 ## yield_prediction
 - [ ] drill_wander_budget

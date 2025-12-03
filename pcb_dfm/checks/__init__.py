@@ -28,6 +28,12 @@ from . import impl_solder_mask_web
 from . import impl_silkscreen_over_mask_defined_pads
 from . import impl_via_tenting
 from . import impl_acid_trap_angle
+from . import impl_copper_thermal_area
+from . import impl_via_in_pad_thermal_balance
+from . import impl_missing_tooling_holes
+from . import impl_aperture_definition_errors
+
+
 
 __all__ = [
     "CheckDefinition",

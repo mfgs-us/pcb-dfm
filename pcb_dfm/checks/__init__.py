@@ -32,6 +32,10 @@ from . import impl_copper_thermal_area
 from . import impl_via_in_pad_thermal_balance
 from . import impl_missing_tooling_holes
 from . import impl_aperture_definition_errors
+from . import impl_unsupported_hole_types
+from . import impl_dielectric_thickness_uniformity
+from . import impl_impedance_control
+from . import impl_drill_wander_budget
 
 
 

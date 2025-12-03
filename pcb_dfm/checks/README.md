@@ -27,12 +27,12 @@
 - [x] aperture_definition_errors
 - [x] missing_tooling_holes
 - [x] silkscreen_over_mask_defined_pads
-- [ ] unsupported_hole_types
+- [x] unsupported_hole_types
 
 ## fabrication_stackup
 - [x] copper_to_edge_distance
-- [ ] dielectric_thickness_uniformity
-- [ ] impedance_control
+- [x] dielectric_thickness_uniformity
+- [x] impedance_control
 - [ ] layer_registration_margin
 
 ## high_speed_si
@@ -61,6 +61,6 @@
 - [x] via_in_pad_thermal_balance
 
 ## yield_prediction
-- [ ] drill_wander_budget
+- [x] drill_wander_budget
 - [ ] etch_compensation_margin
 - [ ] plating_uniformity

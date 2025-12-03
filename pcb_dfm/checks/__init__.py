@@ -22,6 +22,11 @@ from . import impl_component_to_component_spacing
 from . import impl_copper_density_balance
 from . import impl_plane_fragmentation
 from . import impl_thermal_relief_spoke_width
+from . import impl_silkscreen_min_width
+from . import impl_solder_mask_expansion
+from . import impl_solder_mask_web
+from . import impl_silkscreen_over_mask_defined_pads
+from . import impl_via_tenting
 
 __all__ = [
     "CheckDefinition",

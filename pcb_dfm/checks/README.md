@@ -20,13 +20,13 @@
 - [x] drill_aspect_ratio
 - [x] drill_to_drill_spacing
 - [x] min_drill_size
-- [ ] via_tenting
+- [x] via_tenting
 - [x] via_to_copper_clearance
 
 ## fab_process_compatibility
 - [ ] aperture_definition_errors
 - [ ] missing_tooling_holes
-- [ ] silkscreen_over_mask_defined_pads
+- [x] silkscreen_over_mask_defined_pads
 - [ ] unsupported_hole_types
 
 ## fabrication_stackup
@@ -49,10 +49,10 @@
 
 ## solder_mask_silkscreen
 - [x] mask_to_trace_clearance
-- [ ] silkscreen_min_width
+- [x] silkscreen_min_width
 - [x] silkscreen_on_copper
-- [ ] solder_mask_expansion
-- [ ] solder_mask_web
+- [x] solder_mask_expansion
+- [x] solder_mask_web
 
 ## thermal_power
 - [ ] copper_thermal_area

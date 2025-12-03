@@ -27,6 +27,7 @@ from . import impl_solder_mask_expansion
 from . import impl_solder_mask_web
 from . import impl_silkscreen_over_mask_defined_pads
 from . import impl_via_tenting
+from . import impl_acid_trap_angle
 
 __all__ = [
     "CheckDefinition",

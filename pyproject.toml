@@ -37,11 +37,10 @@ Homepage = "https://github.com/mfgs-us/pcb-dfm"
 include-package-data = true
 
 [tool.setuptools.packages.find]
-# Only include pcb_dfm package and its subpackages
-include = ["pcb_dfm"]
-
-# Do NOT exclude check_data, this now contains packaged JSON rules
+# Include pcb_dfm and ALL its subpackages (pcb_dfm.engine, pcb_dfm.checks, etc)
+include = ["pcb_dfm", "pcb_dfm.*"]
 exclude = ["tests*", "scripts*", "schemas*", "testdata*"]
+
 
 [tool.setuptools.package-data]
 # These JSON rule files get installed WITH the package

@@ -4,10 +4,11 @@ build-backend = "setuptools.build_meta"
 
 [project]
 name = "pcb-dfm"
-version = "0.1.0"
+version = "0.2.0"
 description = "Open DFM rule and report schemas and tooling for PCB manufacturing."
 readme = "README.md"
 requires-python = ">=3.9"
+
 license = { text = "MIT" }
 
 authors = [
@@ -28,6 +29,23 @@ dev = [
 [project.urls]
 Homepage = "https://github.com/mfgs-us/pcb-dfm"
 
+# -------------------------------------------------------
+# Packaging configuration
+# -------------------------------------------------------
+
+[tool.setuptools]
+include-package-data = true
+
 [tool.setuptools.packages.find]
+# Only include pcb_dfm package and its subpackages
 include = ["pcb_dfm"]
-exclude = ["tests*", "scripts*", "schemas*", "checks*", "testdata*"]
+
+# Do NOT exclude check_data, this now contains packaged JSON rules
+exclude = ["tests*", "scripts*", "schemas*", "testdata*"]
+
+[tool.setuptools.package-data]
+# These JSON rule files get installed WITH the package
+pcb_dfm = [
+  "check_data/checks/*.json",
+  "check_data/categories.json"
+]

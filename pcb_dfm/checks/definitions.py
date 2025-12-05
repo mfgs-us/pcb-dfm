@@ -7,6 +7,8 @@ from pathlib import Path
 from typing import Any, Dict, List
 import json
 
+from importlib.resources import files
+
 
 @dataclass
 class CheckDefinition:
@@ -51,18 +53,14 @@ class CheckDefinition:
             raw=data,
         )
 
-
 def _default_checks_dir() -> Path:
     """
-    Resolve the checks/ directory relative to this file.
+    Resolve the checks directory from installed package data.
 
-    Assumes repo layout:
-      repo_root/
-        pcb_dfm/
-        checks/
+    Assumes data lives at pcb_dfm/check_data/checks/*.json.
     """
-    pkg_root = Path(__file__).resolve().parents[1]
-    return pkg_root.parent / "checks"
+    return Path(files("pcb_dfm").joinpath("check_data", "checks"))
+
 
 
 def load_check_definition(path: Path) -> CheckDefinition:

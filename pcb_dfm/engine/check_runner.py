@@ -5,6 +5,8 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Callable, Dict
 
+from ..checks import _ensure_impls_loaded
+
 from ..checks.definitions import CheckDefinition
 from ..ingest import ingest_gerber_zip
 from ..geometry import build_board_geometry
@@ -36,21 +38,20 @@ def get_check_runner(check_id: str) -> CheckFn:
 
 
 def run_single_check(
-    gerber_zip: Path,
+    gerber_zip: Path | str,
     check_def: CheckDefinition,
     ruleset_id: str = "default",
     design_id: str = "board",
 ) -> CheckResult:
     """
-    Convenience function to run a single check on a Gerber.zip.
-
-    This will:
-      - ingest Gerbers
-      - build geometry
-      - build a CheckContext
-      - dispatch to the registered check function
+    Run a single DFM check on a Gerber zip archive.
     """
-    gerber_zip = gerber_zip.resolve()
+
+    # Make sure all impl_* modules are imported and their runners are registered
+    _ensure_impls_loaded()
+
+    gerber_zip = Path(gerber_zip).resolve()
+
     ingest_result = ingest_gerber_zip(gerber_zip)
     geom = build_board_geometry(ingest_result)
 
@@ -65,3 +66,4 @@ def run_single_check(
 
     runner = get_check_runner(check_def.id)
     return runner(ctx)
+

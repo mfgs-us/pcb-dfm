@@ -20,8 +20,8 @@ def load_check_definition(path: PathLike) -> CheckDefinition:
     """
     Backwards compatible helper to load a single check definition.
 
-    - If given a Path-like -> load JSON from that file.
-    - If given a str -> treat as check id and resolve via load_all_check_definitions().
+    Accepts either a Path to a JSON file or a check id (str) if you
+    want to resolve against the default checks directory.
     """
     if isinstance(path, (str, bytes)):
         for d in _load_all():

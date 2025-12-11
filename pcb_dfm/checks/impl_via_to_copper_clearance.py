@@ -16,6 +16,7 @@ except Exception:
     gerber = None
 
 _INCH_TO_MM = 25.4
+MAX_REPORTED_VIOLATIONS = 100
 
 
 @dataclass
@@ -107,6 +108,9 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
     min_clear: Optional[float] = None
     worst_location: Optional[ViolationLocation] = None
 
+    # (clearance_mm, layer_name, via_x_mm, via_y_mm)
+    offenders: List[tuple[float, str, float, float]] = []
+
     for hit in hits:
         cx = hit.x_mm
         cy = hit.y_mm
@@ -150,6 +154,12 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
                         x_mm=cx,
                         y_mm=cy,
                         notes="Via with minimum clearance to nearby copper (approx).",
+                    )
+
+                # Track any clearance that violates recommended minimum
+                if clearance < recommended_min:
+                    offenders.append(
+                        (clearance, layer.logical_layer, cx, cy)
                     )
 
     if min_clear is None:
@@ -201,17 +211,37 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
 
     violations: List[Violation] = []
     if status != "pass":
-        msg = (
-            f"Minimum via-to-copper clearance {min_clear:.3f} mm is below "
-            f"recommended {recommended_min:.3f} mm (absolute minimum {absolute_min:.3f} mm)."
-        )
-        violations.append(
-            Violation(
-                severity=severity,
-                message=msg,
-                location=worst_location,
+        offenders_sorted = sorted(offenders, key=lambda t: t[0])
+        if offenders_sorted:
+            for clearance, layer_name, vx, vy in offenders_sorted[:MAX_REPORTED_VIOLATIONS]:
+                msg = (
+                    f"Minimum via-to-copper clearance {clearance:.3f} mm on layer {layer_name} is below "
+                    f"recommended {recommended_min:.3f} mm (absolute minimum {absolute_min:.3f} mm)."
+                )
+                violations.append(
+                    Violation(
+                        severity=severity,
+                        message=msg,
+                        location=ViolationLocation(
+                            layer=layer_name,
+                            x_mm=vx,
+                            y_mm=vy,
+                            notes="Via with low clearance to copper (approx).",
+                        ),
+                    )
+                )
+        else:
+            msg = (
+                f"Minimum via-to-copper clearance {min_clear:.3f} mm is below "
+                f"recommended {recommended_min:.3f} mm (absolute minimum {absolute_min:.3f} mm)."
             )
-        )
+            violations.append(
+                Violation(
+                    severity=severity,
+                    message=msg,
+                    location=worst_location,
+                )
+            )
 
     return CheckResult(
         check_id=ctx.check_def.id,

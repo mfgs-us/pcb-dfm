@@ -17,6 +17,7 @@ except Exception:
     Line = None  # type: ignore
 
 _INCH_TO_MM = 25.4
+MAX_REPORTED_VIOLATIONS = 100
 
 
 @dataclass
@@ -125,6 +126,9 @@ def run_min_trace_spacing(ctx: CheckContext) -> CheckResult:
     min_spacing_mm: Optional[float] = None
     worst_location: Optional[ViolationLocation] = None
 
+    # (spacing_mm, layer_name, mx_mm, my_mm)
+    offenders: List[tuple[float, str, float, float]] = []
+
     for layer_name, segs in segments_by_layer.items():
         n = len(segs)
         if n < 2:
@@ -135,9 +139,7 @@ def run_min_trace_spacing(ctx: CheckContext) -> CheckResult:
             for j in range(i + 1, n):
                 s2 = segs[j]
 
-                # Quick bbox reject: if the centerlines are far apart,
-                # skip expensive distance calc. Use an upper bound based
-                # on current best spacing if available.
+                # Quick bbox reject
                 if min_spacing_mm is not None:
                     if not _might_be_closer_than(s1, s2, min_spacing_mm):
                         continue
@@ -160,6 +162,10 @@ def run_min_trace_spacing(ctx: CheckContext) -> CheckResult:
                         y_mm=my_mm,
                         notes="Minimum spacing between copper traces (segment-based).",
                     )
+
+                # Track all spacings that violate the recommended minimum
+                if spacing_mm < recommended_min:
+                    offenders.append((spacing_mm, layer_name, mx_mm, my_mm))
 
     if min_spacing_mm is None:
         viol = Violation(
@@ -210,17 +216,37 @@ def run_min_trace_spacing(ctx: CheckContext) -> CheckResult:
 
     violations: List[Violation] = []
     if status != "pass":
-        msg = (
-            f"Minimum trace spacing {min_spacing_mm:.3f} mm is below "
-            f"recommended {recommended_min:.3f} mm (absolute minimum {absolute_min:.3f} mm)."
-        )
-        violations.append(
-            Violation(
-                severity=severity,
-                message=msg,
-                location=worst_location,
+        offenders_sorted = sorted(offenders, key=lambda t: t[0])
+        if offenders_sorted:
+            for spacing_mm, layer_name, mx_mm, my_mm in offenders_sorted[:MAX_REPORTED_VIOLATIONS]:
+                msg = (
+                    f"Trace spacing {spacing_mm:.3f} mm on layer {layer_name} is below "
+                    f"recommended {recommended_min:.3f} mm (absolute minimum {absolute_min:.3f} mm)."
+                )
+                violations.append(
+                    Violation(
+                        severity=severity,
+                        message=msg,
+                        location=ViolationLocation(
+                            layer=layer_name,
+                            x_mm=mx_mm,
+                            y_mm=my_mm,
+                            notes="Trace spacing below minimum.",
+                        ),
+                    )
+                )
+        else:
+            msg = (
+                f"Minimum trace spacing {min_spacing_mm:.3f} mm is below "
+                f"recommended {recommended_min:.3f} mm (absolute minimum {absolute_min:.3f} mm)."
             )
-        )
+            violations.append(
+                Violation(
+                    severity=severity,
+                    message=msg,
+                    location=worst_location,
+                )
+            )
 
     return CheckResult(
         check_id=ctx.check_def.id,

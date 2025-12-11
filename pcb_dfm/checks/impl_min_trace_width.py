@@ -17,6 +17,7 @@ except Exception:
     Line = None  # type: ignore
 
 _INCH_TO_MM = 25.4
+MAX_REPORTED_VIOLATIONS = 100
 
 
 @register_check("min_trace_width")
@@ -76,6 +77,9 @@ def run_min_trace_width(ctx: CheckContext) -> CheckResult:
     min_width_mm: Optional[float] = None
     worst_location: Optional[ViolationLocation] = None
 
+    # (width_mm, layer_name, mx_mm, my_mm)
+    offenders: List[tuple[float, str, float, float]] = []
+
     for info in copper_files:
         layer_name = info.logical_layer
 
@@ -121,6 +125,14 @@ def run_min_trace_width(ctx: CheckContext) -> CheckResult:
                     )
                 else:
                     worst_location = None
+
+            # Track any segment that violates the recommended minimum
+            if (
+                mx_mm is not None
+                and my_mm is not None
+                and width_mm < recommended_min
+            ):
+                offenders.append((width_mm, layer_name, mx_mm, my_mm))
 
     if min_width_mm is None:
         viol = Violation(
@@ -171,17 +183,39 @@ def run_min_trace_width(ctx: CheckContext) -> CheckResult:
 
     violations: List[Violation] = []
     if status != "pass":
-        msg = (
-            f"Minimum trace width {min_width_mm:.3f} mm is below "
-            f"recommended {recommended_min:.3f} mm (absolute minimum {absolute_min:.3f} mm)."
-        )
-        violations.append(
-            Violation(
-                severity=severity,
-                message=msg,
-                location=worst_location,
+        # Sort offenders by width ascending (worst first)
+        offenders_sorted = sorted(offenders, key=lambda t: t[0])
+        if offenders_sorted:
+            for width_mm, layer_name, mx_mm, my_mm in offenders_sorted[:MAX_REPORTED_VIOLATIONS]:
+                msg = (
+                    f"Trace segment width {width_mm:.3f} mm on layer {layer_name} is below "
+                    f"recommended {recommended_min:.3f} mm (absolute minimum {absolute_min:.3f} mm)."
+                )
+                violations.append(
+                    Violation(
+                        severity=severity,
+                        message=msg,
+                        location=ViolationLocation(
+                            layer=layer_name,
+                            x_mm=mx_mm,
+                            y_mm=my_mm,
+                            notes="Trace segment below minimum width.",
+                        ),
+                    )
+                )
+        else:
+            # Fallback: no per segment offenders captured, keep previous single summary
+            msg = (
+                f"Minimum trace width {min_width_mm:.3f} mm is below "
+                f"recommended {recommended_min:.3f} mm (absolute minimum {absolute_min:.3f} mm)."
             )
-        )
+            violations.append(
+                Violation(
+                    severity=severity,
+                    message=msg,
+                    location=worst_location,
+                )
+            )
 
     return CheckResult(
         check_id=ctx.check_def.id,

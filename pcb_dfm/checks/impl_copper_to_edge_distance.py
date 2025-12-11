@@ -6,9 +6,11 @@ from typing import List, Optional
 
 from ..geometry import queries
 from ..geometry.primitives import Bounds, Polygon, Point2D
-from ..results import CheckResult, Violation, ViolationLocation  # adjust imports if module structure differs
+from ..results import CheckResult, Violation, ViolationLocation
 from ..engine.context import CheckContext
 from ..engine.check_runner import register_check
+
+MAX_REPORTED_VIOLATIONS = 100
 
 
 @register_check("copper_to_edge_distance")
@@ -65,6 +67,9 @@ def run_copper_to_edge_distance(ctx: CheckContext) -> CheckResult:
     min_dist: Optional[float] = None
     worst_location: Optional[ViolationLocation] = None
 
+    # (dist_mm, layer_name, x_mm, y_mm)
+    offenders: List[tuple[float, str, float, float]] = []
+
     for layer in copper_layers:
         for poly in layer.polygons:
             pb = poly.bounds()
@@ -77,6 +82,10 @@ def run_copper_to_edge_distance(ctx: CheckContext) -> CheckResult:
                     y_mm=loc.y,
                     notes="Closest copper to board edge",
                 )
+
+            # Track any copper feature that violates the recommended minimum
+            if d < recommended_min:
+                offenders.append((d, layer.logical_layer, loc.x, loc.y))
 
     # If somehow no polygons, treat as warning but with metric None
     if min_dist is None:
@@ -127,17 +136,37 @@ def run_copper_to_edge_distance(ctx: CheckContext) -> CheckResult:
 
     violations: List[Violation] = []
     if status != "pass":
-        message = (
-            f"Minimum copper to edge distance {min_dist:.3f} mm is below "
-            f"recommended {recommended_min:.3f} mm (absolute minimum {absolute_min:.3f} mm)."
-        )
-        violations.append(
-            Violation(
-                severity=severity,
-                message=message,
-                location=worst_location,
+        offenders_sorted = sorted(offenders, key=lambda t: t[0])
+        if offenders_sorted:
+            for dist_mm, layer_name, x_mm, y_mm in offenders_sorted[:MAX_REPORTED_VIOLATIONS]:
+                message = (
+                    f"Copper feature is {dist_mm:.3f} mm from board edge on layer {layer_name}, "
+                    f"below recommended {recommended_min:.3f} mm (absolute minimum {absolute_min:.3f} mm)."
+                )
+                violations.append(
+                    Violation(
+                        severity=severity,
+                        message=message,
+                        location=ViolationLocation(
+                            layer=layer_name,
+                            x_mm=x_mm,
+                            y_mm=y_mm,
+                            notes="Copper too close to board edge.",
+                        ),
+                    )
+                )
+        else:
+            message = (
+                f"Minimum copper to edge distance {min_dist:.3f} mm is below "
+                f"recommended {recommended_min:.3f} mm (absolute minimum {absolute_min:.3f} mm)."
             )
-        )
+            violations.append(
+                Violation(
+                    severity=severity,
+                    message=message,
+                    location=worst_location,
+                )
+            )
 
     margin_to_limit = float(min_dist - absolute_min)
 

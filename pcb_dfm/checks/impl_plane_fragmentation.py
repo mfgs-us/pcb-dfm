@@ -7,6 +7,8 @@ from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
 from ..results import CheckResult, Violation, ViolationLocation
 
+MAX_REPORTED_FRAGMENTS = 50
+
 
 def _poly_area_mm2(poly) -> float:
     if hasattr(poly, "area_mm2"):
@@ -56,7 +58,7 @@ def run_plane_fragmentation(ctx: CheckContext) -> CheckResult:
 
     fragment_max_area_mm2 = float(raw_cfg.get("fragment_max_area_mm2", 2.0))
     fragment_max_diag_mm = float(raw_cfg.get("fragment_max_diag_mm", 1.5))
-    # "really tiny" fragment threshold for stronger concern
+    # "really tiny" fragment threshold for stronger concern (currently not used for scoring)
     tiny_fragment_area_mm2 = float(raw_cfg.get("tiny_fragment_area_mm2", 0.5))
 
     geom = ctx.geometry
@@ -130,9 +132,8 @@ def run_plane_fragmentation(ctx: CheckContext) -> CheckResult:
         components.append(comp)
 
     # Evaluate components as possible islands
-    fragment_count = 0
+    fragments: List[dict] = []
     smallest_area = math.inf
-    smallest_loc: Optional[ViolationLocation] = None
 
     for comp in components:
         comp_area = 0.0
@@ -162,17 +163,21 @@ def run_plane_fragmentation(ctx: CheckContext) -> CheckResult:
 
         # Fragment definition
         if comp_area < fragment_max_area_mm2 and diag < fragment_max_diag_mm:
-            fragment_count += 1
+            cx = 0.5 * (min_x + max_x)
+            cy = 0.5 * (min_y + max_y)
+            fragments.append(
+                {
+                    "area_mm2": comp_area,
+                    "diag_mm": diag,
+                    "x_mm": cx,
+                    "y_mm": cy,
+                    "layer": any_layer_name,
+                }
+            )
             if comp_area < smallest_area:
                 smallest_area = comp_area
-                cx = 0.5 * (min_x + max_x)
-                cy = 0.5 * (min_y + max_y)
-                smallest_loc = ViolationLocation(
-                    layer=any_layer_name,
-                    x_mm=cx,
-                    y_mm=cy,
-                    notes="Small isolated copper island in plane like region.",
-                )
+
+    fragment_count = len(fragments)
 
     if fragment_count == 0:
         viol = Violation(
@@ -199,7 +204,6 @@ def run_plane_fragmentation(ctx: CheckContext) -> CheckResult:
             violations=[viol],
         )
 
-    # We have fragments, classify based on count & smallest area
     measured_value = fragment_count
 
     if measured_value <= target_max:
@@ -221,18 +225,37 @@ def run_plane_fragmentation(ctx: CheckContext) -> CheckResult:
 
     margin_to_limit = float(limit_max - measured_value)
 
-    msg = (
-        f"Detected {fragment_count} small fragmented plane region(s); "
-        f"smallest fragment area is {smallest_area:.3f} mm²."
-    )
+    # Sort fragments from smallest area (worst) to largest
+    fragments_sorted = sorted(fragments, key=lambda f: f["area_mm2"])
 
-    violations = [
-        Violation(
-            severity=severity,
-            message=msg,
-            location=smallest_loc,
+    violations: List[Violation] = []
+    for idx, frag in enumerate(fragments_sorted[:MAX_REPORTED_FRAGMENTS]):
+        area = frag["area_mm2"]
+        layer = frag["layer"]
+        x = frag["x_mm"]
+        y = frag["y_mm"]
+
+        if idx == 0:
+            msg = (
+                f"Detected {fragment_count} small fragmented plane region(s); "
+                f"this fragment area is {area:.3f} mm² "
+                f"(smallest fragment area is {smallest_area:.3f} mm²)."
+            )
+        else:
+            msg = f"Small fragmented plane region with area {area:.3f} mm²."
+
+        violations.append(
+            Violation(
+                severity=severity,
+                message=msg,
+                location=ViolationLocation(
+                    layer=layer,
+                    x_mm=x,
+                    y_mm=y,
+                    notes="Small isolated copper island in plane like region.",
+                ),
+            )
         )
-    ]
 
     return CheckResult(
         check_id=ctx.check_def.id,

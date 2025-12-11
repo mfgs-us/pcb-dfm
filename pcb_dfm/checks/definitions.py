@@ -90,3 +90,16 @@ def load_all_check_definitions(checks_dir: Path | None = None) -> List[CheckDefi
             continue
         defs.append(load_check_definition(p))
     return defs
+
+
+def load_check_definitions_for_ruleset(
+    ruleset_id: str,
+    checks_dir: Path | None = None,
+) -> List[CheckDefinition]:
+    """
+    Temporary shim for engine.run.run_dfm_on_gerber_zip.
+
+    For now we ignore ruleset_id and just return all check definitions.
+    Later you can filter using an index.json or ruleset metadata.
+    """
+    return load_all_check_definitions(checks_dir=checks_dir)

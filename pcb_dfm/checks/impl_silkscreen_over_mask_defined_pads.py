@@ -164,13 +164,13 @@ def run_silkscreen_over_mask_defined_pads(ctx: CheckContext) -> CheckResult:
         score = 100.0
     elif measured <= limit_max:
         status = "warning"
-        severity = "warning"
+        severity = "error"
         # simple scoring from 100 down to 60 as we approach limit_max
         span = max(1.0, limit_max - target_max)
         frac = max(0.0, min(1.0, (measured - target_max) / span))
         score = max(0.0, min(100.0, 100.0 - 40.0 * frac))
     else:
-        status = "fail"
+        status = "warning"
         severity = "error"
         score = 0.0
 

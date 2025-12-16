@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import math
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from ..results import CheckResult, Violation, ViolationLocation
 from ..engine.context import CheckContext
@@ -53,6 +53,25 @@ def _bbox_contains_point(poly, x_mm: float, y_mm: float, margin_mm: float = 0.0)
     min_y = float(b.min_y) - margin_mm
     max_y = float(b.max_y) + margin_mm
     return (min_x <= x_mm <= max_x) and (min_y <= y_mm <= max_y)
+
+
+def _poly_bbox_dims_mm(poly) -> Tuple[float, float, float, float, float, float]:
+    """
+    Returns (min_x, min_y, max_x, max_y, w, h) in mm.
+    """
+    b = poly.bounds()
+    min_x = float(b.min_x)
+    min_y = float(b.min_y)
+    max_x = float(b.max_x)
+    max_y = float(b.max_y)
+    w = max(0.0, max_x - min_x)
+    h = max(0.0, max_y - min_y)
+    return min_x, min_y, max_x, max_y, w, h
+
+
+def _bbox_center_mm(poly) -> Tuple[float, float]:
+    min_x, min_y, max_x, max_y, _, _ = _poly_bbox_dims_mm(poly)
+    return (0.5 * (min_x + max_x), 0.5 * (min_y + max_y))
 
 
 def _extract_drill_hits_mm(path: str) -> List[dict]:
@@ -148,15 +167,14 @@ def run_via_in_pad_thermal_balance(ctx: CheckContext) -> CheckResult:
     """
     Estimate thermal balance risk for vias placed in copper pads.
 
-    Drill source: same as min_drill_size / drill_to_drill_spacing
-    - ctx.ingest.files where layer_type == "drill"
-    - parsed via gerber.read(...).hits
-
-    For each plated drill:
-      - find copper polygons whose bbox contains the drill center
-      - treat those polygons as pads
-      - compute via area / pad area
-      - metric is worst ratio in percent
+    Upgraded heuristics:
+      - Filter drill hits to "via-like" plated holes (diameter range)
+      - Identify pad-like copper polygons by area + aspect ratio + max dimension
+      - Consider a via "in pad" only if:
+          (a) via center is within pad bbox (with margin)
+          (b) via center is close to pad bbox centroid (to avoid matching pours / large regions)
+      - If multiple pads match, choose the best candidate (smallest pad area).
+      - Metric is worst ratio in percent: (via_area / pad_area) * 100
     """
     metric_cfg = ctx.check_def.metric or {}
     units = metric_cfg.get("units", "%")
@@ -164,28 +182,55 @@ def run_via_in_pad_thermal_balance(ctx: CheckContext) -> CheckResult:
     limits_cfg = metric_cfg.get("limits", {}) or {}
 
     # We treat metric as percent 0..100
-    recommended_max_pct = float(target_cfg.get("max", 20.0)) if isinstance(target_cfg, dict) else float(target_cfg or 20.0)
-    absolute_max_pct = float(limits_cfg.get("max", 40.0)) if isinstance(limits_cfg, dict) else float(limits_cfg or 40.0)
+    recommended_max_pct = (
+        float(target_cfg.get("max", 20.0)) if isinstance(target_cfg, dict) else float(target_cfg or 20.0)
+    )
+    absolute_max_pct = (
+        float(limits_cfg.get("max", 40.0)) if isinstance(limits_cfg, dict) else float(limits_cfg or 40.0)
+    )
 
     raw_cfg = getattr(ctx.check_def, "raw", None) or {}
+
+    # Pad-like copper selection
     min_pad_area_mm2 = float(raw_cfg.get("min_pad_area_mm2", 0.05))
     max_pad_area_mm2 = float(raw_cfg.get("max_pad_area_mm2", 10.0))
-    bbox_margin_mm = float(raw_cfg.get("bbox_margin_mm", 0.02))
+    max_pad_aspect = float(raw_cfg.get("max_pad_aspect", 4.0))
+    max_pad_dim_mm = float(raw_cfg.get("max_pad_dim_mm", 6.0))
 
-    # 1) Collect drills: same source as min_drill_size
-    drill_files: List[GerberFileInfo] = [
-        f for f in ctx.ingest.files if f.layer_type == "drill"
-    ]
+    # Via-in-pad detection tolerances
+    bbox_margin_mm = float(raw_cfg.get("bbox_margin_mm", 0.02))
+    # Via center must be near pad centroid, else likely matching a pour/region
+    pad_center_max_offset_mm = float(raw_cfg.get("pad_center_max_offset_mm", 0.6))
+    pad_center_max_offset_frac = float(raw_cfg.get("pad_center_max_offset_frac", 0.40))
+
+    # Filter drills to "via-like" hits
+    min_via_d_mm = float(raw_cfg.get("min_via_d_mm", 0.15))
+    max_via_d_mm = float(raw_cfg.get("max_via_d_mm", 0.60))
+
+    # 1) Collect drills
+    drill_files: List[GerberFileInfo] = [f for f in ctx.ingest.files if f.layer_type == "drill"]
 
     drill_hits: List[dict] = []
     if gerber is not None:
         for info in drill_files:
             drill_hits.extend(_extract_drill_hits_mm(str(info.path)))
 
-    if not drill_hits:
+    # Filter to plated + via-like diameters
+    via_hits: List[dict] = []
+    for h in drill_hits:
+        if not h.get("plated", True):
+            continue
+        d = float(h.get("diameter_mm", 0.0) or 0.0)
+        if d <= 0.0:
+            continue
+        if d < min_via_d_mm or d > max_via_d_mm:
+            continue
+        via_hits.append(h)
+
+    if not via_hits:
         viol = Violation(
             severity="info",
-            message="No drill/via hits found to evaluate via in pad thermal balance.",
+            message="No plated via-like drill hits found to evaluate via in pad thermal balance.",
             location=None,
         )
         return CheckResult(
@@ -207,26 +252,43 @@ def run_via_in_pad_thermal_balance(ctx: CheckContext) -> CheckResult:
             violations=[viol],
         )
 
-    # 2) Collect copper polygons that look pad like
+    # 2) Collect pad-like copper polygons (all copper layers)
     geom = ctx.geometry
-    copper_polys: List[tuple[str, object]] = []  # (layer_name, poly)
+    copper_polys: List[tuple[str, object, float, float, float, float, float]] = []
+    # tuple: (layer_name, poly, area, cx, cy, w, h)
 
     for layer in getattr(geom, "layers", []):
         layer_type = getattr(layer, "layer_type", getattr(layer, "type", None))
         if layer_type != "copper":
             continue
-        logical = getattr(layer, "logical_layer", getattr(layer, "name", None))
+
+        logical = getattr(layer, "logical_layer", getattr(layer, "name", None)) or "Copper"
 
         for poly in getattr(layer, "polygons", []):
             area = _poly_area_mm2(poly)
             if area < min_pad_area_mm2 or area > max_pad_area_mm2:
                 continue
-            copper_polys.append((logical, poly))
+
+            _, _, _, _, w, h = _poly_bbox_dims_mm(poly)
+            if w <= 0.0 or h <= 0.0:
+                continue
+
+            long_dim = max(w, h)
+            short_dim = min(w, h)
+            if long_dim > max_pad_dim_mm:
+                continue
+
+            aspect = (long_dim / short_dim) if short_dim > 0.0 else 999.0
+            if aspect > max_pad_aspect:
+                continue
+
+            cx, cy = _bbox_center_mm(poly)
+            copper_polys.append((logical, poly, area, cx, cy, w, h))
 
     if not copper_polys:
         viol = Violation(
             severity="info",
-            message="No suitable copper pad like features found to evaluate via in pad thermal balance.",
+            message="No suitable pad-like copper features found to evaluate via in pad thermal balance.",
             location=None,
         )
         return CheckResult(
@@ -248,14 +310,11 @@ def run_via_in_pad_thermal_balance(ctx: CheckContext) -> CheckResult:
             violations=[viol],
         )
 
-    # 3) Scan vias in pads and track worst via area / pad area
+    # 3) For each via, find best-matching pad and compute via area / pad area
     worst_ratio_pct = 0.0
     worst_loc: Optional[ViolationLocation] = None
 
-    for hit in drill_hits:
-        if not hit.get("plated", True):
-            continue
-
+    for hit in via_hits:
         x_mm = float(hit["x_mm"])
         y_mm = float(hit["y_mm"])
         d_mm = float(hit["diameter_mm"])
@@ -264,34 +323,50 @@ def run_via_in_pad_thermal_balance(ctx: CheckContext) -> CheckResult:
 
         via_area = math.pi * (d_mm * 0.5) ** 2
 
-        for layer_name, poly in copper_polys:
+        best_pad: Optional[tuple[str, object, float, float, float, float, float]] = None
+
+        for layer_name, poly, pad_area, pcx, pcy, pw, ph in copper_polys:
+            # Must be inside bbox (cheap)
             if not _bbox_contains_point(poly, x_mm, y_mm, margin_mm=bbox_margin_mm):
                 continue
 
-            pad_area = _poly_area_mm2(poly)
-            if pad_area <= 0.0:
+            # Must be near pad centroid to avoid pours/regions matching
+            # Use a combined absolute + relative gate.
+            local_scale = max(1e-9, min(pw, ph))
+            max_offset = max(pad_center_max_offset_mm, pad_center_max_offset_frac * local_scale)
+            if math.hypot(x_mm - pcx, y_mm - pcy) > max_offset:
                 continue
 
-            ratio = via_area / pad_area
-            ratio_pct = ratio * 100.0
+            # If multiple match, choose smallest pad area (usually actual pad vs unions)
+            if best_pad is None or pad_area < best_pad[2]:
+                best_pad = (layer_name, poly, pad_area, pcx, pcy, pw, ph)
 
-            if ratio_pct > worst_ratio_pct:
-                worst_ratio_pct = ratio_pct
-                worst_loc = ViolationLocation(
-                    layer=layer_name,
-                    x_mm=x_mm,
-                    y_mm=y_mm,
-                    width_mm=None,
-                    height_mm=None,
-                    net=None,
-                    component=None,
-                    notes="Via in pad with highest via to pad area ratio.",
-                )
+        if best_pad is None:
+            continue
+
+        layer_name, _, pad_area, _, _, _, _ = best_pad
+        if pad_area <= 0.0:
+            continue
+
+        ratio_pct = (via_area / pad_area) * 100.0
+
+        if ratio_pct > worst_ratio_pct:
+            worst_ratio_pct = ratio_pct
+            worst_loc = ViolationLocation(
+                layer=layer_name,
+                x_mm=x_mm,
+                y_mm=y_mm,
+                width_mm=None,
+                height_mm=None,
+                net=None,
+                component=None,
+                notes="Via-in-pad detected: worst via area to pad area ratio (via near pad centroid).",
+            )
 
     if worst_loc is None:
         viol = Violation(
             severity="info",
-            message="No via in pad configurations detected based on simple geometry heuristics.",
+            message="No via-in-pad configurations detected based on upgraded geometry heuristics.",
             location=None,
         )
         return CheckResult(
@@ -335,7 +410,7 @@ def run_via_in_pad_thermal_balance(ctx: CheckContext) -> CheckResult:
     margin_to_limit = absolute_max_pct - measured
 
     msg = (
-        f"Worst via in pad area ratio is {measured:.1f}% "
+        f"Worst via-in-pad area ratio is {measured:.1f}% "
         f"(recommended <= {recommended_max_pct:.1f}%, absolute <= {absolute_max_pct:.1f}%)."
     )
 

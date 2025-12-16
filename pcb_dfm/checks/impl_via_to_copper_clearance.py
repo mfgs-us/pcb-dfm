@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import math
-from typing import List, Optional
+from collections import defaultdict
+from math import floor
+from typing import Dict, List, Optional, Tuple
 from dataclasses import dataclass
 
 from ..geometry import queries
@@ -25,6 +27,10 @@ class DrillHit:
     x_mm: float
     y_mm: float
     d_mm: float
+
+
+def _cell_key(x: float, y: float, cell: float) -> Tuple[int, int]:
+    return (int(floor(x / cell)), int(floor(y / cell)))
 
 
 def _get_board_bounds(ctx: CheckContext) -> Optional[Bounds]:
@@ -198,6 +204,59 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
 
     board_bounds = _get_board_bounds(ctx)
 
+    # Precompute copper bbox entries once (huge speed win)
+    # entry: (layer_name, bounds, edge_dist_mm_or_None)
+    copper_entries: List[tuple[str, Bounds, Optional[float]]] = []
+    for layer in copper_layers:
+        lname = layer.logical_layer
+        for poly in layer.polygons:
+            b: Bounds = poly.bounds()
+            edge_dist = None
+            if board_bounds is not None and perimeter_ignore_mm > 0.0:
+                try:
+                    edge_dist = _dist_bbox_to_bounds_edge_mm(b, board_bounds)
+                except Exception:
+                    edge_dist = None
+            copper_entries.append((lname, b, edge_dist))
+
+    if not copper_entries:
+        viol = Violation(
+            severity="warning",
+            message="No copper polygons found to compute via-to-copper clearance.",
+            location=None,
+        )
+        return CheckResult(
+            check_id=ctx.check_def.id,
+            name=ctx.check_def.name,
+            category_id=ctx.check_def.category_id,
+            severity=ctx.check_def.severity,
+            status="warning",
+            score=50.0,
+            metric={
+                "kind": "geometry",
+                "units": units,
+                "measured_value": None,
+                "target": recommended_min,
+                "limit_low": absolute_min,
+                "limit_high": None,
+                "margin_to_limit": None,
+            },
+            violations=[viol],
+        )
+
+    # Spatial grid over copper bboxes
+    cell = max(1.0, recommended_min + 1.0)  # 1mm floor helps keep grid density reasonable
+    grid: Dict[Tuple[int, int], List[int]] = defaultdict(list)
+    for idx, (_, b, _) in enumerate(copper_entries):
+        # insert bbox into all intersected cells
+        ix0 = int(floor(b.min_x / cell))
+        ix1 = int(floor(b.max_x / cell))
+        iy0 = int(floor(b.min_y / cell))
+        iy1 = int(floor(b.max_y / cell))
+        for iy in range(iy0, iy1 + 1):
+            for ix in range(ix0, ix1 + 1):
+                grid[(ix, iy)].append(idx)
+
     min_clear: Optional[float] = None
     worst_location: Optional[ViolationLocation] = None
 
@@ -212,48 +271,67 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
         # Exclusion radius for copper considered to be "this via's own pad/annular ring"
         pad_exclusion_r = r + assumed_annular_ring_mm + pad_exclusion_margin_mm
 
-        for layer in copper_layers:
-            for poly in layer.polygons:
-                b: Bounds = poly.bounds()
+        ci, cj = _cell_key(cx, cy, cell)
 
-                # Optional: ignore copper very near the board edge to reduce noisy false positives
-                if board_bounds is not None and perimeter_ignore_mm > 0.0:
-                    try:
-                        if _dist_bbox_to_bounds_edge_mm(b, board_bounds) <= perimeter_ignore_mm:
+        # Expand ring until we can prove we won't beat the current min_clear (global)
+        ring = 0
+        seen: set[int] = set()
+
+        while True:
+            # scan ring of cells
+            for di in range(-ring, ring + 1):
+                for dj in range(-ring, ring + 1):
+                    if ring > 0 and (abs(di) != ring and abs(dj) != ring):
+                        continue
+                    bucket = grid.get((ci + di, cj + dj))
+                    if not bucket:
+                        continue
+
+                    for idx in bucket:
+                        if idx in seen:
                             continue
-                    except Exception:
-                        pass
+                        seen.add(idx)
 
-                dist_center, closest_x, closest_y = _center_to_bbox_distance_and_closest_point(cx, cy, b)
+                        layer_name, b, edge_dist = copper_entries[idx]
 
-                # If the copper bbox is extremely close to via center, treat it as the via's own pad
-                # rather than "nearby copper to clear from".
-                if dist_center <= pad_exclusion_r:
-                    continue
+                        if perimeter_ignore_mm > 0.0 and edge_dist is not None and edge_dist <= perimeter_ignore_mm:
+                            continue
 
-                # Approx clearance from via edge to copper bbox
-                clearance = dist_center - r
-                if clearance < 0.0:
-                    clearance = 0.0
+                        dist_center, closest_x, closest_y = _center_to_bbox_distance_and_closest_point(cx, cy, b)
 
-                # Marker: midpoint between via edge (toward copper) and closest copper point
-                vx_edge_x, vx_edge_y = _via_edge_point_toward_target(cx, cy, r, closest_x, closest_y)
-                marker_x = 0.5 * (vx_edge_x + closest_x)
-                marker_y = 0.5 * (vx_edge_y + closest_y)
+                        if dist_center <= pad_exclusion_r:
+                            continue
 
-                if min_clear is None or clearance < min_clear:
-                    min_clear = clearance
-                    worst_location = ViolationLocation(
-                        layer=layer.logical_layer,
-                        x_mm=marker_x,
-                        y_mm=marker_y,
-                        notes="Midpoint between via edge and nearest copper bbox point (approx).",
-                    )
+                        clearance = dist_center - r
+                        if clearance < 0.0:
+                            clearance = 0.0
 
-                if clearance < recommended_min:
-                    offenders.append(
-                        (clearance, layer.logical_layer, cx, cy, marker_x, marker_y)
-                    )
+                        vx_edge_x, vx_edge_y = _via_edge_point_toward_target(cx, cy, r, closest_x, closest_y)
+                        marker_x = 0.5 * (vx_edge_x + closest_x)
+                        marker_y = 0.5 * (vx_edge_y + closest_y)
+
+                        if min_clear is None or clearance < min_clear:
+                            min_clear = clearance
+                            worst_location = ViolationLocation(
+                                layer=layer_name,
+                                x_mm=marker_x,
+                                y_mm=marker_y,
+                                notes="Midpoint between via edge and nearest copper bbox point (approx).",
+                            )
+
+                        if clearance < recommended_min:
+                            offenders.append((clearance, layer_name, cx, cy, marker_x, marker_y))
+
+            # Stop expanding if we already have a min_clear and the next ring is too far to improve it.
+            if min_clear is not None:
+                # Lower bound on distance from center to any bbox in next ring is roughly ring*cell
+                # If that lower bound minus r is already >= min_clear, no need to expand.
+                if (ring + 1) * cell - r >= min_clear:
+                    break
+
+            ring += 1
+            if ring > 200:
+                break
 
     if min_clear is None:
         viol = Violation(

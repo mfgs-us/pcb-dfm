@@ -1,8 +1,10 @@
 from __future__ import annotations
 
+from collections import defaultdict
 from dataclasses import dataclass
-from math import sqrt
-from typing import List, Optional
+from math import ceil, floor, hypot, inf, sqrt
+import math
+from typing import Dict, List, Optional, Tuple
 
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
@@ -21,6 +23,19 @@ class DrillHole:
     x_mm: float
     y_mm: float
     diameter_mm: float
+
+
+def _cell_key(x: float, y: float, cell: float) -> Tuple[int, int]:
+    return (int(floor(x / cell)), int(floor(y / cell)))
+
+
+def _min_possible_center_dist_between_cells(dx_cells: int, dy_cells: int, cell: float) -> float:
+    """
+    Lower bound on distance between any two points located in two grid cells offset by (dx_cells, dy_cells).
+    """
+    dx = max(0, abs(dx_cells) - 1) * cell
+    dy = max(0, abs(dy_cells) - 1) * cell
+    return hypot(dx, dy)
 
 
 def _collect_drills(ctx: CheckContext) -> List[DrillHole]:
@@ -127,31 +142,97 @@ def run_drill_to_drill_spacing(ctx: CheckContext) -> CheckResult:
     min_spacing: Optional[float] = None
     worst_location: Optional[ViolationLocation] = None
 
+    # Build grid index of drills
+    max_d = max(h.diameter_mm for h in drills)
+    # cell size: big enough that "likely nearest" lives nearby, but not so big that bins explode
+    cell = max(0.5, recommended_min + max_d)  # mm; 0.5mm floor keeps bins reasonable on tiny thresholds
+
+    grid: Dict[Tuple[int, int], List[int]] = defaultdict(list)
+    for idx, h in enumerate(drills):
+        grid[_cell_key(h.x_mm, h.y_mm, cell)].append(idx)
+
+    min_spacing: Optional[float] = None
+    worst_location: Optional[ViolationLocation] = None
+
     n = len(drills)
+
+    # For correctness: for each drill i, search neighboring cells in expanding rings until we can prove
+    # no unsearched cell can contain a closer candidate than current global best.
+    global_best_center = math.inf  # best center-to-center distance found so far
+
     for i in range(n):
         h1 = drills[i]
         r1 = 0.5 * h1.diameter_mm
-        for j in range(i + 1, n):
-            h2 = drills[j]
-            r2 = 0.5 * h2.diameter_mm
+        ci, cj = _cell_key(h1.x_mm, h1.y_mm, cell)
 
-            dx = h2.x_mm - h1.x_mm
-            dy = h2.y_mm - h1.y_mm
-            center_dist = sqrt(dx * dx + dy * dy)
-            spacing = center_dist - (r1 + r2)
-            if spacing <= 0.0:
-                continue
+        # ring expansion
+        ring = 0
+        local_best_center = math.inf
 
-            if min_spacing is None or spacing < min_spacing:
-                min_spacing = spacing
-                mx = 0.5 * (h1.x_mm + h2.x_mm)
-                my = 0.5 * (h1.y_mm + h2.y_mm)
-                worst_location = ViolationLocation(
-                    layer="DrillPlated",
-                    x_mm=mx,
-                    y_mm=my,
-                    notes="Minimum spacing between two plated drill holes.",
-                )
+        while True:
+            # Search this ring of cells
+            for di in range(-ring, ring + 1):
+                for dj in range(-ring, ring + 1):
+                    # only perimeter of square ring (avoid repeats)
+                    if ring > 0 and (abs(di) != ring and abs(dj) != ring):
+                        continue
+
+                    bucket = grid.get((ci + di, cj + dj))
+                    if not bucket:
+                        continue
+
+                    for j in bucket:
+                        if j <= i:
+                            continue
+                        h2 = drills[j]
+                        r2 = 0.5 * h2.diameter_mm
+
+                        dx = h2.x_mm - h1.x_mm
+                        dy = h2.y_mm - h1.y_mm
+                        center_dist = sqrt(dx * dx + dy * dy)
+
+                        if center_dist < local_best_center:
+                            local_best_center = center_dist
+
+                        spacing = center_dist - (r1 + r2)
+                        if spacing <= 0.0:
+                            continue
+
+                        if min_spacing is None or spacing < min_spacing:
+                            min_spacing = spacing
+                            global_best_center = min(global_best_center, center_dist)
+                            mx = 0.5 * (h1.x_mm + h2.x_mm)
+                            my = 0.5 * (h1.y_mm + h2.y_mm)
+                            worst_location = ViolationLocation(
+                                layer="DrillPlated",
+                                x_mm=mx,
+                                y_mm=my,
+                                notes="Minimum spacing between two plated drill holes.",
+                            )
+
+            # Stopping condition:
+            # If we already have a global best center distance, and the minimum possible distance to any
+            # yet-unsearched ring is >= that, then no closer pair exists (for this i).
+            if global_best_center < math.inf:
+                next_ring = ring + 1
+                # Minimum possible distance from h1 cell to any cell on the next ring:
+                min_lb = math.inf
+                for di in (-next_ring, next_ring):
+                    for dj in range(-next_ring, next_ring + 1):
+                        min_lb = min(min_lb, _min_possible_center_dist_between_cells(di, dj, cell))
+                for dj in (-next_ring, next_ring):
+                    for di in range(-next_ring, next_ring + 1):
+                        min_lb = min(min_lb, _min_possible_center_dist_between_cells(di, dj, cell))
+
+                if min_lb >= global_best_center:
+                    break
+
+            # If we still haven't found any candidate for this i, we must expand at least a bit.
+            ring += 1
+
+            # Safety: avoid infinite loops on pathological bounds
+            if ring > 200:
+                break
 
     if min_spacing is None:
         viol = Violation(

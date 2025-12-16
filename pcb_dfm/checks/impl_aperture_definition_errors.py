@@ -244,13 +244,26 @@ def run_aperture_definition_errors(ctx: CheckContext) -> CheckResult:
             pass
 
         apertures = getattr(layer, "apertures", None)
-
-        # If no aperture table exists, this is normal for many Gerbers.
-        # Do NOT flag this as suspicious.
-        if not isinstance(apertures, dict) or not apertures:
+        if not apertures:
             continue
 
-        for code, ap in apertures.items():
+        # pcb-tools sometimes returns apertures as a dict, or a dict_values/list-like view.
+        # Normalize to an iterable of (code, aperture) pairs.
+        ap_items: Iterable[Tuple[Any, Any]]
+        if isinstance(apertures, dict):
+            ap_items = apertures.items()
+        else:
+            # Try .items() if it exists
+            items_fn = getattr(apertures, "items", None)
+            if callable(items_fn):
+                ap_items = items_fn()
+            else:
+                # Fallback: treat it as a sequence of aperture objects (no codes available)
+                ap_items = [(f"(idx:{i})", ap) for i, ap in enumerate(list(apertures))]
+
+        for code, ap in ap_items:
+            if len(suspicious) >= max_individual:
+                break
             shape_norm = _normalize_shape(ap)
             dim_mm_val, dim_detail = _extract_aperture_dim_mm(ap)
 

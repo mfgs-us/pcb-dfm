@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import math
-from typing import List, Optional, Tuple
+from collections import defaultdict
+from math import floor
+from typing import Dict, List, Optional, Tuple
 
 from ..results import CheckResult, Violation, ViolationLocation
 from ..engine.context import CheckContext
@@ -15,6 +17,10 @@ except Exception:
     gerber = None
 
 _INCH_TO_MM = 25.4
+
+
+def _cell_key(x: float, y: float, cell: float) -> Tuple[int, int]:
+    return (int(floor(x / cell)), int(floor(y / cell)))
 
 
 def _poly_area_mm2(poly) -> float:
@@ -254,8 +260,8 @@ def run_via_in_pad_thermal_balance(ctx: CheckContext) -> CheckResult:
 
     # 2) Collect pad-like copper polygons (all copper layers)
     geom = ctx.geometry
-    copper_polys: List[tuple[str, object, float, float, float, float, float]] = []
-    # tuple: (layer_name, poly, area, cx, cy, w, h)
+    copper_polys: List[tuple[str, object, object, float, float, float, float, float]] = []
+    # (layer_name, poly, bbox, area, cx, cy, w, h)
 
     for layer in getattr(geom, "layers", []):
         layer_type = getattr(layer, "layer_type", getattr(layer, "type", None))
@@ -269,7 +275,12 @@ def run_via_in_pad_thermal_balance(ctx: CheckContext) -> CheckResult:
             if area < min_pad_area_mm2 or area > max_pad_area_mm2:
                 continue
 
-            _, _, _, _, w, h = _poly_bbox_dims_mm(poly)
+            b = poly.bounds()
+            min_x = float(b.min_x); max_x = float(b.max_x)
+            min_y = float(b.min_y); max_y = float(b.max_y)
+            w = max(0.0, max_x - min_x)
+            h = max(0.0, max_y - min_y)
+
             if w <= 0.0 or h <= 0.0:
                 continue
 
@@ -282,8 +293,9 @@ def run_via_in_pad_thermal_balance(ctx: CheckContext) -> CheckResult:
             if aspect > max_pad_aspect:
                 continue
 
-            cx, cy = _bbox_center_mm(poly)
-            copper_polys.append((logical, poly, area, cx, cy, w, h))
+            cx = 0.5 * (min_x + max_x)
+            cy = 0.5 * (min_y + max_y)
+            copper_polys.append((logical, poly, b, area, cx, cy, w, h))
 
     if not copper_polys:
         viol = Violation(
@@ -310,6 +322,19 @@ def run_via_in_pad_thermal_balance(ctx: CheckContext) -> CheckResult:
             violations=[viol],
         )
 
+    # Grid index pad bboxes
+    cell = max(max_via_d_mm + 2.0, 1.0)  # conservative: pads are small, 1-2mm typical
+    grid: Dict[Tuple[int, int], List[int]] = defaultdict(list)
+
+    for idx, (_lname, _poly, b, _area, _cx, _cy, _w, _h) in enumerate(copper_polys):
+        ix0 = int(floor(b.min_x / cell))
+        ix1 = int(floor(b.max_x / cell))
+        iy0 = int(floor(b.min_y / cell))
+        iy1 = int(floor(b.max_y / cell))
+        for iy in range(iy0, iy1 + 1):
+            for ix in range(ix0, ix1 + 1):
+                grid[(ix, iy)].append(idx)
+
     # 3) For each via, find best-matching pad and compute via area / pad area
     worst_ratio_pct = 0.0
     worst_loc: Optional[ViolationLocation] = None
@@ -323,23 +348,30 @@ def run_via_in_pad_thermal_balance(ctx: CheckContext) -> CheckResult:
 
         via_area = math.pi * (d_mm * 0.5) ** 2
 
-        best_pad: Optional[tuple[str, object, float, float, float, float, float]] = None
+        best_pad: Optional[tuple[str, object, object, float, float, float, float, float]] = None
 
-        for layer_name, poly, pad_area, pcx, pcy, pw, ph in copper_polys:
-            # Must be inside bbox (cheap)
-            if not _bbox_contains_point(poly, x_mm, y_mm, margin_mm=bbox_margin_mm):
-                continue
+        ci, cj = _cell_key(x_mm, y_mm, cell)
 
-            # Must be near pad centroid to avoid pours/regions matching
-            # Use a combined absolute + relative gate.
-            local_scale = max(1e-9, min(pw, ph))
-            max_offset = max(pad_center_max_offset_mm, pad_center_max_offset_frac * local_scale)
-            if math.hypot(x_mm - pcx, y_mm - pcy) > max_offset:
-                continue
+        # Search nearby cells (3x3 is generally enough because pads are small)
+        for di in (-1, 0, 1):
+            for dj in (-1, 0, 1):
+                for idx in grid.get((ci + di, cj + dj), []):
+                    layer_name, poly, b, pad_area, pcx, pcy, pw, ph = copper_polys[idx]
 
-            # If multiple match, choose smallest pad area (usually actual pad vs unions)
-            if best_pad is None or pad_area < best_pad[2]:
-                best_pad = (layer_name, poly, pad_area, pcx, pcy, pw, ph)
+                    # bbox contains (with margin) using bbox directly
+                    if not (
+                        (b.min_x - bbox_margin_mm) <= x_mm <= (b.max_x + bbox_margin_mm)
+                        and (b.min_y - bbox_margin_mm) <= y_mm <= (b.max_y + bbox_margin_mm)
+                    ):
+                        continue
+
+                    local_scale = max(1e-9, min(pw, ph))
+                    max_offset = max(pad_center_max_offset_mm, pad_center_max_offset_frac * local_scale)
+                    if math.hypot(x_mm - pcx, y_mm - pcy) > max_offset:
+                        continue
+
+                    if best_pad is None or pad_area < best_pad[3]:
+                        best_pad = (layer_name, poly, b, pad_area, pcx, pcy, pw, ph)
 
         if best_pad is None:
             continue

@@ -1,19 +1,16 @@
-# pcb_dfm/engine/check_runner.py
-
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Callable, Dict
+from typing import Callable, Dict, Iterable
+import time
 
 from ..checks import _ensure_impls_loaded
-
 from ..checks.definitions import CheckDefinition
 from ..ingest import ingest_gerber_zip
 from ..geometry import build_board_geometry
-from ..results import CheckResult  # uses your existing results.py
+from ..results import CheckResult
 from .context import CheckContext
 
-from typing import Iterable
 from .check_defs import load_check_definition as _load_check_definition
 from .check_defs import CheckDefinition as EngineCheckDefinition, PathLike as _PathLike
 
@@ -50,13 +47,14 @@ def run_single_check(
     Run a single DFM check on a Gerber zip archive.
     """
 
-    # Make sure all impl_* modules are imported and their runners are registered
     _ensure_impls_loaded()
 
     gerber_zip = Path(gerber_zip).resolve()
 
+    t0 = time.perf_counter()
     ingest_result = ingest_gerber_zip(gerber_zip)
     geom = build_board_geometry(ingest_result)
+    t_setup = time.perf_counter() - t0
 
     ctx = CheckContext(
         check_def=check_def,
@@ -68,8 +66,17 @@ def run_single_check(
     )
 
     runner = get_check_runner(check_def.id)
-    return runner(ctx)
 
+    t1 = time.perf_counter()
+    result = runner(ctx)
+    t_run = time.perf_counter() - t1
+
+    print(
+        f"[DFM TIMING] {check_def.id:<40} "
+        f"setup={t_setup:6.3f}s  run={t_run:6.3f}s  total={t_setup + t_run:6.3f}s"
+    )
+
+    return result
 
 
 def run_single_check_from_definition_file(
@@ -79,12 +86,7 @@ def run_single_check_from_definition_file(
     design_id: str = "board",
 ) -> CheckResult:
     """
-    Convenience helper:
-
-    - Accepts a check definition as either:
-      - a path to a JSON file, or
-      - a check id string that matches one of the built in definitions.
-    - Loads the CheckDefinition and runs it against the given Gerber zip.
+    Convenience helper.
     """
     check_def = _load_check_definition(definition)
     return run_single_check(
@@ -104,19 +106,23 @@ def run_checks(
     """
     Run multiple checks in one pass over the input.
 
-    This is similar to engine.run.run_dfm_on_gerber_zip, but instead of
-    looking up checks by ruleset id, you pass in concrete CheckDefinition
-    objects (which can include custom ones).
+    Ingest + geometry are built once and shared.
     """
-    # Make sure built in impl_* modules have registered their runners
+
     _ensure_impls_loaded()
 
     gerber_zip = Path(gerber_zip).resolve()
 
+    # ---- Shared ingest + geometry (major speed win)
+    t0 = time.perf_counter()
     ingest_result = ingest_gerber_zip(gerber_zip)
     geom = build_board_geometry(ingest_result)
+    setup_time = time.perf_counter() - t0
+
+    print(f"[DFM TIMING] shared setup (ingest+geometry): {setup_time:.3f}s")
 
     results: list[CheckResult] = []
+
     for check_def in check_defs:
         ctx = CheckContext(
             check_def=check_def,
@@ -126,8 +132,19 @@ def run_checks(
             design_id=design_id,
             gerber_zip=gerber_zip,
         )
+
         runner = get_check_runner(check_def.id)
-        results.append(runner(ctx))
+
+        t1 = time.perf_counter()
+        result = runner(ctx)
+        t_run = time.perf_counter() - t1
+
+        print(
+            f"[DFM TIMING] {check_def.id:<40} "
+            f"run={t_run:6.3f}s"
+        )
+
+        results.append(result)
 
     return results
 
@@ -140,14 +157,8 @@ def run_checks_from_definition_files(
 ) -> list[CheckResult]:
     """
     Higher level helper that accepts a list of JSON definition paths or ids.
-
-    Example:
-        run_checks_from_definition_files(
-            \"Gerbers.zip\",
-            [\"min_trace_width\", Path(\"./my_custom_check.json\")],
-        )
     """
-    check_defs = [ _load_check_definition(d) for d in definitions ]
+    check_defs = [_load_check_definition(d) for d in definitions]
     return run_checks(
         gerber_zip=gerber_zip,
         check_defs=check_defs,

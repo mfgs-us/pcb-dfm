@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from collections import defaultdict
 from typing import List, Optional, Tuple
 
 from ..engine.check_runner import register_check
@@ -107,6 +108,17 @@ def run_silkscreen_on_copper(ctx: CheckContext) -> CheckResult:
                 (b.min_x, b.max_x, b.min_y, b.max_y, layer.logical_layer)
             )
 
+    cell = 1.0
+    copper_grids = {}
+
+    for side, boxes in copper_bboxes_by_side.items():
+        g = defaultdict(list)
+        for idx, (min_x, max_x, min_y, max_y, layer) in enumerate(boxes):
+            cx = 0.5 * (min_x + max_x)
+            cy = 0.5 * (min_y + max_y)
+            g[(int(cx // cell), int(cy // cell))].append(idx)
+        copper_grids[side] = g
+
     # Collect silkscreen primitives per side
     silk_bboxes_by_side: dict[str, List[Tuple[float, float, float, float, str]]] = {}
     for f in ctx.ingest.files:
@@ -151,33 +163,39 @@ def run_silkscreen_on_copper(ctx: CheckContext) -> CheckResult:
             continue
 
         for s_min_x, s_max_x, s_min_y, s_max_y, s_layer in silk_boxes:
-            for c_min_x, c_max_x, c_min_y, c_max_y, c_layer in copper_boxes:
-                if (
-                    s_max_x < c_min_x
-                    or s_min_x > c_max_x
-                    or s_max_y < c_min_y
-                    or s_min_y > c_max_y
-                ):
-                    continue
+            ci = int((s_min_x + s_max_x) * 0.5 // cell)
+            cj = int((s_min_y + s_max_y) * 0.5 // cell)
 
-                # overlap
-                total_overlaps += 1
-                cx = 0.5 * max(s_min_x, c_min_x) + 0.5 * min(s_max_x, c_max_x)
-                cy = 0.5 * max(s_min_y, c_min_y) + 0.5 * min(s_max_y, c_max_y)
-                msg = f"Silkscreen overlaps copper on side {side}."
-                violations.append(
-                    Violation(
-                        severity=ctx.check_def.severity or "warning",
-                        message=msg,
-                        location=ViolationLocation(
-                            layer=s_layer,
-                            x_mm=cx,
-                            y_mm=cy,
-                            notes=f"Silk {s_layer} over copper {c_layer}.",
-                        ),
-                    )
-                )
-                # do not break here; we want to count multiple overlaps
+            for di in (-1, 0, 1):
+                for dj in (-1, 0, 1):
+                    for idx in copper_grids[side].get((ci + di, cj + dj), []):
+                        c_min_x, c_max_x, c_min_y, c_max_y, c_layer = copper_boxes[idx]
+                        if (
+                            s_max_x < c_min_x
+                            or s_min_x > c_max_x
+                            or s_max_y < c_min_y
+                            or s_min_y > c_max_y
+                        ):
+                            continue
+
+                        # overlap
+                        total_overlaps += 1
+                        cx = 0.5 * max(s_min_x, c_min_x) + 0.5 * min(s_max_x, c_max_x)
+                        cy = 0.5 * max(s_min_y, c_min_y) + 0.5 * min(s_max_y, c_max_y)
+                        msg = f"Silkscreen overlaps copper on side {side}."
+                        violations.append(
+                            Violation(
+                                severity=ctx.check_def.severity or "warning",
+                                message=msg,
+                                location=ViolationLocation(
+                                    layer=s_layer,
+                                    x_mm=cx,
+                                    y_mm=cy,
+                                    notes=f"Silk {s_layer} over copper {c_layer}.",
+                                ),
+                            )
+                        )
+                        # do not break here; we want to count multiple overlaps
 
     if total_overlaps == 0:
         return CheckResult(

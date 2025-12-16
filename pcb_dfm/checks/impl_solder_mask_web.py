@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import math
+from collections import defaultdict
+from math import floor
 from typing import List, Optional
 
 from ..engine.check_runner import register_check
@@ -26,6 +28,10 @@ def _bbox_distance_mm(b1, b2) -> float:
     if dx == 0.0 and dy == 0.0:
         return 0.0
     return math.hypot(dx, dy)
+
+
+def _cell_key(x: float, y: float, cell: float):
+    return (int(floor(x / cell)), int(floor(y / cell)))
 
 
 @register_check("solder_mask_web")
@@ -126,43 +132,54 @@ def run_solder_mask_web(ctx: CheckContext) -> CheckResult:
             violations=[viol],
         )
 
+    cell = max(recommended_min, 0.25)  # mm
+    grid = defaultdict(list)
+
+    for idx, o in enumerate(openings):
+        grid[_cell_key(o.cx, o.cy, cell)].append(idx)
+
     min_spacing = math.inf
     min_loc: Optional[ViolationLocation] = None
 
-    m = len(openings)
-    for i in range(m):
-        oi = openings[i]
-        for j in range(i + 1, m):
-            oj = openings[j]
-            if oi.side and oj.side and str(oi.side).lower() != str(oj.side).lower():
-                continue
+    for i, oi in enumerate(openings):
+        ci, cj = _cell_key(oi.cx, oi.cy, cell)
 
-            class _B:
-                __slots__ = ("min_x", "max_x", "min_y", "max_y")
+        for di in (-1, 0, 1):
+            for dj in (-1, 0, 1):
+                for j in grid.get((ci + di, cj + dj), []):
+                    if j <= i:
+                        continue
+                    oj = openings[j]
 
-                def __init__(self, min_x, max_x, min_y, max_y):
-                    self.min_x = min_x
-                    self.max_x = max_x
-                    self.min_y = min_y
-                    self.max_y = max_y
+                    if oi.side and oj.side and str(oi.side).lower() != str(oj.side).lower():
+                        continue
 
-            bi = _B(oi.min_x, oi.max_x, oi.min_y, oi.max_y)
-            bj = _B(oj.min_x, oj.max_x, oj.min_y, oj.max_y)
+                    class _B:
+                        __slots__ = ("min_x", "max_x", "min_y", "max_y")
 
-            d = _bbox_distance_mm(bi, bj)
-            if d < spacing_epsilon_mm:
-                continue
+                        def __init__(self, min_x, max_x, min_y, max_y):
+                            self.min_x = min_x
+                            self.max_x = max_x
+                            self.min_y = min_y
+                            self.max_y = max_y
 
-            if d < min_spacing:
-                min_spacing = d
-                cx = 0.5 * (oi.cx + oj.cx)
-                cy = 0.5 * (oi.cy + oj.cy)
-                min_loc = ViolationLocation(
-                    layer=oi.layer or oj.layer,
-                    x_mm=cx,
-                    y_mm=cy,
-                    notes="Narrowest solder mask web between adjacent openings.",
-                )
+                    bi = _B(oi.min_x, oi.max_x, oi.min_y, oi.max_y)
+                    bj = _B(oj.min_x, oj.max_x, oj.min_y, oj.max_y)
+
+                    d = _bbox_distance_mm(bi, bj)
+                    if d < spacing_epsilon_mm:
+                        continue
+
+                    if d < min_spacing:
+                        min_spacing = d
+                        cx = 0.5 * (oi.cx + oj.cx)
+                        cy = 0.5 * (oi.cy + oj.cy)
+                        min_loc = ViolationLocation(
+                            layer=oi.layer or oj.layer,
+                            x_mm=cx,
+                            y_mm=cy,
+                            notes="Narrowest solder mask web between adjacent openings.",
+                        )
 
     if not math.isfinite(min_spacing):
         viol = Violation(

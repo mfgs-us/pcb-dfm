@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from math import sqrt
+from math import floor, sqrt
 from typing import List, Optional
+from collections import defaultdict
 
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
@@ -141,39 +142,61 @@ def run_min_annular_ring(ctx: CheckContext) -> CheckResult:
     min_ring: Optional[float] = None
     worst_location: Optional[ViolationLocation] = None
 
+    pads = []
+    for layer in copper_layers:
+        for poly in layer.polygons:
+            b = poly.bounds()
+            pads.append((b, layer.logical_layer))
+
+    cell = max(0.5, max(d.diameter_mm for d in drills))
+    grid = defaultdict(list)
+
+    for idx, (b, layer_name) in enumerate(pads):
+        ix0 = int(floor(b.min_x / cell))
+        ix1 = int(floor(b.max_x / cell))
+        iy0 = int(floor(b.min_y / cell))
+        iy1 = int(floor(b.max_y / cell))
+        for iy in range(iy0, iy1 + 1):
+            for ix in range(ix0, ix1 + 1):
+                grid[(ix, iy)].append(idx)
+
     for hole in drills:
         r_drill = hole.diameter_mm * 0.5
 
-        for layer in copper_layers:
-            for poly in layer.polygons:
-                b = poly.bounds()
-                # quick containment check: drill center inside copper bbox
-                if (
-                    hole.x_mm < b.min_x
-                    or hole.x_mm > b.max_x
-                    or hole.y_mm < b.min_y
-                    or hole.y_mm > b.max_y
-                ):
-                    continue
+        ci = int(floor(hole.x_mm / cell))
+        cj = int(floor(hole.y_mm / cell))
 
-                width = max(b.max_x - b.min_x, 0.0)
-                height = max(b.max_y - b.min_y, 0.0)
-                if width <= 0.0 or height <= 0.0:
-                    continue
+        for di in (-1, 0, 1):
+            for dj in (-1, 0, 1):
+                for idx in grid.get((ci + di, cj + dj), []):
+                    b, layer_name = pads[idx]
+                    # quick containment check: drill center inside copper bbox
+                    if (
+                        hole.x_mm < b.min_x
+                        or hole.x_mm > b.max_x
+                        or hole.y_mm < b.min_y
+                        or hole.y_mm > b.max_y
+                    ):
+                        continue
 
-                outer_radius = 0.5 * min(width, height)
-                ring = outer_radius - r_drill
-                if ring < 0.0:
-                    ring = 0.0
+                    width = max(b.max_x - b.min_x, 0.0)
+                    height = max(b.max_y - b.min_y, 0.0)
+                    if width <= 0.0 or height <= 0.0:
+                        continue
 
-                if min_ring is None or ring < min_ring:
-                    min_ring = ring
-                    worst_location = ViolationLocation(
-                        layer=layer.logical_layer,
-                        x_mm=hole.x_mm,
-                        y_mm=hole.y_mm,
-                        notes="Approximate annular ring using copper pad bounding box.",
-                    )
+                    outer_radius = 0.5 * min(width, height)
+                    ring = outer_radius - r_drill
+                    if ring < 0.0:
+                        ring = 0.0
+
+                    if min_ring is None or ring < min_ring:
+                        min_ring = ring
+                        worst_location = ViolationLocation(
+                            layer=layer_name,
+                            x_mm=hole.x_mm,
+                            y_mm=hole.y_mm,
+                            notes="Approximate annular ring using copper pad bounding box.",
+                        )
 
     if min_ring is None:
         viol = Violation(

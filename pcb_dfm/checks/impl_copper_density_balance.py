@@ -1,7 +1,8 @@
 from __future__ import annotations
 
 import math
-from typing import List, Optional, Tuple
+from collections import defaultdict
+from typing import Dict, List, Optional, Tuple
 
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
@@ -48,23 +49,16 @@ def _poly_bbox_area_mm2(poly) -> float:
     return max(0.0, (b.max_x - b.min_x) * (b.max_y - b.min_y))
 
 
-def _poly_overlap_with_window(
-    poly, wx_min: float, wx_max: float, wy_min: float, wy_max: float
+def _bbox_overlap_with_window(
+    b, wx_min: float, wx_max: float, wy_min: float, wy_max: float
 ) -> float:
-    """
-    Approximate overlap area between polygon and window using bounding boxes only.
-    This is intentionally approximate but stable and fast.
-    """
-    b = poly.bounds()
     ix_min = max(b.min_x, wx_min)
     ix_max = min(b.max_x, wx_max)
     iy_min = max(b.min_y, wy_min)
     iy_max = min(b.max_y, wy_max)
-
     if ix_max <= ix_min or iy_max <= iy_min:
         return 0.0
-
-    return max(0.0, (ix_max - ix_min) * (iy_max - iy_min))
+    return (ix_max - ix_min) * (iy_max - iy_min)
 
 
 @register_check("copper_density_balance")
@@ -185,13 +179,13 @@ def run_copper_density_balance(ctx: CheckContext) -> CheckResult:
 
     window_density = [[0.0 for _ in range(nx)] for _ in range(ny)]
 
-    # Pre-collect all copper polygons
-    copper_polys = []
+    # Precompute bboxes once and bin them into windows they touch
+    copper_bboxes = []
     for layer in copper_layers:
         for poly in getattr(layer, "polygons", []):
-            copper_polys.append(poly)
+            copper_bboxes.append(poly.bounds())
 
-    if not copper_polys:
+    if not copper_bboxes:
         viol = Violation(
             severity="info",
             message="No copper polygons found; copper density is effectively 0 everywhere.",
@@ -216,6 +210,21 @@ def run_copper_density_balance(ctx: CheckContext) -> CheckResult:
             violations=[viol],
         )
 
+    # Bin copper bboxes into the windows they overlap so each window only checks local candidates.
+    # bins[(iy, ix)] -> list of indices into copper_bboxes
+    bins: Dict[Tuple[int, int], List[int]] = defaultdict(list)
+
+    for pi, b in enumerate(copper_bboxes):
+        # Convert bbox span to window index span, clamped to [0..nx-1], [0..ny-1]
+        ix0 = int(max(0, math.floor((b.min_x - bx_min) / window_size_mm)))
+        ix1 = int(min(nx - 1, math.floor((b.max_x - bx_min) / window_size_mm)))
+        iy0 = int(max(0, math.floor((b.min_y - by_min) / window_size_mm)))
+        iy1 = int(min(ny - 1, math.floor((b.max_y - by_min) / window_size_mm)))
+
+        for iy in range(iy0, iy1 + 1):
+            for ix in range(ix0, ix1 + 1):
+                bins[(iy, ix)].append(pi)
+
     # Compute density per window
     for iy in range(ny):
         for ix in range(nx):
@@ -230,8 +239,9 @@ def run_copper_density_balance(ctx: CheckContext) -> CheckResult:
                 continue
 
             copper_area = 0.0
-            for poly in copper_polys:
-                copper_area += _poly_overlap_with_window(poly, wx_min, wx_max, wy_min, wy_max)
+            for pi in bins.get((iy, ix), []):
+                b = copper_bboxes[pi]
+                copper_area += _bbox_overlap_with_window(b, wx_min, wx_max, wy_min, wy_max)
 
             if copper_area < min_window_copper_area_mm2:
                 density = 0.0

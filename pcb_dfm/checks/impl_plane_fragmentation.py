@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import math
+from collections import defaultdict
+from math import floor
 from typing import List, Tuple, Optional
 
 from ..engine.check_runner import register_check
@@ -105,12 +107,28 @@ def run_plane_fragmentation(ctx: CheckContext) -> CheckResult:
     bboxes = [poly.bounds() for poly, _ in plane_polys]
     adj: List[List[int]] = [[] for _ in range(n)]
 
-    for i in range(n):
-        for j in range(i + 1, n):
-            d = _bbox_distance_mm(bboxes[i], bboxes[j])
-            if d <= connectivity_gap_mm:
-                adj[i].append(j)
-                adj[j].append(i)
+    cell = connectivity_gap_mm + max(
+        (b.max_x - b.min_x) for b in bboxes
+    )
+    grid = defaultdict(list)
+
+    for i, b in enumerate(bboxes):
+        cx = 0.5 * (b.min_x + b.max_x)
+        cy = 0.5 * (b.min_y + b.max_y)
+        grid[(int(cx // cell), int(cy // cell))].append(i)
+
+    for i, b1 in enumerate(bboxes):
+        ci = int((b1.min_x + b1.max_x) * 0.5 // cell)
+        cj = int((b1.min_y + b1.max_y) * 0.5 // cell)
+
+        for di in (-1, 0, 1):
+            for dj in (-1, 0, 1):
+                for j in grid.get((ci + di, cj + dj), []):
+                    if j <= i:
+                        continue
+                    if _bbox_distance_mm(b1, bboxes[j]) <= connectivity_gap_mm:
+                        adj[i].append(j)
+                        adj[j].append(i)
 
     # Connected components
     visited = [False] * n

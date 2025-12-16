@@ -1,7 +1,9 @@
 from __future__ import annotations
 
 import math
-from typing import List, Tuple, Optional
+from collections import defaultdict
+from math import floor
+from typing import Dict, List, Tuple, Optional
 
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
@@ -95,6 +97,10 @@ def _is_via_like(poly, via_like_max_diameter_mm: float, via_like_max_area_mm2: f
 
     area = _poly_area_mm2(poly)
     return area <= via_like_max_area_mm2
+
+
+def _cell_key(x: float, y: float, cell: float) -> Tuple[int, int]:
+    return (int(floor(x / cell)), int(floor(y / cell)))
 
 
 @register_check("component_to_component_spacing")
@@ -218,19 +224,33 @@ def run_component_to_component_spacing(ctx: CheckContext) -> CheckResult:
 
     # Filter out isolated via-like features so vias do not become components.
     non_via_centers = [(cx, cy) for _, cx, cy, is_via in candidates if not is_via]
-    filtered: List[Tuple[object, float, float]] = []
 
+    # Grid index for neighbor queries
+    cell_nv = max(keep_via_if_within_mm, 0.25)
+    grid_nv: Dict[Tuple[int, int], List[Tuple[float, float]]] = defaultdict(list)
+    for nx, ny in non_via_centers:
+        grid_nv[_cell_key(nx, ny, cell_nv)].append((nx, ny))
+
+    filtered: List[Tuple[object, float, float]] = []
     for poly, cx, cy, is_via in candidates:
         if not is_via:
             filtered.append((poly, cx, cy))
             continue
 
-        # Keep via-like only if it's near a non-via feature (likely part of a footprint region).
         keep = False
-        for nx, ny in non_via_centers:
-            if math.hypot(nx - cx, ny - cy) <= keep_via_if_within_mm:
-                keep = True
+        ci, cj = _cell_key(cx, cy, cell_nv)
+        # Search neighboring cells only (3x3 is enough because cell size ~= radius)
+        for di in (-1, 0, 1):
+            for dj in (-1, 0, 1):
+                for nx, ny in grid_nv.get((ci + di, cj + dj), []):
+                    if math.hypot(nx - cx, ny - cy) <= keep_via_if_within_mm:
+                        keep = True
+                        break
+                if keep:
+                    break
+            if keep:
                 break
+
         if keep:
             filtered.append((poly, cx, cy))
 
@@ -261,9 +281,42 @@ def run_component_to_component_spacing(ctx: CheckContext) -> CheckResult:
             violations=[viol],
         )
 
-    # Cluster candidate centers into components (single-linkage within cluster_radius_mm)
+    # Grid for clustering neighbor search
+    centers: List[Tuple[float, float]] = []
     n = len(pad_polys)
-    centers = [(cx, cy) for _, cx, cy in pad_polys]
+
+    if n < 2:
+        viol = Violation(
+            severity="info",
+            message="After filtering via-like features, too few candidates remain to estimate component spacing.",
+            location=None,
+        )
+        return CheckResult(
+            check_id=ctx.check_def.id,
+            name=ctx.check_def.name,
+            category_id=ctx.check_def.category_id,
+            severity=ctx.check_def.severity or ctx.check_def.severity_default,
+            status="pass",
+            score=100.0,
+            metric={
+                "kind": "distance",
+                "units": units,
+                "measured_value": None,
+                "target": recommended_min,
+                "limit_low": absolute_min,
+                "limit_high": None,
+                "margin_to_limit": None,
+            },
+            violations=[viol],
+        )
+
+    cell_c = max(cluster_radius_mm, 0.25)
+    grid_c: Dict[Tuple[int, int], List[int]] = defaultdict(list)
+
+    for idx, (_poly, cx, cy) in enumerate(pad_polys):
+        centers.append((cx, cy))
+        grid_c[_cell_key(cx, cy, cell_c)].append(idx)
+
     visited = [False] * n
     clusters: List[List[int]] = []
 
@@ -273,17 +326,24 @@ def run_component_to_component_spacing(ctx: CheckContext) -> CheckResult:
         stack = [i]
         visited[i] = True
         cluster: List[int] = []
+
         while stack:
             k = stack.pop()
             cluster.append(k)
             ckx, cky = centers[k]
-            for j in range(n):
-                if visited[j]:
-                    continue
-                cjx, cjy = centers[j]
-                if math.hypot(cjx - ckx, cjy - cky) <= cluster_radius_mm:
-                    visited[j] = True
-                    stack.append(j)
+            ci, cj = _cell_key(ckx, cky, cell_c)
+
+            # Only check points in nearby cells
+            for di in (-1, 0, 1):
+                for dj in (-1, 0, 1):
+                    for j in grid_c.get((ci + di, cj + dj), []):
+                        if visited[j]:
+                            continue
+                        cjx, cjy = centers[j]
+                        if math.hypot(cjx - ckx, cjy - cky) <= cluster_radius_mm:
+                            visited[j] = True
+                            stack.append(j)
+
         clusters.append(cluster)
 
     if len(clusters) < 2:

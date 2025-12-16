@@ -255,20 +255,33 @@ def run_copper_density_balance(ctx: CheckContext) -> CheckResult:
     for iy in range(ny):
         for ix in range(nx):
             d_here = window_density[iy][ix]
+
+            # Compute actual window bounds for (ix, iy) - matches density calc
+            wx0 = bx_min + ix * window_size_mm
+            wx1 = min(bx_min + (ix + 1) * window_size_mm, bx_max)
+            wy0 = by_min + iy * window_size_mm
+            wy1 = min(by_min + (iy + 1) * window_size_mm, by_max)
+
             # right neighbor
             if ix + 1 < nx:
                 d_r = window_density[iy][ix + 1]
                 delta = abs(d_here - d_r)
-                cx = bx_min + (ix + 0.5) * window_size_mm
-                cy = by_min + (iy + 0.5) * window_size_mm
+
+                # shared vertical boundary x = wx1, y midpoint of this window
+                cx = wx1
+                cy = 0.5 * (wy0 + wy1)
                 _record_delta(delta, cx, cy)
+
             # down neighbor
             if iy + 1 < ny:
                 d_d = window_density[iy + 1][ix]
                 delta = abs(d_here - d_d)
-                cx = bx_min + (ix + 0.5) * window_size_mm
-                cy = by_min + (iy + 0.5) * window_size_mm
+
+                # shared horizontal boundary y = wy1, x midpoint of this window
+                cx = 0.5 * (wx0 + wx1)
+                cy = wy1
                 _record_delta(delta, cx, cy)
+
 
     # Convert to percent
     max_delta_percent = max_delta * 100.0

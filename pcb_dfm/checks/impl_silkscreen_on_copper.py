@@ -199,13 +199,13 @@ def run_silkscreen_on_copper(ctx: CheckContext) -> CheckResult:
             violations=[],
         )
 
-    # any overlap is a fail by default
+    # any overlap is a warning by default
     return CheckResult(
         check_id=ctx.check_def.id,
         name=ctx.check_def.name,
         category_id=ctx.check_def.category_id,
         severity=ctx.check_def.severity,
-        status="fail",
+        status="warning",
         score=0.0,
         metric={
             "kind": "count",

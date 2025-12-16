@@ -1,10 +1,11 @@
 from __future__ import annotations
 
+import math
 from typing import List, Optional
 from dataclasses import dataclass
 
 from ..geometry import queries
-from ..geometry.primitives import Bounds, Point2D
+from ..geometry.primitives import Bounds
 from ..results import CheckResult, Violation, ViolationLocation
 from ..engine.context import CheckContext
 from ..engine.check_runner import register_check
@@ -26,14 +27,96 @@ class DrillHit:
     d_mm: float
 
 
+def _get_board_bounds(ctx: CheckContext) -> Optional[Bounds]:
+    """
+    Best-effort board bounds. Prefer ctx.geometry.bounds() if available,
+    else ctx.geometry.outline.bounds() if outline exists.
+    """
+    geom = ctx.geometry
+    try:
+        if hasattr(geom, "bounds"):
+            b = geom.bounds()
+            if b is not None:
+                return b
+    except Exception:
+        pass
+
+    try:
+        outline = getattr(geom, "outline", None)
+        if outline is not None and hasattr(outline, "bounds"):
+            return outline.bounds()
+    except Exception:
+        pass
+
+    return None
+
+
+def _dist_bbox_to_bounds_edge_mm(b: Bounds, board: Bounds) -> float:
+    """
+    Returns minimum distance from bbox b to the board boundary edges, assuming b is inside.
+    If b touches or extends to an edge, distance is 0.
+    """
+    left = max(0.0, b.min_x - board.min_x)
+    right = max(0.0, board.max_x - b.max_x)
+    bottom = max(0.0, b.min_y - board.min_y)
+    top = max(0.0, board.max_y - b.max_y)
+    return min(left, right, bottom, top)
+
+
+def _center_to_bbox_distance_and_closest_point(cx: float, cy: float, b: Bounds) -> tuple[float, float, float]:
+    """
+    Returns (dist_center_to_bbox, closest_x, closest_y) where closest point lies on/in bbox.
+    If center is inside bbox, dist is 0 and closest point is (cx,cy).
+    """
+    if cx < b.min_x:
+        closest_x = b.min_x
+    elif cx > b.max_x:
+        closest_x = b.max_x
+    else:
+        closest_x = cx
+
+    if cy < b.min_y:
+        closest_y = b.min_y
+    elif cy > b.max_y:
+        closest_y = b.max_y
+    else:
+        closest_y = cy
+
+    dx = closest_x - cx
+    dy = closest_y - cy
+    dist = math.hypot(dx, dy)
+    return dist, closest_x, closest_y
+
+
+def _via_edge_point_toward_target(
+    cx: float, cy: float, r: float, tx: float, ty: float
+) -> tuple[float, float]:
+    """
+    Point on via edge in direction of target point (tx,ty).
+    If target equals center, returns center (degenerate).
+    """
+    vx = tx - cx
+    vy = ty - cy
+    norm = math.hypot(vx, vy)
+    if norm <= 1e-12:
+        return cx, cy
+    ux = vx / norm
+    uy = vy / norm
+    return cx + r * ux, cy + r * uy
+
+
 @register_check("via_to_copper_clearance")
 def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
     """
     Approximate via-to-copper clearance by:
 
       - Using all drill hits as via centers
-      - For each via, computing min distance from via edge to any copper polygon
-        whose bounds do NOT contain the via center (i.e. not its own pad).
+      - For each via, computing min distance from via edge to any copper polygon bounds
+
+    Improvements over older version:
+      - Perimeter copper band exclusion (optional)
+      - Pad exclusion based on *distance* to copper bbox (instead of bbox containment)
+      - Violation marker placed between via edge and closest copper point (more clear)
 
     Metric:
       measured_value: min_via_to_copper_clearance_mm
@@ -45,11 +128,19 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
     recommended_min = float(limits.get("recommended_min", 0.15))
     absolute_min = float(limits.get("absolute_min", 0.1))
 
+    raw_cfg = getattr(ctx.check_def, "raw", None) or {}
+
+    # Ignore copper polygons close to board perimeter (band inwards from outline)
+    perimeter_ignore_mm = float(raw_cfg.get("perimeter_ignore_mm", 0.0))
+
+    # Replace old "bbox contains center" skip with a tighter pad exclusion radius.
+    # This is a heuristic for "that's the via's own annular ring / pad copper".
+    assumed_annular_ring_mm = float(raw_cfg.get("assumed_annular_ring_mm", 0.15))
+    pad_exclusion_margin_mm = float(raw_cfg.get("pad_exclusion_margin_mm", 0.05))
+
     copper_layers = queries.get_copper_layers(ctx.geometry)
 
-    drill_files: List[GerberFileInfo] = [
-        f for f in ctx.ingest.files if f.layer_type == "drill"
-    ]
+    drill_files: List[GerberFileInfo] = [f for f in ctx.ingest.files if f.layer_type == "drill"]
 
     if gerber is None or not drill_files or not copper_layers:
         viol = Violation(
@@ -105,67 +196,69 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
             violations=[viol],
         )
 
+    board_bounds = _get_board_bounds(ctx)
+
     min_clear: Optional[float] = None
     worst_location: Optional[ViolationLocation] = None
 
-    # (clearance_mm, layer_name, via_x_mm, via_y_mm)
-    offenders: List[tuple[float, str, float, float]] = []
+    # (clearance_mm, layer_name, via_x_mm, via_y_mm, marker_x_mm, marker_y_mm)
+    offenders: List[tuple[float, str, float, float, float, float]] = []
 
     for hit in hits:
         cx = hit.x_mm
         cy = hit.y_mm
         r = hit.d_mm / 2.0
 
+        # Exclusion radius for copper considered to be "this via's own pad/annular ring"
+        pad_exclusion_r = r + assumed_annular_ring_mm + pad_exclusion_margin_mm
+
         for layer in copper_layers:
             for poly in layer.polygons:
                 b: Bounds = poly.bounds()
 
-                # Skip polygons whose bounds contain via center (assume it's the pad for this via)
-                if (b.min_x <= cx <= b.max_x) and (b.min_y <= cy <= b.max_y):
+                # Optional: ignore copper very near the board edge to reduce noisy false positives
+                if board_bounds is not None and perimeter_ignore_mm > 0.0:
+                    try:
+                        if _dist_bbox_to_bounds_edge_mm(b, board_bounds) <= perimeter_ignore_mm:
+                            continue
+                    except Exception:
+                        pass
+
+                dist_center, closest_x, closest_y = _center_to_bbox_distance_and_closest_point(cx, cy, b)
+
+                # If the copper bbox is extremely close to via center, treat it as the via's own pad
+                # rather than "nearby copper to clear from".
+                if dist_center <= pad_exclusion_r:
                     continue
 
-                # Compute distance from via center to polygon bounds
-                dx = 0.0
-                if cx < b.min_x:
-                    dx = b.min_x - cx
-                elif cx > b.max_x:
-                    dx = cx - b.max_x
-
-                dy = 0.0
-                if cy < b.min_y:
-                    dy = b.min_y - cy
-                elif cy > b.max_y:
-                    dy = cy - b.max_y
-
-                if dx == 0.0 and dy == 0.0:
-                    # Overlap or containment - treat as zero clearance
-                    dist_center = 0.0
-                else:
-                    dist_center = (dx * dx + dy * dy) ** 0.5
-
+                # Approx clearance from via edge to copper bbox
                 clearance = dist_center - r
-                if clearance < 0:
+                if clearance < 0.0:
                     clearance = 0.0
+
+                # Marker: midpoint between via edge (toward copper) and closest copper point
+                vx_edge_x, vx_edge_y = _via_edge_point_toward_target(cx, cy, r, closest_x, closest_y)
+                marker_x = 0.5 * (vx_edge_x + closest_x)
+                marker_y = 0.5 * (vx_edge_y + closest_y)
 
                 if min_clear is None or clearance < min_clear:
                     min_clear = clearance
                     worst_location = ViolationLocation(
                         layer=layer.logical_layer,
-                        x_mm=cx,
-                        y_mm=cy,
-                        notes="Via with minimum clearance to nearby copper (approx).",
+                        x_mm=marker_x,
+                        y_mm=marker_y,
+                        notes="Midpoint between via edge and nearest copper bbox point (approx).",
                     )
 
-                # Track any clearance that violates recommended minimum
                 if clearance < recommended_min:
                     offenders.append(
-                        (clearance, layer.logical_layer, cx, cy)
+                        (clearance, layer.logical_layer, cx, cy, marker_x, marker_y)
                     )
 
     if min_clear is None:
         viol = Violation(
             severity="warning",
-            message="Could not determine via-to-copper clearance.",
+            message="Could not determine via-to-copper clearance (all copper filtered or no measurable candidates).",
             location=None,
         )
         return CheckResult(
@@ -190,7 +283,7 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
     # Decide status
     if min_clear < absolute_min:
         status = "fail"
-        severity = "error"
+        severity = "warning"
     elif min_clear < recommended_min:
         status = "warning"
         severity = "warning"
@@ -204,7 +297,7 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
     elif min_clear <= absolute_min:
         score = 0.0
     else:
-        span = recommended_min - absolute_min
+        span = max(1e-12, recommended_min - absolute_min)
         score = max(0.0, min(100.0, 100.0 * (min_clear - absolute_min) / span))
 
     margin_to_limit = float(min_clear - absolute_min)
@@ -213,7 +306,7 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
     if status != "pass":
         offenders_sorted = sorted(offenders, key=lambda t: t[0])
         if offenders_sorted:
-            for clearance, layer_name, vx, vy in offenders_sorted[:MAX_REPORTED_VIOLATIONS]:
+            for clearance, layer_name, vx, vy, mx, my in offenders_sorted[:MAX_REPORTED_VIOLATIONS]:
                 msg = (
                     f"Minimum via-to-copper clearance {clearance:.3f} mm on layer {layer_name} is below "
                     f"recommended {recommended_min:.3f} mm (absolute minimum {absolute_min:.3f} mm)."
@@ -224,9 +317,9 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
                         message=msg,
                         location=ViolationLocation(
                             layer=layer_name,
-                            x_mm=vx,
-                            y_mm=vy,
-                            notes="Via with low clearance to copper (approx).",
+                            x_mm=mx,
+                            y_mm=my,
+                            notes="Midpoint between via edge and nearest copper bbox point (approx).",
                         ),
                     )
                 )

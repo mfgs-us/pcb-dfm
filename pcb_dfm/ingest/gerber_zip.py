@@ -130,6 +130,12 @@ def ingest_gerber_zip(zip_path: Path, workspace_root: Optional[Path] = None) -> 
         if not p.is_file():
             continue
 
+        # Skip junk from macOS zip packs
+        if "__macosx" in (part.lower() for part in p.parts):
+            continue
+        if p.name.lower().startswith("._"):
+            continue
+
         name_lower = p.name.lower()
         ext = p.suffix.lower()
 
@@ -222,7 +228,7 @@ def _guess_format(ext: str, name_lower: str) -> GerberFormat:
 
 
 def _looks_like_drill(name_lower: str) -> bool:
-    return any(token in name_lower for token in ["drill", "drl", "via", "hole", "thru"])
+    return any(token in name_lower for token in ["drill", "drl", "xln", "excellon", "npth", "pth"])
 
 
 def _classify_layer(
@@ -230,9 +236,6 @@ def _classify_layer(
     ext: str,
     fmt: GerberFormat,
 ) -> tuple[LogicalLayer, LayerSide, LayerType, Optional[bool]]:
-    """
-    Map filename patterns to logical layer, side, type, plating.
-    """
     # Defaults
     logical_layer: LogicalLayer = "Other"
     side: LayerSide = "None"
@@ -243,7 +246,7 @@ def _classify_layer(
         layer_type = "drill"
         side = "None"
 
-        np_tokens = ["npth", "nonplated", "np_"]
+        np_tokens = ["npth", "nonplated", "non-plated", "np_"]
         if any(t in name_lower for t in np_tokens):
             logical_layer = "DrillNonPlated"
             is_plated = False
@@ -253,86 +256,101 @@ def _classify_layer(
 
         return logical_layer, side, layer_type, is_plated
 
-    # At this point fmt == "gerber"
+    # ---- fmt == "gerber" ----
+
+    # Normalize common KiCad tokens
+    # KiCad: F_Cu, B_Cu, Edge_Cuts, F_Mask, B_Mask, F_Silkscreen, B_Silkscreen, F_Paste, B_Paste
+    is_f = any(t in name_lower for t in ["f_", "-f_", ".f_", "_f_"]) or "fcu" in name_lower
+    is_b = any(t in name_lower for t in ["b_", "-b_", ".b_", "_b_"]) or "bcu" in name_lower
+
     # Copper layers
-    if any(t in name_lower for t in ["gtl", "top"]) and any(t in name_lower for t in ["gbr", "gtl", "sig", "copper", "cu"]):
+    if ("f_cu" in name_lower) or ("fcu" in name_lower) or ("gtl" in name_lower) or ("top" in name_lower and ("cu" in name_lower or "copper" in name_lower or "sig" in name_lower)):
         logical_layer = "TopCopper"
         side = "Top"
         layer_type = "copper"
         return logical_layer, side, layer_type, is_plated
 
-    if any(t in name_lower for t in ["gbl", "bot", "bottom"]) and any(t in name_lower for t in ["gbr", "gbl", "sig", "copper", "cu"]):
+    if ("b_cu" in name_lower) or ("bcu" in name_lower) or ("gbl" in name_lower) or (("bot" in name_lower or "bottom" in name_lower) and ("cu" in name_lower or "copper" in name_lower or "sig" in name_lower)):
         logical_layer = "BottomCopper"
         side = "Bottom"
         layer_type = "copper"
         return logical_layer, side, layer_type, is_plated
 
-    # Inner copper layers (simple heuristic based on in1, in2, etc)
-    if "in1" in name_lower or "inner1" in name_lower:
+    # Inner copper layers (KiCad often uses In1_Cu, In2_Cu, etc)
+    if ("in1_cu" in name_lower) or ("in1cu" in name_lower) or ("inner1" in name_lower) or ("in1" in name_lower and "cu" in name_lower):
         logical_layer = "InnerCopper1"
         side = "Inner"
         layer_type = "copper"
         return logical_layer, side, layer_type, is_plated
 
-    if "in2" in name_lower or "inner2" in name_lower:
+    if ("in2_cu" in name_lower) or ("in2cu" in name_lower) or ("inner2" in name_lower) or ("in2" in name_lower and "cu" in name_lower):
         logical_layer = "InnerCopper2"
         side = "Inner"
         layer_type = "copper"
         return logical_layer, side, layer_type, is_plated
 
-    if "in3" in name_lower or "inner3" in name_lower:
+    if ("in3_cu" in name_lower) or ("in3cu" in name_lower) or ("inner3" in name_lower) or ("in3" in name_lower and "cu" in name_lower):
         logical_layer = "InnerCopper3"
         side = "Inner"
         layer_type = "copper"
         return logical_layer, side, layer_type, is_plated
 
-    if "in4" in name_lower or "inner4" in name_lower:
+    if ("in4_cu" in name_lower) or ("in4cu" in name_lower) or ("inner4" in name_lower) or ("in4" in name_lower and "cu" in name_lower):
         logical_layer = "InnerCopper4"
         side = "Inner"
         layer_type = "copper"
         return logical_layer, side, layer_type, is_plated
 
     # Solder mask
-    if any(t in name_lower for t in ["gts", "top"]) and "mask" in name_lower:
+    if ("f_mask" in name_lower) or ("fmask" in name_lower) or ("gts" in name_lower) or (("top" in name_lower) and ("mask" in name_lower)):
         logical_layer = "TopSolderMask"
         side = "Top"
         layer_type = "mask"
         return logical_layer, side, layer_type, is_plated
 
-    if any(t in name_lower for t in ["gbs", "bot", "bottom"]) and "mask" in name_lower:
+    if ("b_mask" in name_lower) or ("bmask" in name_lower) or ("gbs" in name_lower) or (("bot" in name_lower or "bottom" in name_lower) and ("mask" in name_lower)):
         logical_layer = "BottomSolderMask"
         side = "Bottom"
         layer_type = "mask"
         return logical_layer, side, layer_type, is_plated
 
     # Silkscreen
-    if any(t in name_lower for t in ["gto", "top"]) and any(t in name_lower for t in ["silk", "ss"]):
+    if ("f_silkscreen" in name_lower) or ("fsilkscreen" in name_lower) or ("gto" in name_lower) or (("top" in name_lower) and ("silk" in name_lower or "ss" in name_lower)):
         logical_layer = "TopSilkscreen"
         side = "Top"
         layer_type = "silkscreen"
         return logical_layer, side, layer_type, is_plated
 
-    if any(t in name_lower for t in ["gbo", "bot", "bottom"]) and any(t in name_lower for t in ["silk", "ss"]):
+    if ("b_silkscreen" in name_lower) or ("bsilkscreen" in name_lower) or ("gbo" in name_lower) or (("bot" in name_lower or "bottom" in name_lower) and ("silk" in name_lower or "ss" in name_lower)):
         logical_layer = "BottomSilkscreen"
         side = "Bottom"
         layer_type = "silkscreen"
         return logical_layer, side, layer_type, is_plated
 
+    # Paste
+    if ("f_paste" in name_lower) or ("fpaste" in name_lower) or ("gtp" in name_lower) or (("top" in name_lower) and ("paste" in name_lower)):
+        logical_layer = "Other"
+        side = "Top"
+        layer_type = "other"
+        return logical_layer, side, layer_type, is_plated
+
+    if ("b_paste" in name_lower) or ("bpaste" in name_lower) or ("gbp" in name_lower) or (("bot" in name_lower or "bottom" in name_lower) and ("paste" in name_lower)):
+        logical_layer = "Other"
+        side = "Bottom"
+        layer_type = "other"
+        return logical_layer, side, layer_type, is_plated
+
     # Outline and mechanical
-    if ext in {".gko"} or any(t in name_lower for t in ["outline", "edge", "edges"]):
+    if ("edge_cuts" in name_lower) or ("edgecuts" in name_lower) or (ext in {".gko", ".gm1", ".gml"}) or any(t in name_lower for t in ["outline", "boardoutline"]):
         logical_layer = "Outline"
         side = "None"
         layer_type = "outline"
         return logical_layer, side, layer_type, is_plated
 
-    if ext in {".gm1", ".gm2"} or "mech" in name_lower:
+    if ext in {".gm2"} or "mech" in name_lower or "mechanical" in name_lower:
         logical_layer = "Mechanical"
         side = "None"
         layer_type = "mechanical"
         return logical_layer, side, layer_type, is_plated
 
-    # Fallback
-    logical_layer = "Other"
-    side = "None"
-    layer_type = "other"
     return logical_layer, side, layer_type, is_plated

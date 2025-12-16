@@ -72,6 +72,9 @@ def run_silkscreen_on_copper(ctx: CheckContext) -> CheckResult:
     units_raw = metric_cfg.get("units", metric_cfg.get("unit", "count"))
     units = "count" if units_raw in (None, "", "count") else units_raw
 
+    raw_cfg = getattr(ctx.check_def, "raw", None) or {}
+    max_reported = int(raw_cfg.get("max_reported", 200))
+
     if gerber is None or Line is None:
         viol = Violation(
             severity="warning",
@@ -114,9 +117,13 @@ def run_silkscreen_on_copper(ctx: CheckContext) -> CheckResult:
     for side, boxes in copper_bboxes_by_side.items():
         g = defaultdict(list)
         for idx, (min_x, max_x, min_y, max_y, layer) in enumerate(boxes):
-            cx = 0.5 * (min_x + max_x)
-            cy = 0.5 * (min_y + max_y)
-            g[(int(cx // cell), int(cy // cell))].append(idx)
+            ix0 = int(min_x // cell)
+            ix1 = int(max_x // cell)
+            iy0 = int(min_y // cell)
+            iy1 = int(max_y // cell)
+            for iy in range(iy0, iy1 + 1):
+                for ix in range(ix0, ix1 + 1):
+                    g[(ix, iy)].append(idx)
         copper_grids[side] = g
 
     # Collect silkscreen primitives per side
@@ -162,14 +169,22 @@ def run_silkscreen_on_copper(ctx: CheckContext) -> CheckResult:
         if not copper_boxes:
             continue
 
+        done_side = False
         for s_min_x, s_max_x, s_min_y, s_max_y, s_layer in silk_boxes:
-            ci = int((s_min_x + s_max_x) * 0.5 // cell)
-            cj = int((s_min_y + s_max_y) * 0.5 // cell)
+            ix0 = int(s_min_x // cell)
+            ix1 = int(s_max_x // cell)
+            iy0 = int(s_min_y // cell)
+            iy1 = int(s_max_y // cell)
 
-            for di in (-1, 0, 1):
-                for dj in (-1, 0, 1):
-                    for idx in copper_grids[side].get((ci + di, cj + dj), []):
+            seen: set[int] = set()
+            for iy in range(iy0 - 1, iy1 + 2):
+                for ix in range(ix0 - 1, ix1 + 2):
+                    for idx in copper_grids[side].get((ix, iy), []):
+                        if idx in seen:
+                            continue
+                        seen.add(idx)
                         c_min_x, c_max_x, c_min_y, c_max_y, c_layer = copper_boxes[idx]
+
                         if (
                             s_max_x < c_min_x
                             or s_min_x > c_max_x
@@ -195,7 +210,13 @@ def run_silkscreen_on_copper(ctx: CheckContext) -> CheckResult:
                                 ),
                             )
                         )
-                        # do not break here; we want to count multiple overlaps
+                        if len(violations) >= max_reported:
+                            done_side = True
+                            break
+                if done_side:
+                    break
+            if done_side:
+                break
 
     if total_overlaps == 0:
         return CheckResult(

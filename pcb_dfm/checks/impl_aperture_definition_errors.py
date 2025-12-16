@@ -186,6 +186,7 @@ def run_aperture_definition_errors(ctx: CheckContext) -> CheckResult:
     # How many individual violations to emit (beyond the summary)
     max_individual = int(raw_cfg.get("max_individual_violations", 50))
     max_examples = int(raw_cfg.get("max_examples", 12))
+    max_files = int(raw_cfg.get("max_files", 999))
 
     if gerber is None:
         viol = Violation(
@@ -215,9 +216,14 @@ def run_aperture_definition_errors(ctx: CheckContext) -> CheckResult:
     suspicious: List[SuspiciousAperture] = []
     per_file_counts: Dict[str, int] = {}
 
-    gerber_files: List[GerberFileInfo] = [f for f in ctx.ingest.files if f.format == "gerber"]
+    gerber_files: List[GerberFileInfo] = [
+        f for f in ctx.ingest.files
+        if f.format == "gerber" and f.layer_type in ("copper", "mask", "silk", "silkscreen")
+    ]
 
-    for info in gerber_files:
+    for k, info in enumerate(gerber_files):
+        if k >= max_files:
+            break
         layer_label = str(info.logical_layer or info.path.name)
         file_label = str(info.path.name)
 

@@ -107,25 +107,35 @@ def run_plane_fragmentation(ctx: CheckContext) -> CheckResult:
     bboxes = [poly.bounds() for poly, _ in plane_polys]
     adj: List[List[int]] = [[] for _ in range(n)]
 
-    cell = connectivity_gap_mm + max(
-        (b.max_x - b.min_x) for b in bboxes
-    )
+    # Better spatial index:
+    # - Use a moderate cell size so we do not collapse everything into one cell.
+    # - Insert each bbox into every cell it overlaps (not just its center).
+    # This keeps neighbor queries local even if some plane polygons are huge.
+    cell = max(2.0, fragment_max_diag_mm * 2.0)  # mm, reasonable default
     grid = defaultdict(list)
 
     for i, b in enumerate(bboxes):
-        cx = 0.5 * (b.min_x + b.max_x)
-        cy = 0.5 * (b.min_y + b.max_y)
-        grid[(int(cx // cell), int(cy // cell))].append(i)
+        ix0 = int(floor(b.min_x / cell))
+        ix1 = int(floor(b.max_x / cell))
+        iy0 = int(floor(b.min_y / cell))
+        iy1 = int(floor(b.max_y / cell))
+        for iy in range(iy0, iy1 + 1):
+            for ix in range(ix0, ix1 + 1):
+                grid[(ix, iy)].append(i)
 
     for i, b1 in enumerate(bboxes):
-        ci = int((b1.min_x + b1.max_x) * 0.5 // cell)
-        cj = int((b1.min_y + b1.max_y) * 0.5 // cell)
+        ix0 = int(floor(b1.min_x / cell))
+        ix1 = int(floor(b1.max_x / cell))
+        iy0 = int(floor(b1.min_y / cell))
+        iy1 = int(floor(b1.max_y / cell))
 
-        for di in (-1, 0, 1):
-            for dj in (-1, 0, 1):
-                for j in grid.get((ci + di, cj + dj), []):
-                    if j <= i:
+        seen: set[int] = set()
+        for iy in range(iy0 - 1, iy1 + 2):
+            for ix in range(ix0 - 1, ix1 + 2):
+                for j in grid.get((ix, iy), []):
+                    if j <= i or j in seen:
                         continue
+                    seen.add(j)
                     if _bbox_distance_mm(b1, bboxes[j]) <= connectivity_gap_mm:
                         adj[i].append(j)
                         adj[j].append(i)

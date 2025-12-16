@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import math
+from collections import defaultdict
+from math import floor
 from typing import List, Optional
 
 from ..engine.check_runner import register_check
@@ -150,6 +152,48 @@ def run_solder_mask_expansion(ctx: CheckContext) -> CheckResult:
             violations=[viol],
         )
 
+    # Spatial index for mask openings to avoid pads*masks scans
+    cell = max(0.5, mask_search_inflate_mm * 4.0)  # mm, tuned for typical mask clearances
+    mask_grid_by_side: dict[str, dict[tuple[int, int], list[int]]] = {}
+    masks_by_side: dict[str, list[_MaskOpening]] = defaultdict(list)
+
+    for m in masks:
+        key = str(m.side).lower() if m.side is not None else "unknown"
+        masks_by_side[key].append(m)
+
+    for side_key, side_masks in masks_by_side.items():
+        grid = defaultdict(list)
+        for idx, m in enumerate(side_masks):
+            # Put each mask bbox into all cells it overlaps
+            ix0 = int(floor((m.min_x - mask_search_inflate_mm) / cell))
+            ix1 = int(floor((m.max_x + mask_search_inflate_mm) / cell))
+            iy0 = int(floor((m.min_y - mask_search_inflate_mm) / cell))
+            iy1 = int(floor((m.max_y + mask_search_inflate_mm) / cell))
+            for iy in range(iy0, iy1 + 1):
+                for ix in range(ix0, ix1 + 1):
+                    grid[(ix, iy)].append(idx)
+        mask_grid_by_side[side_key] = grid
+
+    # helper to fetch candidate masks for a pad
+    def _mask_candidates_for_pad(pad: _Pad) -> list[_MaskOpening]:
+        side_key = str(pad.side).lower() if pad.side is not None else "unknown"
+        side_masks = masks_by_side.get(side_key, [])
+        grid = mask_grid_by_side.get(side_key)
+        if not grid:
+            return []
+        ci = int(floor(pad.cx / cell))
+        cj = int(floor(pad.cy / cell))
+        out: list[_MaskOpening] = []
+        seen: set[int] = set()
+        for di in (-1, 0, 1):
+            for dj in (-1, 0, 1):
+                for midx in grid.get((ci + di, cj + dj), []):
+                    if midx in seen:
+                        continue
+                    seen.add(midx)
+                    out.append(side_masks[midx])
+        return out
+
     min_expansion = math.inf
     min_loc: Optional[ViolationLocation] = None
     has_any_match = False
@@ -160,7 +204,7 @@ def run_solder_mask_expansion(ctx: CheckContext) -> CheckResult:
 
         best_expansion_for_pad = math.inf
 
-        for m in masks:
+        for m in _mask_candidates_for_pad(pad):
             if pad.side and m.side and str(pad.side).lower() != str(m.side).lower():
                 continue
 

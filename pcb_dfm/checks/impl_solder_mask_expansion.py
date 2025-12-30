@@ -22,6 +22,19 @@ def _poly_area_mm2(poly) -> float:
     return max(0.0, (b.max_x - b.min_x) * (b.max_y - b.min_y))
 
 
+def _intersects(a, b) -> bool:
+    if hasattr(a, "intersects"):
+        return bool(a.intersects(b))
+    # fallback: if you have no boolean ops, you can't do this reliably
+    return True
+
+
+def _contains(a, b) -> bool:
+    if hasattr(a, "contains"):
+        return bool(a.contains(b))
+    return False
+
+
 @register_check("solder_mask_expansion")
 def run_solder_mask_expansion(ctx: CheckContext) -> CheckResult:
     """
@@ -202,44 +215,39 @@ def run_solder_mask_expansion(ctx: CheckContext) -> CheckResult:
         pad_w = pad.max_x - pad.min_x
         pad_h = pad.max_y - pad.min_y
 
-        best_expansion_for_pad = math.inf
+        best_rank_for_pad = (2, math.inf)
+        best_mask_for_pad: Optional[_MaskOpening] = None
 
         for m in _mask_candidates_for_pad(pad):
             if pad.side and m.side and str(pad.side).lower() != str(m.side).lower():
                 continue
 
-            if (
-                m.max_x < pad.min_x - mask_search_inflate_mm
-                or m.min_x > pad.max_x + mask_search_inflate_mm
-                or m.max_y < pad.min_y - mask_search_inflate_mm
-                or m.min_y > pad.max_y + mask_search_inflate_mm
-            ):
+            if not _intersects(m.poly, pad.poly):
                 continue
 
-            if not (m.min_x - mask_search_inflate_mm <= pad.cx <= m.max_x + mask_search_inflate_mm):
-                continue
-            if not (m.min_y - mask_search_inflate_mm <= pad.cy <= m.max_y + mask_search_inflate_mm):
-                continue
+            contains = _contains(m.poly, pad.poly)
+            rank = (0 if contains else 1, m.area)
 
-            mask_w = m.max_x - m.min_x
-            mask_h = m.max_y - m.min_y
+            if rank < best_rank_for_pad:
+                best_rank_for_pad = rank
+                best_mask_for_pad = m
 
-            dx = mask_w - pad_w
-            dy = mask_h - pad_h
-            expansion = 0.5 * min(dx, dy)
-
-            if expansion < best_expansion_for_pad:
-                best_expansion_for_pad = expansion
-
-        if best_expansion_for_pad is math.inf:
+        if best_mask_for_pad is None:
             continue
 
         has_any_match = True
 
-        if best_expansion_for_pad < min_expansion:
-            min_expansion = best_expansion_for_pad
+        m = best_mask_for_pad
+        mask_w = m.max_x - m.min_x
+        mask_h = m.max_y - m.min_y
+        dx = mask_w - pad_w
+        dy = mask_h - pad_h
+        expansion = 0.5 * min(dx, dy)
+
+        if expansion < min_expansion:
+            min_expansion = expansion
             min_loc = ViolationLocation(
-                layer=pad.layer,
+                layer=m.layer,
                 x_mm=pad.cx,
                 y_mm=pad.cy,
                 notes="Pad with smallest estimated solder mask expansion.",

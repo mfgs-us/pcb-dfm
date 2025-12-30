@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import Optional, List
+from typing import Optional, List, Tuple
 
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
@@ -33,19 +33,24 @@ def _poly_area_mm2(poly) -> float:
         return 0.0
 
 
-def _get_board_dims_mm(geom) -> Optional[tuple[float, float]]:
+def _get_board_bbox_mm(geom) -> Optional[Tuple[float, float, float, float]]:
     """
-    Try to get board width/height (mm) from geometry.
-    Fallback to outline layer bounding box if needed.
+    Return (min_x, min_y, max_x, max_y) of the board outline in mm, in the same
+    coordinate system as copper polygons. Falls back to 'board' dims if needed.
     """
     board = getattr(geom, "board", None)
     if board is not None:
         w = getattr(board, "width_mm", None)
         h = getattr(board, "height_mm", None)
-        if w is not None and h is not None:
-            return float(w), float(h)
+        # Only safe if we ALSO know the origin. If not present, we can't place a point.
+        ox = getattr(board, "origin_x_mm", None)
+        oy = getattr(board, "origin_y_mm", None)
+        if w is not None and h is not None and ox is not None and oy is not None:
+            min_x = float(ox)
+            min_y = float(oy)
+            return (min_x, min_y, min_x + float(w), min_y + float(h))
 
-    # Fallback: outline polygons
+    # Fallback: outline polygons bounding box
     min_x = None
     max_x = None
     min_y = None
@@ -71,7 +76,7 @@ def _get_board_dims_mm(geom) -> Optional[tuple[float, float]]:
     if min_x is None or max_x is None or min_y is None or max_y is None:
         return None
 
-    return max(0.0, max_x - min_x), max(0.0, max_y - min_y)
+    return (min_x, min_y, max_x, max_y)
 
 
 @register_check("copper_thermal_area")
@@ -103,8 +108,8 @@ def run_copper_thermal_area(ctx: CheckContext) -> CheckResult:
 
     geom = ctx.geometry
 
-    dims = _get_board_dims_mm(geom)
-    if dims is None:
+    bbox = _get_board_bbox_mm(geom)
+    if bbox is None:
         viol = Violation(
             severity="warning",
             message="Could not determine board outline to estimate copper thermal area.",
@@ -129,7 +134,9 @@ def run_copper_thermal_area(ctx: CheckContext) -> CheckResult:
             violations=[viol],
         )
 
-    board_w_mm, board_h_mm = dims
+    min_x, min_y, max_x, max_y = bbox
+    board_w_mm = max(0.0, max_x - min_x)
+    board_h_mm = max(0.0, max_y - min_y)
     board_area_mm2 = max(1e-6, board_w_mm * board_h_mm)
 
     best_pct = 0.0
@@ -200,13 +207,16 @@ def run_copper_thermal_area(ctx: CheckContext) -> CheckResult:
 
     margin_to_limit = measured - absolute_min_pct
 
+    cx = (min_x + max_x) / 2.0
+    cy = (min_y + max_y) / 2.0
+
     loc = ViolationLocation(
         layer=best_layer_name,
-        x_mm=board_w_mm / 2.0,
-        y_mm=board_h_mm / 2.0,
+        x_mm=cx,
+        y_mm=cy,
         width_mm=board_w_mm,
         height_mm=board_h_mm,
-        notes="Layer with highest plane-like copper coverage.",
+        notes="Layer with highest plane-like copper coverage. Location is board bbox center.",
     )
 
     msg = (

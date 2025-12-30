@@ -4,7 +4,7 @@ import math
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-from ..results import CheckResult, Violation
+from ..results import CheckResult, Violation, ViolationLocation
 from ..engine.context import CheckContext
 from ..engine.check_runner import register_check
 from ..ingest import GerberFileInfo
@@ -26,6 +26,82 @@ class SuspiciousAperture:
     dim_mm: Optional[float]
     reason: str
     detail: str
+
+
+def _primitive_location_mm(layer_obj: Any, aperture_code: str) -> Optional[ViolationLocation]:
+    """
+    Best-effort: find first primitive that uses the given aperture code and return its bbox center.
+    Works with pcb-tools style primitives in many cases.
+    """
+    prims = getattr(layer_obj, "primitives", None)
+    if not prims:
+        return None
+
+    # Normalize "Dnn" codes
+    code_norm = str(aperture_code)
+    if not code_norm.startswith("D") and code_norm.startswith("(idx:"):
+        # no real code available, can't match reliably
+        return None
+
+    for p in prims:
+        # Try common fields pcb-tools uses
+        ap = getattr(p, "aperture", None)
+        ap_d = getattr(ap, "d", None) if ap is not None else None
+        p_code = None
+        if ap_d is not None:
+            p_code = f"D{int(ap_d)}"
+        else:
+            p_code = getattr(p, "aperture_code", None) or getattr(p, "d", None)
+
+        if p_code is None:
+            continue
+        if str(p_code) != code_norm:
+            continue
+
+        # Bounds: pcb-tools primitives often have .bounding_box or .bounds
+        bb = getattr(p, "bounding_box", None) or getattr(p, "bounds", None)
+        if bb is None and hasattr(p, "bounding_box"):
+            try:
+                bb = p.bounding_box
+            except Exception:
+                bb = None
+
+        if bb is not None:
+            # Various shapes for bbox objects, try both styles
+            min_x = getattr(bb, "min_x", None)
+            max_x = getattr(bb, "max_x", None)
+            min_y = getattr(bb, "min_y", None)
+            max_y = getattr(bb, "max_y", None)
+
+            if None not in (min_x, max_x, min_y, max_y):
+                # layer has been converted to inch already (layer.to_inch()), so convert to mm
+                cx_mm = (float(min_x) + float(max_x)) * 0.5 * _INCH_TO_MM
+                cy_mm = (float(min_y) + float(max_y)) * 0.5 * _INCH_TO_MM
+                w_mm = max(0.0, (float(max_x) - float(min_x)) * _INCH_TO_MM)
+                h_mm = max(0.0, (float(max_y) - float(min_y)) * _INCH_TO_MM)
+                return ViolationLocation(
+                    layer=None,  # you set layer in the caller to logical layer
+                    x_mm=cx_mm,
+                    y_mm=cy_mm,
+                    width_mm=w_mm,
+                    height_mm=h_mm,
+                    notes=f"Example primitive using {code_norm}.",
+                )
+
+        # Fallback: point-like primitives
+        x = getattr(p, "x", None)
+        y = getattr(p, "y", None)
+        if x is not None and y is not None:
+            return ViolationLocation(
+                layer=None,
+                x_mm=float(x) * _INCH_TO_MM,
+                y_mm=float(y) * _INCH_TO_MM,
+                width_mm=0.5,
+                height_mm=0.5,
+                notes=f"Example primitive point using {code_norm}.",
+            )
+
+    return None
 
 
 def _safe_float(v: Any) -> Optional[float]:
@@ -215,6 +291,7 @@ def run_aperture_definition_errors(ctx: CheckContext) -> CheckResult:
 
     suspicious: List[SuspiciousAperture] = []
     per_file_counts: Dict[str, int] = {}
+    layer_objs: Dict[str, Any] = {}
 
     gerber_files: List[GerberFileInfo] = [
         f for f in ctx.ingest.files
@@ -229,6 +306,7 @@ def run_aperture_definition_errors(ctx: CheckContext) -> CheckResult:
 
         try:
             layer = gerber.read(str(info.path))
+            layer_objs[layer_label] = layer
         except Exception:
             suspicious.append(
                 SuspiciousAperture(
@@ -348,7 +426,23 @@ def run_aperture_definition_errors(ctx: CheckContext) -> CheckResult:
                 )
                 per_file_counts[layer_label] = per_file_counts.get(layer_label, 0) + 1
 
-    count = float(len(suspicious))
+    HARD_REASONS = {
+        "parse_failed",
+        "no_usable_dimension",
+        "macro_no_size",
+        "extremely_small",
+        "extremely_large",
+    }
+
+    SOFT_REASONS = {
+        "unknown_shape",
+    }
+
+    hard = [s for s in suspicious if s.reason in HARD_REASONS]
+    soft = [s for s in suspicious if s.reason in SOFT_REASONS]
+
+    # Metric should reflect real risk, not low-confidence parsing quirks.
+    count = float(len(hard))
 
     if count <= target_max:
         status = "pass"
@@ -426,11 +520,20 @@ def run_aperture_definition_errors(ctx: CheckContext) -> CheckResult:
             else:
                 msg += "."
 
+            loc = None
+            layer_obj = layer_objs.get(s.layer_name)
+            if layer_obj is not None and str(s.code).startswith("D"):
+                loc = _primitive_location_mm(layer_obj, str(s.code))
+                if loc is not None:
+                    loc.layer = s.layer_name
+
+            item_sev = "warning" if s.reason == "unknown_shape" else sev
+
             violations.append(
                 Violation(
-                    severity=sev,
+                    severity=item_sev,
                     message=msg,
-                    location=None,
+                    location=loc,
                     extra={
                         "file": s.file_label,
                         "layer": s.layer_name,

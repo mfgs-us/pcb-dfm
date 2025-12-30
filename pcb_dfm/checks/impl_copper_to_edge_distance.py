@@ -116,7 +116,7 @@ def run_copper_to_edge_distance(ctx: CheckContext) -> CheckResult:
 
     # Determine status, severity, and score
     if min_dist < absolute_min:
-        status = "fail"
+        status = "warning"
         severity = "error"
     elif min_dist < recommended_min:
         status = "warning"

@@ -245,8 +245,7 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
         )
 
     # Spatial grid over copper bboxes
-    # Smaller cells reduce candidates per bucket and keep neighborhood scans cheap
-    cell = max(0.5, recommended_min * 2.0)  # ex: rec=0.15 -> 0.5mm floor
+    cell = max(1.0, recommended_min + 1.0)  # 1mm floor helps keep grid density reasonable
     grid: Dict[Tuple[int, int], List[int]] = defaultdict(list)
     for idx, (_, b, _) in enumerate(copper_entries):
         # insert bbox into all intersected cells
@@ -264,78 +263,100 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
     # (clearance_mm, layer_name, via_x_mm, via_y_mm, marker_x_mm, marker_y_mm)
     offenders: List[tuple[float, str, float, float, float, float]] = []
 
-    any_below_recommended = False
-
     for hit in hits:
         cx = hit.x_mm
         cy = hit.y_mm
         r = hit.d_mm / 2.0
 
+        # Exclusion radius for copper considered to be "this via's own pad/annular ring"
         pad_exclusion_r = r + assumed_annular_ring_mm + pad_exclusion_margin_mm
 
-        # We only care about copper that could possibly violate the recommended limit:
-        # clearance = dist_center - r < recommended_min  -> dist_center < r + recommended_min
-        # Add a small padding so we don't miss bboxes that are in adjacent cells.
-        search_radius = r + recommended_min + cell * 1.5
+        ci, cj = _cell_key(cx, cy, cell)
 
-        ix0 = int(floor((cx - search_radius) / cell))
-        ix1 = int(floor((cx + search_radius) / cell))
-        iy0 = int(floor((cy - search_radius) / cell))
-        iy1 = int(floor((cy + search_radius) / cell))
-
+        # Expand ring until we can prove we won't beat the current min_clear (global)
+        ring = 0
         seen: set[int] = set()
 
-        for iy in range(iy0, iy1 + 1):
-            for ix in range(ix0, ix1 + 1):
-                bucket = grid.get((ix, iy))
-                if not bucket:
-                    continue
-
-                for idx in bucket:
-                    if idx in seen:
+        while True:
+            # scan ring of cells
+            for di in range(-ring, ring + 1):
+                for dj in range(-ring, ring + 1):
+                    if ring > 0 and (abs(di) != ring and abs(dj) != ring):
                         continue
-                    seen.add(idx)
-
-                    layer_name, b, edge_dist = copper_entries[idx]
-
-                    if perimeter_ignore_mm > 0.0 and edge_dist is not None and edge_dist <= perimeter_ignore_mm:
+                    bucket = grid.get((ci + di, cj + dj))
+                    if not bucket:
                         continue
 
-                    dist_center, closest_x, closest_y = _center_to_bbox_distance_and_closest_point(cx, cy, b)
+                    for idx in bucket:
+                        if idx in seen:
+                            continue
+                        seen.add(idx)
 
-                    # Too close means it's probably the via's own pad/annular ring - skip
-                    if dist_center <= pad_exclusion_r:
-                        continue
+                        layer_name, b, edge_dist = copper_entries[idx]
 
-                    # If it can't possibly violate recommended_min, skip
-                    if dist_center >= (r + recommended_min):
-                        continue
+                        if perimeter_ignore_mm > 0.0 and edge_dist is not None and edge_dist <= perimeter_ignore_mm:
+                            continue
 
-                    clearance = dist_center - r
-                    if clearance < 0.0:
-                        clearance = 0.0
+                        dist_center, closest_x, closest_y = _center_to_bbox_distance_and_closest_point(cx, cy, b)
 
-                    vx_edge_x, vx_edge_y = _via_edge_point_toward_target(cx, cy, r, closest_x, closest_y)
-                    marker_x = 0.5 * (vx_edge_x + closest_x)
-                    marker_y = 0.5 * (vx_edge_y + closest_y)
+                        if dist_center <= pad_exclusion_r:
+                            continue
 
-                    any_below_recommended = True
+                        clearance = dist_center - r
+                        if clearance < 0.0:
+                            clearance = 0.0
 
-                    if min_clear is None or clearance < min_clear:
-                        min_clear = clearance
-                        worst_location = ViolationLocation(
-                            layer=layer_name,
-                            x_mm=marker_x,
-                            y_mm=marker_y,
-                            notes="Midpoint between via edge and nearest copper bbox point (approx).",
-                        )
+                        vx_edge_x, vx_edge_y = _via_edge_point_toward_target(cx, cy, r, closest_x, closest_y)
+                        marker_x = 0.5 * (vx_edge_x + closest_x)
+                        marker_y = 0.5 * (vx_edge_y + closest_y)
 
-                    offenders.append((clearance, layer_name, cx, cy, marker_x, marker_y))
+                        if min_clear is None or clearance < min_clear:
+                            min_clear = clearance
+                            worst_location = ViolationLocation(
+                                layer=layer_name,
+                                x_mm=marker_x,
+                                y_mm=marker_y,
+                                notes="Midpoint between via edge and nearest copper bbox point (approx).",
+                            )
+
+                        if clearance < recommended_min:
+                            offenders.append((clearance, layer_name, cx, cy, marker_x, marker_y))
+
+            # Stop expanding if we already have a min_clear and the next ring is too far to improve it.
+            if min_clear is not None:
+                # Lower bound on distance from center to any bbox in next ring is roughly ring*cell
+                # If that lower bound minus r is already >= min_clear, no need to expand.
+                if (ring + 1) * cell - r >= min_clear:
+                    break
+
+            ring += 1
+            if ring > 200:
+                break
 
     if min_clear is None:
-        # No copper bbox came within the violation band for any via.
-        # That implies min clearance is >= recommended_min (for our bbox-approx model).
-        min_clear = recommended_min
+        viol = Violation(
+            severity="warning",
+            message="Could not determine via-to-copper clearance (all copper filtered or no measurable candidates).",
+            location=None,
+        )
+        return CheckResult(
+            check_id=ctx.check_def.id,
+            name=ctx.check_def.name,
+            category_id=ctx.check_def.category_id,
+            severity=ctx.check_def.severity,
+            status="warning",
+            score=50.0,
+            metric={
+                "kind": "geometry",
+                "units": units,
+                "measured_value": None,
+                "target": recommended_min,
+                "limit_low": absolute_min,
+                "limit_high": None,
+                "margin_to_limit": None,
+            },
+            violations=[viol],
+        )
 
     # Decide status
     if min_clear < absolute_min:

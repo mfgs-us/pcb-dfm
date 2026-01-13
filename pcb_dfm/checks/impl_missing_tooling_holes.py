@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 from typing import List, Optional
 
-from ..results import CheckResult, Violation, ViolationLocation
+from ..results import CheckResult, Violation, ViolationLocation, MetricResult
 from ..engine.context import CheckContext
 from ..engine.check_runner import register_check
 from ..ingest import GerberFileInfo
@@ -148,20 +148,20 @@ def run_missing_tooling_holes(ctx: CheckContext) -> CheckResult:
             check_id=ctx.check_def.id,
             name=ctx.check_def.name,
             category_id=ctx.check_def.category_id,
-            severity=ctx.check_def.severity or ctx.check_def.severity_default,
             status="warning",
+            severity="info",  # Default value, will be overridden by finalize()
             score=50.0,
-            metric={
-                "kind": "count",
-                "units": units,
-                "measured_value": None,
-                "target": recommended_min,
-                "limit_low": absolute_min,
-                "limit_high": None,
-                "margin_to_limit": None,
-            },
+            metric=MetricResult(
+                kind="count",
+                units=units,
+                measured_value=None,
+                target=recommended_min,
+                limit_low=absolute_min,
+                limit_high=None,
+                margin_to_limit=None,
+            ),
             violations=[viol],
-        )
+        ).finalize()
 
     min_x = float(getattr(board, "min_x_mm", getattr(board, "x_min_mm", 0.0)))
     max_x = min_x + float(getattr(board, "width_mm", getattr(board, "width", 0.0)))
@@ -188,20 +188,20 @@ def run_missing_tooling_holes(ctx: CheckContext) -> CheckResult:
             check_id=ctx.check_def.id,
             name=ctx.check_def.name,
             category_id=ctx.check_def.category_id,
-            severity=ctx.check_def.severity or ctx.check_def.severity_default,
             status="warning",
+            severity="info",  # Default value, will be overridden by finalize()
             score=50.0,
-            metric={
-                "kind": "count",
-                "units": units,
-                "measured_value": 0.0,
-                "target": recommended_min,
-                "limit_low": absolute_min,
-                "limit_high": None,
-                "margin_to_limit": -absolute_min,
-            },
+            metric=MetricResult(
+                kind="count",
+                units=units,
+                measured_value=0.0,
+                target=recommended_min,
+                limit_low=absolute_min,
+                limit_high=None,
+                margin_to_limit=-absolute_min,
+            ),
             violations=[viol],
-        )
+        ).finalize()
 
     # Filter candidate tooling holes
     tooling_hits: List[dict] = []
@@ -288,17 +288,17 @@ def run_missing_tooling_holes(ctx: CheckContext) -> CheckResult:
         check_id=ctx.check_def.id,
         name=ctx.check_def.name,
         category_id=ctx.check_def.category_id,
-        severity=ctx.check_def.severity or ctx.check_def.severity_default,
+        severity="info",  # Default value, will be overridden by finalize()
         status=status,
         score=score,
-        metric={
-            "kind": "count",
-            "units": units,
-            "measured_value": count,
-            "target": recommended_min,
-            "limit_low": absolute_min,
-            "limit_high": None,
-            "margin_to_limit": margin_to_limit,
-        },
+        metric=MetricResult(
+            kind="count",
+            units=units,
+            measured_value=count,
+            target=recommended_min,
+            limit_low=absolute_min,
+            limit_high=None,
+            margin_to_limit=margin_to_limit,
+        ),
         violations=violations,
-    )
+    ).finalize()

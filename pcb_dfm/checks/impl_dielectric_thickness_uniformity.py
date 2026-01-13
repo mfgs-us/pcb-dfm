@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from ..engine.context import CheckContext
 from ..engine.check_runner import register_check
-from ..results import CheckResult, Violation
+from ..results import CheckResult, Violation, MetricResult
 
 
 @register_check("dielectric_thickness_uniformity")
@@ -37,17 +37,17 @@ def run_dielectric_thickness_uniformity(ctx: CheckContext) -> CheckResult:
         check_id=ctx.check_def.id,
         name=ctx.check_def.name,
         category_id=ctx.check_def.category_id,
-        severity=ctx.check_def.severity,
         status="warning",
+        severity="info",  # Default value, will be overridden by finalize()
         score=80.0,
-        metric={
-            "kind": "ratio",
-            "units": units,
-            "measured_value": None,
-            "target": None,
-            "limit_low": None,
-            "limit_high": None,
-            "margin_to_limit": None,
-        },
+        metric=MetricResult(
+            kind="ratio",
+            units="%",
+            measured_value=None,
+            target=None,
+            limit_low=None,
+            limit_high=None,
+            margin_to_limit=None,
+        ),
         violations=[viol],
-    )
+    ).finalize()

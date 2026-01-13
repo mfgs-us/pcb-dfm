@@ -8,7 +8,7 @@ from typing import Dict, List, Optional, Tuple
 
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
-from ..results import CheckResult, Violation, ViolationLocation
+from ..results import CheckResult, Violation, ViolationLocation, MetricResult
 
 try:
     from gerber import excellon  # type: ignore
@@ -124,20 +124,16 @@ def run_drill_to_drill_spacing(ctx: CheckContext) -> CheckResult:
             check_id=ctx.check_def.id,
             name=ctx.check_def.name,
             category_id=ctx.check_def.category_id,
-            severity=ctx.check_def.severity,
             status="warning",
+            severity="info",  # Default value, will be overridden by finalize()
             score=50.0,
-            metric={
-                "kind": "geometry",
-                "units": units,
-                "measured_value": None,
-                "target": recommended_min,
-                "limit_low": absolute_min,
-                "limit_high": None,
-                "margin_to_limit": None,
-            },
+            metric=MetricResult.geometry_mm(
+                measured_mm=None,
+                target_mm=recommended_min,
+                limit_low_mm=absolute_min,
+            ),
             violations=[viol],
-        )
+        ).finalize()
 
     min_spacing: Optional[float] = None
     worst_location: Optional[ViolationLocation] = None
@@ -244,30 +240,24 @@ def run_drill_to_drill_spacing(ctx: CheckContext) -> CheckResult:
             check_id=ctx.check_def.id,
             name=ctx.check_def.name,
             category_id=ctx.check_def.category_id,
-            severity=ctx.check_def.severity,
             status="warning",
+            severity="info",  # Default value, will be overridden by finalize()
             score=50.0,
-            metric={
-                "kind": "geometry",
-                "units": units,
-                "measured_value": None,
-                "target": recommended_min,
-                "limit_low": absolute_min,
-                "limit_high": None,
-                "margin_to_limit": None,
-            },
+            metric=MetricResult.geometry_mm(
+                measured_mm=None,
+                target_mm=recommended_min,
+                limit_low_mm=absolute_min,
+            ),
             violations=[viol],
-        )
+        ).finalize()
 
+    # Decide status only (severity handled by finalize)
     if min_spacing < absolute_min:
         status = "fail"
-        severity = "error"
     elif min_spacing < recommended_min:
         status = "warning"
-        severity = "warning"
     else:
         status = "pass"
-        severity = ctx.check_def.severity or "error"
 
     if min_spacing >= recommended_min:
         score = 100.0
@@ -287,7 +277,7 @@ def run_drill_to_drill_spacing(ctx: CheckContext) -> CheckResult:
         )
         violations.append(
             Violation(
-                severity=severity,
+                severity="warning" if status == "warning" else "error",
                 message=msg,
                 location=worst_location,
             )
@@ -297,17 +287,13 @@ def run_drill_to_drill_spacing(ctx: CheckContext) -> CheckResult:
         check_id=ctx.check_def.id,
         name=ctx.check_def.name,
         category_id=ctx.check_def.category_id,
-        severity=ctx.check_def.severity,
+        severity="info",  # Default value, will be overridden by finalize()
         status=status,
         score=score,
-        metric={
-            "kind": "geometry",
-            "units": units,
-            "measured_value": float(min_spacing),
-            "target": recommended_min,
-            "limit_low": absolute_min,
-            "limit_high": None,
-            "margin_to_limit": margin_to_limit,
-        },
+        metric=MetricResult.geometry_mm(
+            measured_mm=float(min_spacing),
+            target_mm=recommended_min,
+            limit_low_mm=absolute_min,
+        ),
         violations=violations,
-    )
+    ).finalize()

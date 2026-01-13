@@ -3,7 +3,7 @@ from __future__ import annotations
 from typing import List, Optional
 from pathlib import Path
 
-from ..results import CheckResult, Violation, ViolationLocation
+from ..results import CheckResult, Violation, ViolationLocation, MetricResult
 from ..engine.context import CheckContext
 from ..engine.check_runner import register_check
 from ..ingest import GerberFileInfo
@@ -59,20 +59,20 @@ def run_min_drill_size(ctx: CheckContext) -> CheckResult:
             check_id=ctx.check_def.id,
             name=ctx.check_def.name,
             category_id=ctx.check_def.category_id,
-            severity=ctx.check_def.severity,
             status="warning",
+            severity="info",  # Default value, will be overridden by finalize()
             score=50.0,
-            metric={
-                "kind": "geometry",
-                "units": units,
-                "measured_value": None,
-                "target": recommended_min,
-                "limit_low": absolute_min,
-                "limit_high": None,
-                "margin_to_limit": None,
-            },
+            metric=MetricResult(
+                kind="geometry",
+                units=units,
+                measured_value=None,
+                target=recommended_min,
+                limit_low=absolute_min,
+                limit_high=None,
+                margin_to_limit=None,
+            ),
             violations=[viol],
-        )
+        ).finalize()
 
     diameters_mm: List[float] = []
 
@@ -90,33 +90,30 @@ def run_min_drill_size(ctx: CheckContext) -> CheckResult:
             check_id=ctx.check_def.id,
             name=ctx.check_def.name,
             category_id=ctx.check_def.category_id,
-            severity=ctx.check_def.severity,
             status="warning",
+            severity="info",  # Default value, will be overridden by finalize()
             score=50.0,
-            metric={
-                "kind": "geometry",
-                "units": units,
-                "measured_value": None,
-                "target": recommended_min,
-                "limit_low": absolute_min,
-                "limit_high": None,
-                "margin_to_limit": None,
-            },
+            metric=MetricResult(
+                kind="geometry",
+                units=units,
+                measured_value=None,
+                target=recommended_min,
+                limit_low=absolute_min,
+                limit_high=None,
+                margin_to_limit=None,
+            ),
             violations=[viol],
-        )
+        ).finalize()
 
     min_d_mm = min(diameters_mm)
 
-    # Determine status
+    # Determine status only (severity handled by finalize)
     if min_d_mm < absolute_min:
         status = "fail"
-        severity = "error"
     elif min_d_mm < recommended_min:
         status = "warning"
-        severity = "warning"
     else:
         status = "pass"
-        severity = ctx.check_def.severity or "error"
 
     # Score: 0 at absolute_min or below, 100 at recommended_min or above, linear in between
     if min_d_mm >= recommended_min:
@@ -159,20 +156,20 @@ def run_min_drill_size(ctx: CheckContext) -> CheckResult:
         check_id=ctx.check_def.id,
         name=ctx.check_def.name,
         category_id=ctx.check_def.category_id,
-        severity=ctx.check_def.severity,
         status=status,
+        severity="info",  # Default value, will be overridden by finalize()
         score=score,
-        metric={
-            "kind": "geometry",
-            "units": units,
-            "measured_value": float(measured),
-            "target": target,
-            "limit_low": limit_low,
-            "limit_high": None,
-            "margin_to_limit": margin_to_limit * (1000.0 if units == "um" else 1.0),
-        },
+        metric=MetricResult(
+            kind="geometry",
+            units=units,
+            measured_value=float(measured),
+            target=target,
+            limit_low=limit_low,
+            limit_high=None,
+            margin_to_limit=margin_to_limit * (1000.0 if units == "um" else 1.0),
+        ),
         violations=violations,
-    )
+    ).finalize()
 
 
 def _extract_tool_diameters_mm(path: Path) -> List[float]:

@@ -196,6 +196,43 @@ These improvements transform PCB-DFM from producing false failures to providing 
 - **Policy alignment**: Lenient approach for non-critical issues, strict when opted-in
 - **System consistency**: No more unit contradictions or severity/status mismatches
 
+### 🔧 MetricResult System: Single Source of Truth
+
+PCB-DFM now enforces global consistency through a unified `MetricResult` system:
+
+**Metric Constructors:**
+```python
+# Geometry metrics (distances, sizes)
+MetricResult.geometry_mm(
+    measured_mm=0.296,
+    target_mm=0.25,
+    limit_low_mm=0.15
+)
+
+# Ratio metrics (percentages, ratios)
+MetricResult.ratio_percent(
+    measured_pct=96.6,
+    target_pct=20.0,
+    limit_high_pct=30.0
+)
+```
+
+**Clean Invariant:**
+- **If violations empty** → severity derived from status only
+  - `pass/not_applicable` → `info`
+  - `warning` → `warning` 
+  - `fail` → `error`
+- **If violations exist** → severity = max(violation severities)
+
+**Automatic Consistency:**
+- ✅ Unit validation (geometry uses "mm", ratios use "%")
+- ✅ Automatic margin calculation with correct sign
+- ✅ Consistent scoring (pass=100, warning=75, fail=0)
+- ✅ No more "pass + error" contradictions
+
+**Updated Checks (14 working):**
+`copper_to_edge_distance`, `copper_density_balance`, `min_drill_size`, `copper_thermal_area`, `aperture_definition_errors`, `acid_trap_angle`, `backdrill_stub_length`, `component_to_component_spacing`, `copper_sliver_width`, `min_annular_ring`, `drill_aspect_ratio`, `silkscreen_on_copper`, `solder_mask_expansion`, `via_tenting`
+
 ## 3. Quickstart: Run a Single Check from CLI
 
 1. Place your Gerber archive in the repository root:

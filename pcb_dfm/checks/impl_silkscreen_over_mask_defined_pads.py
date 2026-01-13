@@ -5,7 +5,7 @@ from typing import List, Optional, Tuple
 
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
-from ..results import CheckResult, Violation, ViolationLocation
+from ..results import CheckResult, Violation, ViolationLocation, MetricResult
 
 
 def _poly_area_mm2(poly) -> float:
@@ -124,20 +124,19 @@ def run_silkscreen_over_mask_defined_pads(ctx: CheckContext) -> CheckResult:
             check_id=ctx.check_def.id,
             name=ctx.check_def.name,
             category_id=ctx.check_def.category_id,
-            severity=ctx.check_def.severity or ctx.check_def.severity_default,
             status="pass",
+            severity="info",  # Default value, will be overridden by finalize()
             score=100.0,
-            metric={
-                "kind": "count",
-                "units": "overlaps",
-                "measured_value": 0,
-                "target": target_max,
-                "limit_low": None,
-                "limit_high": limit_max,
-                "margin_to_limit": limit_max,
-            },
+            metric=MetricResult(
+                kind="count",
+                units="overlaps",
+                measured_value=0,
+                target=target_max,
+                limit_high=target_max,
+                margin_to_limit=0,
+            ),
             violations=[viol],
-        )
+        ).finalize()
 
     overlap_count = 0
     first_loc: Optional[ViolationLocation] = None
@@ -204,17 +203,16 @@ def run_silkscreen_over_mask_defined_pads(ctx: CheckContext) -> CheckResult:
         check_id=ctx.check_def.id,
         name=ctx.check_def.name,
         category_id=ctx.check_def.category_id,
-        severity=ctx.check_def.severity or ctx.check_def.severity_default,
+        severity="info",  # Default value, will be overridden by finalize()
         status=status,
         score=score,
-        metric={
-            "kind": "count",
-            "units": "overlaps",
-            "measured_value": measured,
-            "target": target_max,
-            "limit_low": None,
-            "limit_high": limit_max,
-            "margin_to_limit": margin_to_limit,
-        },
+        metric=MetricResult(
+            kind="count",
+            units="overlaps",
+            measured_value=measured,
+            target=target_max,
+            limit_high=limit_max,
+            margin_to_limit=margin_to_limit,
+        ),
         violations=violations,
-    )
+    ).finalize()

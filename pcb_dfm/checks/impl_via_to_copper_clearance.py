@@ -22,6 +22,27 @@ _INCH_TO_MM = 25.4
 MAX_REPORTED_VIOLATIONS = 100
 
 
+def _detect_excellon_units(drill_file) -> str:
+    """Detect Excellon file units from header."""
+    # Try to get units from the file object
+    if hasattr(drill_file, 'units'):
+        units = getattr(drill_file, 'units', None)
+        if units in ('inch', 'mm'):
+            return units
+    
+    # Try to detect from header/comments
+    if hasattr(drill_file, 'header'):
+        header = getattr(drill_file, 'header', '')
+        if isinstance(header, str):
+            if 'M71' in header.upper():
+                return 'mm'
+            elif 'M72' in header.upper():
+                return 'inch'
+    
+    # Default to inch if undetectable
+    return 'inch'
+
+
 @dataclass
 class DrillHit:
     x_mm: float
@@ -136,6 +157,10 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
 
     raw_cfg = getattr(ctx.check_def, "raw", None) or {}
 
+    # Raw configuration parameters for via-centric optimization
+    via_max_d_mm = float(raw_cfg.get("via_max_d_mm", 0.8))
+    include_component_pth = bool(raw_cfg.get("include_component_pth", False))
+    
     # Ignore copper polygons close to board perimeter (band inwards from outline)
     perimeter_ignore_mm = float(raw_cfg.get("perimeter_ignore_mm", 0.0))
 
@@ -146,7 +171,11 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
 
     copper_layers = queries.get_copper_layers(ctx.geometry)
 
-    drill_files: List[GerberFileInfo] = [f for f in ctx.ingest.files if f.layer_type == "drill"]
+    # Filter to plated drill files only (via-centric approach)
+    drill_files: List[GerberFileInfo] = [
+        f for f in ctx.ingest.files 
+        if f.layer_type == "drill" and getattr(f, "is_plated", None) is True
+    ]
 
     if gerber is None or not drill_files or not copper_layers:
         viol = Violation(
@@ -175,7 +204,8 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
 
     hits: List[DrillHit] = []
     for info in drill_files:
-        hits.extend(_extract_drill_hits_mm(info.path))
+        file_hits = _extract_drill_hits_mm(info.path, via_max_d_mm, include_component_pth)
+        hits.extend(file_hits)
 
     if not hits:
         viol = Violation(
@@ -244,8 +274,9 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
             violations=[viol],
         )
 
-    # Spatial grid over copper bboxes
-    cell = max(1.0, recommended_min + 1.0)  # 1mm floor helps keep grid density reasonable
+    # Spatial grid over copper bboxes with cell size proportional to search radius
+    # This makes the runtime proportional to local copper density, not board area
+    cell = max(0.25, min(1.0, recommended_min * 2.0))
     grid: Dict[Tuple[int, int], List[int]] = defaultdict(list)
     for idx, (_, b, _) in enumerate(copper_entries):
         # insert bbox into all intersected cells
@@ -270,68 +301,80 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
 
         # Exclusion radius for copper considered to be "this via's own pad/annular ring"
         pad_exclusion_r = r + assumed_annular_ring_mm + pad_exclusion_margin_mm
-
+        
+        # Compute search radius based on clearance thresholds
+        # Only need to search up to recommended_min + exclusion radius + small safety margin
+        search_radius = pad_exclusion_r + recommended_min + 0.05  # 0.05mm safety margin
+        
+        # Compute grid neighborhood bounds
         ci, cj = _cell_key(cx, cy, cell)
-
-        # Expand ring until we can prove we won't beat the current min_clear (global)
-        ring = 0
+        dk = int(math.ceil(search_radius / cell))
+        
+        # Track seen indices to avoid duplicates
         seen: set[int] = set()
+        
+        # Scan bounded neighborhood (constant-ish time per via)
+        for di in range(-dk, dk + 1):
+            for dj in range(-dk, dk + 1):
+                bucket = grid.get((ci + di, cj + dj))
+                if not bucket:
+                    continue
 
-        while True:
-            # scan ring of cells
-            for di in range(-ring, ring + 1):
-                for dj in range(-ring, ring + 1):
-                    if ring > 0 and (abs(di) != ring and abs(dj) != ring):
+                for idx in bucket:
+                    if idx in seen:
                         continue
-                    bucket = grid.get((ci + di, cj + dj))
-                    if not bucket:
+                    seen.add(idx)
+
+                    layer_name, b, edge_dist = copper_entries[idx]
+
+                    if perimeter_ignore_mm > 0.0 and edge_dist is not None and edge_dist <= perimeter_ignore_mm:
                         continue
 
-                    for idx in bucket:
-                        if idx in seen:
-                            continue
-                        seen.add(idx)
+                    dist_center, closest_x, closest_y = _center_to_bbox_distance_and_closest_point(cx, cy, b)
 
-                        layer_name, b, edge_dist = copper_entries[idx]
+                    # Skip if within pad exclusion radius
+                    if dist_center <= pad_exclusion_r:
+                        continue
+                        
+                    # Skip if beyond search radius (early exit optimization)
+                    if dist_center - r > search_radius:
+                        continue
 
-                        if perimeter_ignore_mm > 0.0 and edge_dist is not None and edge_dist <= perimeter_ignore_mm:
-                            continue
+                    clearance = dist_center - r
+                    if clearance < 0.0:
+                        clearance = 0.0
 
-                        dist_center, closest_x, closest_y = _center_to_bbox_distance_and_closest_point(cx, cy, b)
+                    vx_edge_x, vx_edge_y = _via_edge_point_toward_target(cx, cy, r, closest_x, closest_y)
+                    marker_x = 0.5 * (vx_edge_x + closest_x)
+                    marker_y = 0.5 * (vx_edge_y + closest_y)
 
-                        if dist_center <= pad_exclusion_r:
-                            continue
+                    if min_clear is None or clearance < min_clear:
+                        min_clear = clearance
+                        worst_location = ViolationLocation(
+                            layer=layer_name,
+                            x_mm=marker_x,
+                            y_mm=marker_y,
+                            notes="Midpoint between via edge and nearest copper bbox point (approx).",
+                        )
 
-                        clearance = dist_center - r
-                        if clearance < 0.0:
-                            clearance = 0.0
-
-                        vx_edge_x, vx_edge_y = _via_edge_point_toward_target(cx, cy, r, closest_x, closest_y)
-                        marker_x = 0.5 * (vx_edge_x + closest_x)
-                        marker_y = 0.5 * (vx_edge_y + closest_y)
-
-                        if min_clear is None or clearance < min_clear:
-                            min_clear = clearance
-                            worst_location = ViolationLocation(
-                                layer=layer_name,
-                                x_mm=marker_x,
-                                y_mm=marker_y,
-                                notes="Midpoint between via edge and nearest copper bbox point (approx).",
-                            )
-
-                        if clearance < recommended_min:
-                            offenders.append((clearance, layer_name, cx, cy, marker_x, marker_y))
-
-            # Stop expanding if we already have a min_clear and the next ring is too far to improve it.
-            if min_clear is not None:
-                # Lower bound on distance from center to any bbox in next ring is roughly ring*cell
-                # If that lower bound minus r is already >= min_clear, no need to expand.
-                if (ring + 1) * cell - r >= min_clear:
+                    if clearance < recommended_min:
+                        offenders.append((clearance, layer_name, cx, cy, marker_x, marker_y))
+                    
+                    # Early exit per via: if we found clearance at absolute_min or below, no need to search further
+                    if clearance <= absolute_min:
+                        break
+                
+                # Early exit if we already found the worst possible case
+                if min_clear is not None and min_clear <= absolute_min:
                     break
-
-            ring += 1
-            if ring > 200:
+            
+            # Early exit if we already found the worst possible case
+            if min_clear is not None and min_clear <= absolute_min:
                 break
+        
+        # Global early exit: if we already hit absolute minimum, no need to check more vias
+        if min_clear is not None and min_clear <= absolute_min:
+            break
 
     if min_clear is None:
         viol = Violation(
@@ -434,7 +477,7 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
     )
 
 
-def _extract_drill_hits_mm(path) -> List[DrillHit]:
+def _extract_drill_hits_mm(path, via_max_d_mm: float = 0.8, include_component_pth: bool = False) -> List[DrillHit]:
     if gerber is None:
         return []
     try:
@@ -442,9 +485,18 @@ def _extract_drill_hits_mm(path) -> List[DrillHit]:
     except Exception:
         return []
 
-    try:
-        drill_layer.to_inch()
-    except Exception:
+    # Detect units first to avoid incorrect conversion
+    units = _detect_excellon_units(drill_layer)
+    
+    # Only convert to inch if the file is in mm and we need inch for internal processing
+    if units == 'mm':
+        try:
+            drill_layer.to_inch()
+        except Exception:
+            # If conversion fails, assume coordinates are already in inch
+            pass
+    elif units == 'inch':
+        # Already in inch, no conversion needed
         pass
 
     hits_out: List[DrillHit] = []
@@ -482,11 +534,24 @@ def _extract_drill_hits_mm(path) -> List[DrillHit]:
             except Exception:
                 continue
 
+        # Convert to mm (always multiply by 25.4 since we're working in inch internally)
+        x_mm = x_in * _INCH_TO_MM
+        y_mm = y_in * _INCH_TO_MM
+        d_mm = d_in * _INCH_TO_MM
+        
+        # Filter by diameter for via-like drills only
+        if d_mm > via_max_d_mm:
+            continue
+            
+        # Additional filtering for component PTH if disabled
+        if not include_component_pth and d_mm > 0.8:  # Typical component drill threshold
+            continue
+
         hits_out.append(
             DrillHit(
-                x_mm=x_in * _INCH_TO_MM,
-                y_mm=y_in * _INCH_TO_MM,
-                d_mm=d_in * _INCH_TO_MM,
+                x_mm=x_mm,
+                y_mm=y_mm,
+                d_mm=d_mm,
             )
         )
 

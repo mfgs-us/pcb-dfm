@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-from ..results import CheckResult, Violation
+from ..results import CheckResult, Violation, MetricResult
 from ..engine.context import CheckContext
 from ..engine.check_runner import register_check
 from ..ingest import GerberFileInfo
@@ -50,20 +50,20 @@ def run_drill_aspect_ratio(ctx: CheckContext) -> CheckResult:
             check_id=ctx.check_def.id,
             name=ctx.check_def.name,
             category_id=ctx.check_def.category_id,
-            severity=ctx.check_def.severity,
             status="warning",
+            severity="info",  # Default value, will be overridden by finalize()
             score=50.0,
-            metric={
-                "kind": "ratio",
-                "units": units or "none",
-                "measured_value": None,
-                "target": recommended_max,
-                "limit_low": None,
-                "limit_high": absolute_max,
-                "margin_to_limit": None,
-            },
+            metric=MetricResult(
+                kind="ratio",
+                units="%",
+                measured_value=None,
+                target=recommended_max,
+                limit_low=None,
+                limit_high=absolute_max,
+                margin_to_limit=None,
+            ),
             violations=[viol],
-        )
+        ).finalize()
 
     diameters_mm: List[float] = []
     for info in drill_files:
@@ -79,34 +79,31 @@ def run_drill_aspect_ratio(ctx: CheckContext) -> CheckResult:
             check_id=ctx.check_def.id,
             name=ctx.check_def.name,
             category_id=ctx.check_def.category_id,
-            severity=ctx.check_def.severity,
             status="warning",
+            severity="info",  # Default value, will be overridden by finalize()
             score=50.0,
-            metric={
-                "kind": "ratio",
-                "units": units or "none",
-                "measured_value": None,
-                "target": recommended_max,
-                "limit_low": None,
-                "limit_high": absolute_max,
-                "margin_to_limit": None,
-            },
+            metric=MetricResult(
+                kind="ratio",
+                units="%",
+                measured_value=None,
+                target=recommended_max,
+                limit_low=None,
+                limit_high=absolute_max,
+                margin_to_limit=None,
+            ),
             violations=[viol],
-        )
+        ).finalize()
 
     min_d_mm = min(diameters_mm)
     aspect = board_thickness_mm / min_d_mm
 
-    # Decide status
+    # Decide status only (severity handled by finalize)
     if aspect > absolute_max:
         status = "fail"
-        severity = "error"
     elif aspect > recommended_max:
         status = "warning"
-        severity = "warning"
     else:
         status = "pass"
-        severity = ctx.check_def.severity or "error"
 
     # Score: 100 at <= recommended_max, 0 at >= absolute_max
     if aspect <= recommended_max:
@@ -137,20 +134,20 @@ def run_drill_aspect_ratio(ctx: CheckContext) -> CheckResult:
         check_id=ctx.check_def.id,
         name=ctx.check_def.name,
         category_id=ctx.check_def.category_id,
-        severity=ctx.check_def.severity,
+        severity="info",  # Default value, will be overridden by finalize()
         status=status,
         score=score,
-        metric={
-            "kind": "ratio",
-            "units": units or "none",
-            "measured_value": float(aspect),
-            "target": recommended_max,
-            "limit_low": None,
-            "limit_high": absolute_max,
-            "margin_to_limit": margin_to_limit,
-        },
+        metric=MetricResult(
+            kind="ratio",
+            units="%",
+            measured_value=float(aspect),
+            target=recommended_max,
+            limit_low=None,
+            limit_high=absolute_max,
+            margin_to_limit=margin_to_limit,
+        ),
         violations=violations,
-    )
+    ).finalize()
 
 
 def _extract_tool_diameters_mm(path) -> List[float]:

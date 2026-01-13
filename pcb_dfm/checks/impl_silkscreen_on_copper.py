@@ -8,7 +8,7 @@ from typing import Dict, List, Optional, Tuple
 
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
-from ..results import CheckResult, Violation, ViolationLocation
+from ..results import CheckResult, Violation, ViolationLocation, MetricResult
 from ..geometry import queries
 
 try:
@@ -145,20 +145,20 @@ def run_silkscreen_on_copper(ctx: CheckContext) -> CheckResult:
             check_id=ctx.check_def.id,
             name=ctx.check_def.name,
             category_id=ctx.check_def.category_id,
-            severity=ctx.check_def.severity,
             status="warning",
+            severity="info",  # Default value, will be overridden by finalize()
             score=50.0,
-            metric={
-                "kind": "count",
-                "units": units,
-                "measured_value": None,
-                "target": 0,
-                "limit_low": None,
-                "limit_high": 0,
-                "margin_to_limit": None,
-            },
+            metric=MetricResult(
+                kind="count",
+                units=units,
+                measured_value=None,
+                target=0,
+                limit_low=None,
+                limit_high=0,
+                margin_to_limit=None,
+            ),
             violations=[viol],
-        )
+        ).finalize()
 
     # ---- Collect copper bboxes per side
     copper_layers = queries.get_copper_layers(ctx.geometry)
@@ -351,20 +351,20 @@ def run_silkscreen_on_copper(ctx: CheckContext) -> CheckResult:
             check_id=ctx.check_def.id,
             name=ctx.check_def.name,
             category_id=ctx.check_def.category_id,
-            severity=ctx.check_def.severity,
             status="pass",
+            severity="info",  # Default value, will be overridden by finalize()
             score=100.0,
-            metric={
-                "kind": "count",
-                "units": units,
-                "measured_value": 0,
-                "target": 0,
-                "limit_low": None,
-                "limit_high": 0,
-                "margin_to_limit": 0,
-            },
+            metric=MetricResult(
+                kind="count",
+                units=units,
+                measured_value=0,
+                target=0,
+                limit_low=None,
+                limit_high=0,
+                margin_to_limit=0,
+            ),
             violations=[],
-        )
+        ).finalize()
 
     # 5A) Silkscreen over copper: default to warning (CAM clipping assumed)
     # Optionally add fab_clips_silkscreen=True profile default
@@ -373,15 +373,13 @@ def run_silkscreen_on_copper(ctx: CheckContext) -> CheckResult:
     raw_cfg = getattr(ctx.check_def, "raw", None) or {}
     fab_clips_silkscreen = raw_cfg.get("fab_clips_silkscreen", True)  # Default to True
     
-    # Determine severity based on fab clipping assumption
+    # Determine status only (severity handled by finalize)
     if fab_clips_silkscreen:
         # Assume fab will clip silkscreen, so treat as warning
-        severity = "warning"
         status = "warning"
         score = 60.0  # Warning score but not failure
     else:
         # User wants strict silkscreen checking
-        severity = ctx.check_def.severity or "warning"
         status = "warning"
         score = 60.0
 
@@ -389,17 +387,17 @@ def run_silkscreen_on_copper(ctx: CheckContext) -> CheckResult:
         check_id=ctx.check_def.id,
         name=ctx.check_def.name,
         category_id=ctx.check_def.category_id,
-        severity=severity,
+        severity="info",  # Default value, will be overridden by finalize()
         status=status,
         score=score,
-        metric={
-            "kind": "count",
-            "units": units,
-            "measured_value": total_overlaps,
-            "target": 0,
-            "limit_low": None,
-            "limit_high": 0,
-            "margin_to_limit": -float(total_overlaps),
-        },
+        metric=MetricResult(
+            kind="count",
+            units=units,
+            measured_value=total_overlaps,
+            target=0,
+            limit_low=None,
+            limit_high=0,
+            margin_to_limit=-float(total_overlaps),
+        ),
         violations=violations,
-    )
+    ).finalize()

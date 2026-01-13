@@ -147,20 +147,15 @@ class CheckResult(BaseModel):
     violations: List[Violation] = Field(default_factory=list)
 
     def finalize(self) -> "CheckResult":
-        # Create a copy with normalized values
-        # Normalize severity from violations or status
-        violation_sevs = [v.severity for v in self.violations if getattr(v, "severity", None)]
-        if violation_sevs:
-            final_severity = _max_severity(violation_sevs)
+        # Clean invariant: if violations empty, severity derived from status only
+        if not self.violations:
+            final_severity = (
+                "info" if self.status in ("pass", "not_applicable")
+                else "warning" if self.status == "warning"
+                else "error"
+            )
         else:
-            if self.status == "pass":
-                final_severity = "info"
-            elif self.status == "warning":
-                final_severity = "warning"
-            elif self.status == "fail":
-                final_severity = "error"
-            else:
-                final_severity = "info"
+            final_severity = _max_severity([v.severity for v in self.violations])
 
         # Normalize score if missing
         if self.score is None:

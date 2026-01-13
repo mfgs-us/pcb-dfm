@@ -5,7 +5,7 @@ from typing import List
 
 from ..engine.context import CheckContext
 from ..engine.check_runner import register_check
-from ..results import CheckResult, Violation
+from ..results import CheckResult, Violation, MetricResult
 from ..ingest import GerberFileInfo
 
 try:
@@ -60,20 +60,20 @@ def run_unsupported_hole_types(ctx: CheckContext) -> CheckResult:
             check_id=ctx.check_def.id,
             name=ctx.check_def.name,
             category_id=ctx.check_def.category_id,
-            severity=ctx.check_def.severity,
             status="warning",
+            severity="info",  # Default value, will be overridden by finalize()
             score=80.0,
-            metric={
-                "kind": "count",
-                "units": units,
-                "measured_value": None,
-                "target": 0.0,
-                "limit_low": None,
-                "limit_high": float(max_unsupported),
-                "margin_to_limit": None,
-            },
+            metric=MetricResult(
+                kind="count",
+                units=units,
+                measured_value=None,
+                target=0.0,
+                limit_low=None,
+                limit_high=float(max_unsupported),
+                margin_to_limit=None,
+            ),
             violations=[viol],
-        )
+        ).finalize()
 
     diameters_mm: List[float] = []
     for info in drill_files:
@@ -90,20 +90,20 @@ def run_unsupported_hole_types(ctx: CheckContext) -> CheckResult:
             check_id=ctx.check_def.id,
             name=ctx.check_def.name,
             category_id=ctx.check_def.category_id,
-            severity=ctx.check_def.severity,
             status="warning",
+            severity="info",  # Default value, will be overridden by finalize()
             score=80.0,
-            metric={
-                "kind": "count",
-                "units": units,
-                "measured_value": None,
-                "target": 0.0,
-                "limit_low": None,
-                "limit_high": float(max_unsupported),
-                "margin_to_limit": None,
-            },
+            metric=MetricResult(
+                kind="count",
+                units=units,
+                measured_value=None,
+                target=0.0,
+                limit_low=None,
+                limit_high=float(max_unsupported),
+                margin_to_limit=None,
+            ),
             violations=[viol],
-        )
+        ).finalize()
 
     unsupported: List[float] = [
         d for d in diameters_mm if d < min_supported or d > max_supported

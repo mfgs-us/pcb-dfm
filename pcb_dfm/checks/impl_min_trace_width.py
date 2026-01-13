@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-from ..results import CheckResult, Violation, ViolationLocation
+from ..results import CheckResult, Violation, ViolationLocation, MetricResult
 from ..engine.context import CheckContext
 from ..engine.check_runner import register_check
 from ..ingest import GerberFileInfo
@@ -59,20 +59,16 @@ def run_min_trace_width(ctx: CheckContext) -> CheckResult:
             check_id=ctx.check_def.id,
             name=ctx.check_def.name,
             category_id=ctx.check_def.category_id,
-            severity=ctx.check_def.severity,
             status="warning",
+            severity="info",  # Default value, will be overridden by finalize()
             score=50.0,
-            metric={
-                "kind": "geometry",
-                "units": units,
-                "measured_value": None,
-                "target": recommended_min,
-                "limit_low": absolute_min,
-                "limit_high": None,
-                "margin_to_limit": None,
-            },
+            metric=MetricResult.geometry_mm(
+                measured_mm=None,
+                target_mm=recommended_min,
+                limit_low_mm=absolute_min,
+            ),
             violations=[viol],
-        )
+        ).finalize()
 
     min_width_mm: Optional[float] = None
     worst_location: Optional[ViolationLocation] = None
@@ -144,31 +140,24 @@ def run_min_trace_width(ctx: CheckContext) -> CheckResult:
             check_id=ctx.check_def.id,
             name=ctx.check_def.name,
             category_id=ctx.check_def.category_id,
-            severity=ctx.check_def.severity,
             status="warning",
+            severity="info",  # Default value, will be overridden by finalize()
             score=50.0,
-            metric={
-                "kind": "geometry",
-                "units": units,
-                "measured_value": None,
-                "target": recommended_min,
-                "limit_low": absolute_min,
-                "limit_high": None,
-                "margin_to_limit": None,
-            },
+            metric=MetricResult.geometry_mm(
+                measured_mm=None,
+                target_mm=recommended_min,
+                limit_low_mm=absolute_min,
+            ),
             violations=[viol],
-        )
+        ).finalize()
 
-    # Decide status based on mm
+    # Decide status only (severity handled by finalize)
     if min_width_mm < absolute_min:
         status = "fail"
-        severity = "error"
     elif min_width_mm < recommended_min:
         status = "warning"
-        severity = "warning"
     else:
         status = "pass"
-        severity = ctx.check_def.severity or "error"
 
     # Score: linear between absolute_min and recommended_min
     if min_width_mm >= recommended_min:
@@ -221,20 +210,16 @@ def run_min_trace_width(ctx: CheckContext) -> CheckResult:
         check_id=ctx.check_def.id,
         name=ctx.check_def.name,
         category_id=ctx.check_def.category_id,
-        severity=ctx.check_def.severity,
+        severity="info",  # Default value, will be overridden by finalize()
         status=status,
         score=score,
-        metric={
-            "kind": "geometry",
-            "units": units,
-            "measured_value": float(min_width_mm),
-            "target": recommended_min,
-            "limit_low": absolute_min,
-            "limit_high": None,
-            "margin_to_limit": margin_to_limit,
-        },
+        metric=MetricResult.geometry_mm(
+            measured_mm=float(min_width_mm),
+            target_mm=recommended_min,
+            limit_low_mm=absolute_min,
+        ),
         violations=violations,
-    )
+    ).finalize()
 
 
 def _get_line_width_inch(prim) -> Optional[float]:

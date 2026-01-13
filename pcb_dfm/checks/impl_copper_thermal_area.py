@@ -4,7 +4,7 @@ from typing import Optional, List, Tuple
 
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
-from ..results import CheckResult, Violation, ViolationLocation
+from ..results import CheckResult, Violation, ViolationLocation, MetricResult
 
 
 def _poly_area_mm2(poly) -> float:
@@ -119,20 +119,20 @@ def run_copper_thermal_area(ctx: CheckContext) -> CheckResult:
             check_id=ctx.check_def.id,
             name=ctx.check_def.name,
             category_id=ctx.check_def.category_id,
-            severity=ctx.check_def.severity or ctx.check_def.severity_default,
             status="warning",
+            severity="info",  # Default value, will be overridden by finalize()
             score=50.0,
-            metric={
-                "kind": "ratio",
-                "units": units,
-                "measured_value": None,
-                "target": recommended_min_pct,
-                "limit_low": absolute_min_pct,
-                "limit_high": None,
-                "margin_to_limit": None,
-            },
+            metric=MetricResult(
+                kind="ratio",
+                units=units,
+                measured_value=None,
+                target=recommended_min_pct,
+                limit_low=absolute_min_pct,
+                limit_high=None,
+                margin_to_limit=None,
+            ),
             violations=[viol],
-        )
+        ).finalize()
 
     min_x, min_y, max_x, max_y = bbox
     board_w_mm = max(0.0, max_x - min_x)
@@ -172,35 +172,32 @@ def run_copper_thermal_area(ctx: CheckContext) -> CheckResult:
             check_id=ctx.check_def.id,
             name=ctx.check_def.name,
             category_id=ctx.check_def.category_id,
-            severity=ctx.check_def.severity or ctx.check_def.severity_default,
             status="warning",
+            severity="info",  # Default value, will be overridden by finalize()
             score=50.0,
-            metric={
-                "kind": "ratio",
-                "units": units,
-                "measured_value": 0.0,
-                "target": recommended_min_pct,
-                "limit_low": absolute_min_pct,
-                "limit_high": None,
-                "margin_to_limit": -absolute_min_pct,
-            },
+            metric=MetricResult(
+                kind="ratio",
+                units="%",
+                measured_value=0.0,
+                target=recommended_min_pct,
+                limit_low=absolute_min_pct,
+                limit_high=None,
+                margin_to_limit=-absolute_min_pct,
+            ),
             violations=[viol],
-        )
+        ).finalize()
 
     measured = float(best_pct)
 
     # Simple scoring
     if measured >= recommended_min_pct:
         status = "pass"
-        severity = ctx.check_def.severity or ctx.check_def.severity_default
         score = 100.0
     elif measured < absolute_min_pct:
         status = "fail"
-        severity = "error"
         score = 0.0
     else:
         status = "warning"
-        severity = "warning"
         span = max(1e-6, recommended_min_pct - absolute_min_pct)
         frac = (measured - absolute_min_pct) / span
         score = max(0.0, min(100.0, 60.0 + 40.0 * max(0.0, frac)))
@@ -226,9 +223,10 @@ def run_copper_thermal_area(ctx: CheckContext) -> CheckResult:
 
     violations: List[Violation] = []
     if status != "pass":
+        violation_severity = "warning" if status == "warning" else "error"
         violations.append(
             Violation(
-                severity=severity,
+                severity=violation_severity,
                 message=msg,
                 location=loc,
             )
@@ -246,17 +244,17 @@ def run_copper_thermal_area(ctx: CheckContext) -> CheckResult:
         check_id=ctx.check_def.id,
         name=ctx.check_def.name,
         category_id=ctx.check_def.category_id,
-        severity=ctx.check_def.severity or ctx.check_def.severity_default,
+        severity="info",  # Default value, will be overridden by finalize()
         status=status,
         score=score,
-        metric={
-            "kind": "ratio",
-            "units": units,
-            "measured_value": measured,
-            "target": recommended_min_pct,
-            "limit_low": absolute_min_pct,
-            "limit_high": None,
-            "margin_to_limit": margin_to_limit,
-        },
+        metric=MetricResult(
+            kind="ratio",
+            units="%",
+            measured_value=measured,
+            target=recommended_min_pct,
+            limit_low=absolute_min_pct,
+            limit_high=None,
+            margin_to_limit=margin_to_limit,
+        ),
         violations=violations,
-    )
+    ).finalize()

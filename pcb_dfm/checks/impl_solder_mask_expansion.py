@@ -7,7 +7,7 @@ from typing import List, Optional, Tuple
 
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
-from ..results import CheckResult, Violation, ViolationLocation
+from ..results import CheckResult, Violation, ViolationLocation, MetricResult
 from ..geometry.primitives import Polygon
 
 
@@ -311,20 +311,16 @@ def run_solder_mask_expansion(ctx: CheckContext) -> CheckResult:
             check_id=ctx.check_def.id,
             name=ctx.check_def.name,
             category_id=ctx.check_def.category_id,
-            severity=ctx.check_def.severity or ctx.check_def.severity_default,
             status="pass",
+            severity="info",  # Default value, will be overridden by finalize()
             score=100.0,
-            metric={
-                "kind": "geometry",
-                "units": "mm",
-                "measured_value": None,
-                "target": recommended_min,
-                "limit_low": absolute_min,
-                "limit_high": None,
-                "margin_to_limit": None,
-            },
+            metric=MetricResult.geometry_mm(
+                measured_mm=None,
+                target_mm=recommended_min,
+                limit_low_mm=absolute_min,
+            ),
             violations=[viol],
-        )
+        ).finalize()
 
     # Spatial index for mask openings to avoid pads*masks scans
     cell = max(0.5, mask_search_inflate_mm * 4.0)  # mm, tuned for typical mask clearances
@@ -449,34 +445,28 @@ def run_solder_mask_expansion(ctx: CheckContext) -> CheckResult:
             check_id=ctx.check_def.id,
             name=ctx.check_def.name,
             category_id=ctx.check_def.category_id,
-            severity=ctx.check_def.severity or ctx.check_def.severity_default,
             status="warning",
+            severity="info",  # Default value, will be overridden by finalize()
             score=50.0,
-            metric={
-                "kind": "geometry",
-                "units": "mm",
-                "measured_value": None,
-                "target": recommended_min,
-                "limit_low": absolute_min,
-                "limit_high": None,
-                "margin_to_limit": None,
-            },
+            metric=MetricResult.geometry_mm(
+                measured_mm=None,
+                target_mm=recommended_min,
+                limit_low_mm=absolute_min,
+            ),
             violations=[viol],
-        )
+        ).finalize()
 
     measured = float(min_expansion)
 
+    # Determine status only (severity handled by finalize)
     if measured >= recommended_min:
         status = "pass"
-        severity = ctx.check_def.severity or ctx.check_def.severity_default
         score = 100.0
     elif measured < absolute_min:
         status = "fail"
-        severity = "error"
         score = 0.0
     else:
         status = "warning"
-        severity = "warning"
         span = max(1e-6, recommended_min - absolute_min)
         frac = (measured - absolute_min) / span
         score = max(0.0, min(100.0, 60.0 + 40.0 * max(0.0, frac)))
@@ -490,9 +480,10 @@ def run_solder_mask_expansion(ctx: CheckContext) -> CheckResult:
 
     violations: List[Violation] = []
     if status != "pass":
+        violation_severity = "warning" if status == "warning" else "error"
         violations.append(
             Violation(
-                severity=severity,
+                severity=violation_severity,
                 message=msg,
                 location=min_loc,
             )
@@ -502,17 +493,13 @@ def run_solder_mask_expansion(ctx: CheckContext) -> CheckResult:
         check_id=ctx.check_def.id,
         name=ctx.check_def.name,
         category_id=ctx.check_def.category_id,
-        severity=ctx.check_def.severity or ctx.check_def.severity_default,
+        severity="info",  # Default value, will be overridden by finalize()
         status=status,
         score=score,
-        metric={
-            "kind": "geometry",
-            "units": "mm",
-            "measured_value": measured,
-            "target": recommended_min,
-            "limit_low": absolute_min,
-            "limit_high": None,
-            "margin_to_limit": margin_to_limit,
-        },
+        metric=MetricResult.geometry_mm(
+            measured_mm=measured,
+            target_mm=recommended_min,
+            limit_low_mm=absolute_min,
+        ),
         violations=violations,
-    )
+    ).finalize()

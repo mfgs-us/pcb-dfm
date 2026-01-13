@@ -5,7 +5,7 @@ from typing import List
 
 from ..engine.context import CheckContext
 from ..engine.check_runner import register_check
-from ..results import CheckResult, Violation
+from ..results import CheckResult, Violation, MetricResult
 from ..ingest import GerberFileInfo
 
 try:
@@ -71,20 +71,20 @@ def run_drill_wander_budget(ctx: CheckContext) -> CheckResult:
             check_id=ctx.check_def.id,
             name=ctx.check_def.name,
             category_id=ctx.check_def.category_id,
-            severity=ctx.check_def.severity,
             status="warning",
+            severity="info",  # Default value, will be overridden by finalize()
             score=80.0,
-            metric={
-                "kind": "ratio",
-                "units": units,
-                "measured_value": None,
-                "target": recommended_max,
-                "limit_low": None,
-                "limit_high": absolute_max,
-                "margin_to_limit": None,
-            },
+            metric=MetricResult(
+                kind="ratio",
+                units="%",
+                measured_value=None,
+                target=recommended_max,
+                limit_low=None,
+                limit_high=absolute_max,
+                margin_to_limit=None,
+            ),
             violations=[viol],
-        )
+        ).finalize().finalize()
 
     diameters_mm: List[float] = []
     for info in drill_files:
@@ -103,20 +103,20 @@ def run_drill_wander_budget(ctx: CheckContext) -> CheckResult:
             check_id=ctx.check_def.id,
             name=ctx.check_def.name,
             category_id=ctx.check_def.category_id,
-            severity=ctx.check_def.severity,
             status="warning",
+            severity="info",  # Default value, will be overridden by finalize()
             score=80.0,
-            metric={
-                "kind": "ratio",
-                "units": units,
-                "measured_value": None,
-                "target": recommended_max,
-                "limit_low": None,
-                "limit_high": absolute_max,
-                "margin_to_limit": None,
-            },
+            metric=MetricResult(
+                kind="ratio",
+                units="%",
+                measured_value=None,
+                target=recommended_max,
+                limit_low=None,
+                limit_high=absolute_max,
+                margin_to_limit=None,
+            ),
             violations=[viol],
-        )
+        ).finalize().finalize()
 
     min_d_mm = min(diameters_mm)
     aspect = thickness_mm / min_d_mm if min_d_mm > 0 else float("inf")
@@ -172,15 +172,15 @@ def run_drill_wander_budget(ctx: CheckContext) -> CheckResult:
         severity=ctx.check_def.severity,
         status=status,
         score=score,
-        metric={
-            "kind": "ratio",
-            "units": units,
-            "measured_value": float(aspect),
-            "target": recommended_max,
-            "limit_low": None,
-            "limit_high": absolute_max,
-            "margin_to_limit": margin_to_limit,
-        },
+        metric=MetricResult(
+            kind="ratio",
+            units="%",
+            measured_value=float(aspect),
+            target=recommended_max,
+            limit_low=None,
+            limit_high=absolute_max,
+            margin_to_limit=margin_to_limit,
+        ),
         violations=violations,
     )
 

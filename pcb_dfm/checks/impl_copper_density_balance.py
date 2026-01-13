@@ -195,8 +195,8 @@ def run_copper_density_balance(ctx: CheckContext) -> CheckResult:
             check_id=ctx.check_def.id,
             name=ctx.check_def.name,
             category_id=ctx.check_def.category_id,
-            severity=ctx.check_def.severity,
             status="pass",
+            severity="info",  # Default value, will be overridden by finalize()
             score=100.0,
             metric=MetricResult.ratio_percent(
                 measured_pct=0.0,
@@ -303,8 +303,8 @@ def run_copper_density_balance(ctx: CheckContext) -> CheckResult:
             check_id=ctx.check_def.id,
             name=ctx.check_def.name,
             category_id=ctx.check_def.category_id,
-            severity=ctx.check_def.severity,
             status="pass",
+            severity="info",  # Default value, will be overridden by finalize()
             score=100.0,
             metric=MetricResult.ratio_percent(
                 measured_pct=0.0,
@@ -374,8 +374,8 @@ def run_copper_density_balance(ctx: CheckContext) -> CheckResult:
         check_id=ctx.check_def.id,
         name=ctx.check_def.name,
         category_id=ctx.check_def.category_id,
-        severity=ctx.check_def.severity,
         status=status,
+        severity="info",  # Default value, will be overridden by finalize()
         score=score,
         metric=MetricResult.ratio_percent(
             measured_pct=max_delta_percent,

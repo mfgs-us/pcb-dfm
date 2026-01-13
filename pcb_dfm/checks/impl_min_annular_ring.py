@@ -8,7 +8,7 @@ import re
 
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
-from ..results import CheckResult, Violation, ViolationLocation
+from ..results import CheckResult, Violation, ViolationLocation, MetricResult
 from ..geometry import queries
 
 # pcb-tools excellon reader (optional)
@@ -289,20 +289,20 @@ def run_min_annular_ring(ctx: CheckContext) -> CheckResult:
             check_id=ctx.check_def.id,
             name=ctx.check_def.name,
             category_id=ctx.check_def.category_id,
-            severity=ctx.check_def.severity,
             status="warning",
+            severity="info",  # Default value, will be overridden by finalize()
             score=50.0,
-            metric={
-                "kind": "geometry",
-                "units": units,
-                "measured_value": None,
-                "target": recommended_min,
-                "limit_low": absolute_min,
-                "limit_high": None,
-                "margin_to_limit": None,
-            },
+            metric=MetricResult(
+                kind="geometry",
+                units=units,
+                measured_value=None,
+                target=recommended_min,
+                limit_low=absolute_min,
+                limit_high=None,
+                margin_to_limit=None,
+            ),
             violations=[viol],
-        )
+        ).finalize()
 
     min_ring: Optional[float] = None
     worst_location: Optional[ViolationLocation] = None
@@ -326,20 +326,20 @@ def run_min_annular_ring(ctx: CheckContext) -> CheckResult:
             check_id=ctx.check_def.id,
             name=ctx.check_def.name,
             category_id=ctx.check_def.category_id,
-            severity=ctx.check_def.severity,
             status="warning",
+            severity="info",  # Default value, will be overridden by finalize()
             score=50.0,
-            metric={
-                "kind": "geometry",
-                "units": units,
-                "measured_value": None,
-                "target": recommended_min,
-                "limit_low": absolute_min,
-                "limit_high": None,
-                "margin_to_limit": None,
-            },
+            metric=MetricResult(
+                kind="geometry",
+                units=units,
+                measured_value=None,
+                target=recommended_min,
+                limit_low=absolute_min,
+                limit_high=None,
+                margin_to_limit=None,
+            ),
             violations=[viol],
-        )
+        ).finalize()
 
     # Build spatial grid for efficient candidate selection
     cell = max(0.5, max(d.diameter_mm for d in drills))
@@ -398,31 +398,28 @@ def run_min_annular_ring(ctx: CheckContext) -> CheckResult:
             check_id=ctx.check_def.id,
             name=ctx.check_def.name,
             category_id=ctx.check_def.category_id,
-            severity=ctx.check_def.severity,
             status="warning",
+            severity="info",  # Default value, will be overridden by finalize()
             score=50.0,
-            metric={
-                "kind": "geometry",
-                "units": units,
-                "measured_value": None,
-                "target": recommended_min,
-                "limit_low": absolute_min,
-                "limit_high": None,
-                "margin_to_limit": None,
-            },
+            metric=MetricResult(
+                kind="geometry",
+                units=units,
+                measured_value=None,
+                target=recommended_min,
+                limit_low=absolute_min,
+                limit_high=None,
+                margin_to_limit=None,
+            ),
             violations=[viol],
-        )
+        ).finalize()
 
-    # status
+    # status only (severity handled by finalize)
     if min_ring < absolute_min:
         status = "fail"
-        severity = "error"
     elif min_ring < recommended_min:
         status = "warning"
-        severity = "warning"
     else:
         status = "pass"
-        severity = ctx.check_def.severity or "error"
 
     # score
     if min_ring >= recommended_min:
@@ -453,17 +450,17 @@ def run_min_annular_ring(ctx: CheckContext) -> CheckResult:
         check_id=ctx.check_def.id,
         name=ctx.check_def.name,
         category_id=ctx.check_def.category_id,
-        severity=ctx.check_def.severity,
+        severity="info",  # Default value, will be overridden by finalize()
         status=status,
         score=score,
-        metric={
-            "kind": "geometry",
-            "units": units,
-            "measured_value": float(min_ring),
-            "target": recommended_min,
-            "limit_low": absolute_min,
-            "limit_high": None,
-            "margin_to_limit": margin_to_limit,
-        },
+        metric=MetricResult(
+            kind="geometry",
+            units=units,
+            measured_value=float(min_ring),
+            target=recommended_min,
+            limit_low=absolute_min,
+            limit_high=None,
+            margin_to_limit=margin_to_limit,
+        ),
         violations=violations,
-    )
+    ).finalize()

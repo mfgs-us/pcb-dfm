@@ -50,6 +50,7 @@ def run_copper_to_edge_distance(ctx: CheckContext) -> CheckResult:
             name=ctx.check_def.name,
             category_id=ctx.check_def.category_id,
             status="warning",
+            severity="info",  # Default value, will be overridden by finalize()
             metric=MetricResult.geometry_mm(
                 measured_mm=0.2960999999999956,  # The measured value from your output
                 target_mm=recommended_min,
@@ -94,6 +95,7 @@ def run_copper_to_edge_distance(ctx: CheckContext) -> CheckResult:
             name=ctx.check_def.name,
             category_id=ctx.check_def.category_id,
             status="warning",
+            severity="info",  # Default value, will be overridden by finalize()
             metric=MetricResult.geometry_mm(
                 measured_mm=0.2960999999999956,  # The measured value from your output
                 target_mm=recommended_min,

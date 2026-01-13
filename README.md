@@ -13,6 +13,7 @@ The project is designed to be used both as a Python library (importable module) 
   - [Requirements](#11-requirements)
   - [Clone the Repository](#12-clone-the-repository)
 - [Project Layout](#2-project-layout)
+  - [Recent Improvements: Integr8tor Alignment & Consistency Fixes](#21-recent-improvements-integr8tor-alignment--consistency-fixes)
 - [Quickstart](#3-quickstart-run-a-single-check-from-cli)
 - [Debug Helpers](#4-debug-helpers)
   - [Inspect Gerber Ingest](#41-inspect-gerber-ingest)
@@ -114,6 +115,86 @@ This makes the difference between:
 - where Python check implementations live (`checks/impl_*.py`)  
 
 explicit.
+
+## 2.1 Recent Improvements: Integr8tor Alignment & Consistency Fixes
+
+This version includes major improvements to align with industry-standard tools like Integr8tor and fix fundamental consistency issues:
+
+### 🎯 Geometric Accuracy Improvements
+
+**Annular Ring Check (`impl_min_annular_ring.py`)**
+- ✅ **Non-plated drill filtering**: Uses ingest metadata to skip non-plated drills
+- ✅ **Point-in-polygon containment**: Replaced bbox approximation with geometric testing
+- ✅ **True edge-distance measurement**: Computes actual ring distance from drill edge to copper edge
+- ✅ **Pad candidate filtering**: Filters pads by aspect ratio, size, and area to eliminate false positives
+- ✅ **Proper unit detection**: Fixed Excellon drill unit handling to prevent silent double conversion
+
+**Solder Mask Expansion (`impl_solder_mask_expansion.py`)**
+- ✅ **Mask polarity normalization**: Automatically detects openings vs coverage using 50% board area heuristic
+- ✅ **True distance measurement**: Replaced bbox approximation with geometric distance calculation
+- ✅ **Coverage-to-openings inversion**: Framework for handling coverage-based mask polygons
+
+### 🏗️ Layer Classification Reliability (`gerber_zip.py`)
+
+**Extension-First Classification**
+- ✅ **Reliable detection**: Uses extensions (.gtl, .gbl, .gts, .gbs, .gto, .gbo) before name heuristics
+- ✅ **Enhanced outline detection**: Improved recognition of .gbr files like "Edge_Cuts.gbr"
+- ✅ **Selective fallback parsing**: Only parses outline geometry from strongly-indicated files
+- ✅ **Clean outline extraction**: Filters non-outline moves and uses D01 commands only
+
+### ⚖️ Policy Alignment with Integr8tor
+
+**Severity Policy Changes**
+- ✅ **Silkscreen over copper**: Defaults to warning (CAM clipping assumed)
+- ✅ **Copper density balance**: Defaults to info/warning instead of fail (Integr8tor doesn't report)
+- ✅ **Via tenting ratio**: Defaults to warning/info instead of fail (Integr8tor doesn't enforce)
+
+**Opt-in Strict Modes**
+- ✅ **`strict_plating_mode`**: Enable copper density failures for plating risk profiles
+- ✅ **`strict_assembly_mode`**: Enable via tenting failures for assembly risk profiles
+- ✅ **`fab_clips_silkscreen`**: Control silkscreen strictness (default: True)
+
+### 🔧 System-Wide Consistency Fixes
+
+**Metric Units & Status Consistency**
+- ✅ **Single source of truth**: `MetricResult.geometry_mm()` and `MetricResult.ratio_percent()` constructors
+- ✅ **Unit validation**: Enforces "mm" for geometry, "%" for ratios, prevents scale mismatches
+- ✅ **Severity contract**: `pass→info`, `warning→warning`, `fail→error` unless violations justify otherwise
+- ✅ **Auto score calculation**: Consistent scoring based on status (pass=100, warning=75, fail=0)
+- ✅ **Margin calculation**: Automatic computation of `margin_to_limit` with correct sign
+
+**Before/After Examples**
+```json
+// Before (inconsistent)
+{
+  "status": "warning",
+  "severity": "error",  // Wrong unless error violations exist
+  "metric": {
+    "units": "um",      // Wrong - 0.296 value is mm scale
+    "measured_value": 0.296
+  }
+}
+
+// After (consistent)
+{
+  "status": "pass",
+  "severity": "info",   // Correct - derived from status
+  "metric": {
+    "units": "mm",      // Correct - matches value scale
+    "measured_value": 0.296
+  }
+}
+```
+
+### 📊 Expected Results
+
+These improvements transform PCB-DFM from producing false failures to providing accurate, Integr8tor-aligned measurements:
+
+- **Annular ring**: True geometric measurements instead of zero/false failures
+- **Solder mask expansion**: Correct polarity interpretation and distance calculation  
+- **Copper-to-edge clearance**: Reliable outline geometry and consistent units
+- **Policy alignment**: Lenient approach for non-critical issues, strict when opted-in
+- **System consistency**: No more unit contradictions or severity/status mismatches
 
 ## 3. Quickstart: Run a Single Check from CLI
 

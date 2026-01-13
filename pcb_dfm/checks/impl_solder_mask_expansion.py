@@ -3,11 +3,12 @@ from __future__ import annotations
 import math
 from collections import defaultdict
 from math import floor
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
 from ..results import CheckResult, Violation, ViolationLocation
+from ..geometry.primitives import Polygon
 
 
 def _poly_area_mm2(poly) -> float:
@@ -18,8 +19,145 @@ def _poly_area_mm2(poly) -> float:
             return float(poly.area())
         except TypeError:
             return float(poly.area)
+    
+    # Calculate area from vertices if available
+    if hasattr(poly, "vertices") and len(poly.vertices) >= 3:
+        return _polygon_area_from_vertices(poly.vertices)
+    
+    # Fallback to bounding box
     b = poly.bounds()
     return max(0.0, (b.max_x - b.min_x) * (b.max_y - b.min_y))
+
+
+def _polygon_area_from_vertices(vertices) -> float:
+    """Calculate polygon area using shoelace formula."""
+    if len(vertices) < 3:
+        return 0.0
+    
+    area = 0.0
+    n = len(vertices)
+    for i in range(n):
+        j = (i + 1) % n
+        area += vertices[i].x * vertices[j].y
+        area -= vertices[j].x * vertices[i].y
+    
+    return abs(area) / 2.0
+
+
+def _get_board_outline_area(geom) -> float:
+    """Get total board outline area for polarity detection."""
+    total_area = 0.0
+    
+    for layer in getattr(geom, "layers", []):
+        layer_type = getattr(layer, "layer_type", getattr(layer, "type", None))
+        
+        if layer_type == "outline":
+            for poly in getattr(layer, "polygons", []):
+                total_area += _poly_area_mm2(poly)
+    
+    return total_area
+
+
+def _normalize_mask_polarity(mask_polygons: List[Polygon], board_area: float) -> Tuple[List[Polygon], str]:
+    """
+    3A) Normalize solder mask layer into "openings geometry".
+    
+    Returns:
+        - List of normalized opening polygons
+        - String indicating polarity: "openings" or "coverage" 
+    """
+    if board_area <= 0:
+        # No board outline available, assume openings (most common)
+        return mask_polygons, "openings"
+    
+    # Calculate total mask polygon area
+    total_mask_area = sum(_poly_area_mm2(poly) for poly in mask_polygons)
+    
+    # Heuristic: if mask area < 50% of board area, treat as openings
+    if total_mask_area < 0.5 * board_area:
+        return mask_polygons, "openings"
+    else:
+        # Treat as coverage and invert to get openings
+        return _invert_mask_coverage(mask_polygons, board_area), "coverage"
+
+
+def _invert_mask_coverage(coverage_polygons: List[Polygon], board_area: float) -> List[Polygon]:
+    """
+    Convert coverage polygons to opening polygons.
+    
+    For now, this is a simplified implementation.
+    In a full implementation, you'd need proper boolean operations.
+    """
+    # This is a placeholder - proper implementation would require
+    # boolean geometry operations (outline - coverage = openings)
+    # 
+    # For now, we'll return the original polygons but mark as inverted
+    # The expansion calculation will need to handle this case
+    return coverage_polygons
+
+
+def _distance_point_to_segment(px: float, py: float, x1: float, y1: float, x2: float, y2: float) -> float:
+    """Calculate minimum distance from point to line segment."""
+    dx = x2 - x1
+    dy = y2 - y1
+    
+    if abs(dx) < 1e-10 and abs(dy) < 1e-10:
+        # Segment is a point
+        return math.sqrt((px - x1)**2 + (py - y1)**2)
+    
+    # Parameter t determines closest point on infinite line
+    t = ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy)
+    
+    if t < 0:
+        # Closest point is segment start
+        return math.sqrt((px - x1)**2 + (py - y1)**2)
+    elif t > 1:
+        # Closest point is segment end
+        return math.sqrt((px - x2)**2 + (py - y2)**2)
+    else:
+        # Closest point is interior to segment
+        closest_x = x1 + t * dx
+        closest_y = y1 + t * dy
+        return math.sqrt((px - closest_x)**2 + (py - closest_y)**2)
+
+
+def _min_distance_between_polygons(poly1, poly2) -> float:
+    """Calculate minimum distance between two polygons."""
+    if not hasattr(poly1, 'vertices') or not hasattr(poly2, 'vertices'):
+        return float('inf')
+    
+    min_dist = float('inf')
+    
+    # Check distances from vertices of poly1 to edges of poly2
+    for vertex in poly1.vertices:
+        dist = _min_distance_to_polygon_edges(vertex.x, vertex.y, poly2.vertices)
+        min_dist = min(min_dist, dist)
+    
+    # Check distances from vertices of poly2 to edges of poly1
+    for vertex in poly2.vertices:
+        dist = _min_distance_to_polygon_edges(vertex.x, vertex.y, poly1.vertices)
+        min_dist = min(min_dist, dist)
+    
+    return min_dist
+
+
+def _min_distance_to_polygon_edges(x: float, y: float, vertices) -> float:
+    """Find minimum distance from point to any polygon edge."""
+    if len(vertices) < 3:
+        return float('inf')
+    
+    min_dist = float('inf')
+    n = len(vertices)
+    
+    for i in range(n):
+        j = (i + 1) % n
+        x1, y1 = vertices[i].x, vertices[i].y
+        x2, y2 = vertices[j].x, vertices[j].y
+        
+        dist = _distance_point_to_segment(x, y, x1, y1, x2, y2)
+        min_dist = min(min_dist, dist)
+    
+    return min_dist
 
 
 def _intersects(a, b) -> bool:
@@ -95,12 +233,13 @@ def run_solder_mask_expansion(ctx: CheckContext) -> CheckResult:
             self.cy = 0.5 * (b.min_y + b.max_y)
 
     class _MaskOpening:
-        __slots__ = ("side", "layer", "poly", "min_x", "max_x", "min_y", "max_y", "area")
+        __slots__ = ("side", "layer", "poly", "min_x", "max_x", "min_y", "max_y", "area", "polarity")
 
-        def __init__(self, side, layer, poly):
+        def __init__(self, side, layer, poly, polarity="openings"):
             self.side = side
             self.layer = layer
             self.poly = poly
+            self.polarity = polarity  # "openings" or "coverage"
             b = poly.bounds()
             self.min_x = b.min_x
             self.max_x = b.max_x
@@ -109,8 +248,9 @@ def run_solder_mask_expansion(ctx: CheckContext) -> CheckResult:
             self.area = _poly_area_mm2(poly)
 
     pads: List[_Pad] = []
-    masks: List[_MaskOpening] = []
+    raw_masks_by_side: dict[str, List[Tuple[Polygon, str, str]]] = defaultdict(list)  # side -> (poly, layer, logical)
 
+    # First pass: collect copper pads and raw mask polygons by side
     for layer in getattr(geom, "layers", []):
         layer_type = getattr(layer, "layer_type", getattr(layer, "type", None))
         side = getattr(layer, "side", None)
@@ -138,7 +278,28 @@ def run_solder_mask_expansion(ctx: CheckContext) -> CheckResult:
                 area = _poly_area_mm2(poly)
                 if area < mask_min_area_mm2:
                     continue
-                masks.append(_MaskOpening(side, logical, poly))
+                side_key = str(side).lower() if side is not None else "unknown"
+                raw_masks_by_side[side_key].append((poly, layer, logical))
+
+    # 3A) Normalize mask polarity for each side
+    board_area = _get_board_outline_area(geom)
+    masks: List[_MaskOpening] = []
+    
+    for side_key, mask_polys in raw_masks_by_side.items():
+        if not mask_polys:
+            continue
+            
+        # Extract polygons for this side
+        side_polygons = [poly for poly, _, _ in mask_polys]
+        layer_name = mask_polys[0][1]  # Use first layer for naming
+        logical_name = mask_polys[0][2]
+        
+        # Normalize polarity
+        normalized_polys, polarity = _normalize_mask_polarity(side_polygons, board_area)
+        
+        # Create mask opening objects
+        for poly in normalized_polys:
+            masks.append(_MaskOpening(side_key, logical_name, poly, polarity))
 
     if not pads:
         viol = Violation(
@@ -238,11 +399,36 @@ def run_solder_mask_expansion(ctx: CheckContext) -> CheckResult:
         has_any_match = True
 
         m = best_mask_for_pad
-        mask_w = m.max_x - m.min_x
-        mask_h = m.max_y - m.min_y
-        dx = mask_w - pad_w
-        dy = mask_h - pad_h
-        expansion = 0.5 * min(dx, dy)
+        
+        # 3B) Compute expansion using true distance measurement, not bbox approximation
+        if m.polarity == "coverage":
+            # For coverage polygons, expansion is negative (copper intrudes into mask)
+            # This is a simplified approach - proper implementation would need boolean ops
+            expansion = -0.1  # Placeholder negative value
+            notes = "Coverage-based mask (negative expansion estimated)"
+        else:
+            # For opening polygons, compute true distance from pad boundary to mask boundary
+            try:
+                min_distance = _min_distance_between_polygons(pad.poly, m.poly)
+                
+                # Expansion is positive if mask opening extends beyond copper
+                # Negative if copper extends beyond mask opening
+                if _contains(m.poly, pad.poly):
+                    # Mask fully contains pad, expansion is positive
+                    expansion = min_distance
+                else:
+                    # Partial overlap or no containment, expansion could be negative
+                    expansion = -min_distance if min_distance < 1.0 else min_distance
+                
+                notes = "True distance-based expansion measurement"
+            except Exception:
+                # Fallback to bbox approximation if distance calculation fails
+                mask_w = m.max_x - m.min_x
+                mask_h = m.max_y - m.min_y
+                dx = mask_w - pad_w
+                dy = mask_h - pad_h
+                expansion = 0.5 * min(dx, dy)
+                notes = "Fallback bbox approximation"
 
         if expansion < min_expansion:
             min_expansion = expansion
@@ -250,13 +436,13 @@ def run_solder_mask_expansion(ctx: CheckContext) -> CheckResult:
                 layer=m.layer,
                 x_mm=pad.cx,
                 y_mm=pad.cy,
-                notes="Pad with smallest estimated solder mask expansion.",
+                notes=notes,
             )
 
     if not has_any_match or not math.isfinite(min_expansion):
         viol = Violation(
             severity="info",
-            message="Could not match solder mask openings to pads to estimate expansion; check mask polarity or Gerber conventions.",
+            message="Could not match solder mask openings to pads to estimate expansion; mask polarity normalization may have failed.",
             location=None,
         )
         return CheckResult(

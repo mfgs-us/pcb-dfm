@@ -366,13 +366,32 @@ def run_silkscreen_on_copper(ctx: CheckContext) -> CheckResult:
             violations=[],
         )
 
+    # 5A) Silkscreen over copper: default to warning (CAM clipping assumed)
+    # Optionally add fab_clips_silkscreen=True profile default
+    
+    # Check if user has indicated fab clips silkscreen (default behavior)
+    raw_cfg = getattr(ctx.check_def, "raw", None) or {}
+    fab_clips_silkscreen = raw_cfg.get("fab_clips_silkscreen", True)  # Default to True
+    
+    # Determine severity based on fab clipping assumption
+    if fab_clips_silkscreen:
+        # Assume fab will clip silkscreen, so treat as warning
+        severity = "warning"
+        status = "warning"
+        score = 60.0  # Warning score but not failure
+    else:
+        # User wants strict silkscreen checking
+        severity = ctx.check_def.severity or "warning"
+        status = "warning"
+        score = 60.0
+
     return CheckResult(
         check_id=ctx.check_def.id,
         name=ctx.check_def.name,
         category_id=ctx.check_def.category_id,
-        severity=ctx.check_def.severity,
-        status="warning",
-        score=0.0,
+        severity=severity,
+        status=status,
+        score=score,
         metric={
             "kind": "count",
             "units": units,

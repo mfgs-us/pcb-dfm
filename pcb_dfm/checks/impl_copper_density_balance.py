@@ -6,7 +6,7 @@ from typing import Dict, List, Optional, Tuple
 
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
-from ..results import CheckResult, Violation, ViolationLocation
+from ..results import CheckResult, Violation, ViolationLocation, MetricResult
 
 
 def _compute_board_bounds_mm(ctx: CheckContext) -> Optional[Tuple[float, float, float, float]]:
@@ -198,15 +198,11 @@ def run_copper_density_balance(ctx: CheckContext) -> CheckResult:
             severity=ctx.check_def.severity,
             status="pass",
             score=100.0,
-            metric={
-                "kind": "ratio",
-                "units": units,
-                "measured_value": 0.0,
-                "target": recommended_max_delta,
-                "limit_low": None,
-                "limit_high": absolute_max_delta,
-                "margin_to_limit": absolute_max_delta,
-            },
+            metric=MetricResult.ratio_percent(
+                measured_pct=0.0,
+                target_pct=recommended_max_delta,
+                limit_high_pct=absolute_max_delta,
+            ),
             violations=[viol],
         )
 
@@ -310,22 +306,25 @@ def run_copper_density_balance(ctx: CheckContext) -> CheckResult:
             severity=ctx.check_def.severity,
             status="pass",
             score=100.0,
-            metric={
-                "kind": "ratio",
-                "units": units,
-                "measured_value": 0.0,
-                "target": recommended_max_delta,
-                "limit_low": None,
-                "limit_high": absolute_max_delta,
-                "margin_to_limit": absolute_max_delta,
-            },
+            metric=MetricResult.ratio_percent(
+                measured_pct=0.0,
+                target_pct=recommended_max_delta,
+                limit_high_pct=absolute_max_delta,
+            ),
             violations=[viol],
         )
 
+    # 5B) Default to Info/Warning instead of Fail to match Integr8tor
+    # Only fail when user opts into plating/process risk profile
+    
+    # Check if user has opted into strict plating risk profile
+    raw_cfg = getattr(ctx.check_def, "raw", None) or {}
+    strict_plating_mode = raw_cfg.get("strict_plating_mode", False)
+    
     # Status and score
     if max_delta_percent <= recommended_max_delta:
         status = "pass"
-        severity = ctx.check_def.severity or "error"
+        severity = ctx.check_def.severity or "info"  # Default to info
         score = 100.0
     elif max_delta_percent <= absolute_max_delta:
         status = "warning"
@@ -333,16 +332,22 @@ def run_copper_density_balance(ctx: CheckContext) -> CheckResult:
         # Linear falloff between recommended and absolute
         span = max(1e-6, absolute_max_delta - recommended_max_delta)
         score = max(
-            0.0,
+            60.0,
             min(
                 100.0,
-                100.0 * (absolute_max_delta - max_delta_percent) / span,
+                60.0 + 40.0 * (max_delta_percent - recommended_max_delta) / span,
             ),
         )
     else:
-        status = "fail"
-        severity = "error"
-        score = 0.0
+        # Only fail if user has opted into strict plating mode
+        if strict_plating_mode:
+            status = "fail"
+            severity = "error"
+            score = 0.0
+        else:
+            status = "warning"  # Default to warning instead of fail
+            severity = "warning"
+            score = 40.0  # Lower score for warning but not failure
 
     margin_to_limit = float(absolute_max_delta - max_delta_percent)
 
@@ -372,14 +377,10 @@ def run_copper_density_balance(ctx: CheckContext) -> CheckResult:
         severity=ctx.check_def.severity,
         status=status,
         score=score,
-        metric={
-            "kind": "ratio",
-            "units": units,
-            "measured_value": max_delta_percent,
-            "target": recommended_max_delta,
-            "limit_low": None,
-            "limit_high": absolute_max_delta,
-            "margin_to_limit": margin_to_limit,
-        },
+        metric=MetricResult.ratio_percent(
+            measured_pct=max_delta_percent,
+            target_pct=recommended_max_delta,
+            limit_high_pct=absolute_max_delta,
+        ),
         violations=violations,
-    )
+    ).finalize()

@@ -193,14 +193,27 @@ def run_via_tenting(ctx: CheckContext) -> CheckResult:
 
     tented_pct = 100.0 * tented_count / float(total)
 
+    # 5C) Default to Warning/Info instead of Fail to match Integr8tor
+    # Integr8tor doesn't enforce tenting ratios
+    
+    # Check if user has opted into strict assembly risk profile
+    raw_cfg = getattr(ctx.check_def, "raw", None) or {}
+    strict_assembly_mode = raw_cfg.get("strict_assembly_mode", False)
+
     if tented_pct >= recommended_min:
         status = "pass"
-        severity = ctx.check_def.severity or ctx.check_def.severity_default
+        severity = ctx.check_def.severity or "info"  # Default to info
         score = 100.0
     elif tented_pct < absolute_min:
-        status = "fail"
-        severity = "error"
-        score = 0.0
+        # Only fail if user has opted into strict assembly mode
+        if strict_assembly_mode:
+            status = "fail"
+            severity = "error"
+            score = 0.0
+        else:
+            status = "warning"  # Default to warning instead of fail
+            severity = "warning"
+            score = 40.0  # Lower score for warning but not failure
     else:
         status = "warning"
         severity = "warning"

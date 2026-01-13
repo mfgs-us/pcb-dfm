@@ -305,18 +305,58 @@ def _line_to_polygon_mm(prim: object) -> Optional[Polygon]:
 
 def _populate_outline_polygons_fallback(layer: BoardLayer) -> None:
     """
-    Fallback outline polygon extraction using naive X/Y coordinate parsing.
+    4C) Improved fallback outline polygon extraction with selective parsing.
+    
+    Only fallback parse if the file name strongly indicates outline,
+    and only take coordinates from draw commands (D01) to avoid non-outline moves.
     """
     for f in layer.files:
+        # Only use fallback for files that strongly indicate outline content
+        if not _is_strong_outline_candidate(f.path, f.original_name):
+            continue
+            
         polys = _extract_outline_polygons_from_file_fallback(f.path)
         layer.polygons.extend(polys)
 
 
+def _is_strong_outline_candidate(path: Path, original_name: str) -> bool:
+    """
+    Check if file is a strong outline candidate for fallback parsing.
+    
+    This prevents parsing random X/Y coordinates from non-outline Gerbers.
+    """
+    name_lower = original_name.lower()
+    ext = path.suffix.lower()
+    
+    # Strong outline indicators
+    strong_indicators = [
+        "edge_cuts", "edgecuts", "outline", "boardoutline", 
+        "board_edge", "board-edge", "profile", "contour"
+    ]
+    
+    # Check for strong indicators in name
+    if any(indicator in name_lower for indicator in strong_indicators):
+        return True
+    
+    # Check for outline-specific extensions
+    if ext in {".gko", ".gm1", ".gml"}:
+        return True
+    
+    # If it's a generic .gbr, be more cautious
+    if ext == ".gbr":
+        # Only proceed if there's at least one strong indicator
+        return any(indicator in name_lower for indicator in strong_indicators)
+    
+    return False
+
+
 def _extract_outline_polygons_from_file_fallback(path: Path) -> List[Polygon]:
     """
-    Very naive outline polygon extractor:
-
-    - Looks for lines with X...Y... coordinates
+    4C) Improved outline polygon extractor:
+    
+    - Only parses files strongly identified as outlines
+    - Only extracts coordinates from draw commands (D01)
+    - Filters out non-outline moves and apertures
     - Uses header to guess units and format
     - Converts integers with implicit decimals -> mm
     """
@@ -327,14 +367,22 @@ def _extract_outline_polygons_from_file_fallback(path: Path) -> List[Polygon]:
 
     points: List[Point2D] = []
 
-    coord_re = re.compile(r".*X(-?\d+)Y(-?\d+).*", re.IGNORECASE)
+    # 4C) Only look for coordinates in draw commands (D01), not all X/Y coordinates
+    # This prevents capturing non-outline moves, flashes, and apertures
+    draw_cmd_re = re.compile(r".*X(-?\d+)Y(-?\d+)D01.*", re.IGNORECASE)
 
     for line in text.splitlines():
         line = line.strip()
-        if "X" not in line or "Y" not in line:
+        
+        # Skip lines that don't contain draw commands
+        if "D01" not in line.upper():
+            continue
+            
+        # Skip lines that look like aperture definitions or other non-draw commands
+        if any(cmd in line.upper() for cmd in ["D02", "D03", "AD", "AM", "SR", "G04", "M02", "M00"]):
             continue
 
-        m = coord_re.match(line)
+        m = draw_cmd_re.match(line)
         if not m:
             continue
 
@@ -348,6 +396,7 @@ def _extract_outline_polygons_from_file_fallback(path: Path) -> List[Polygon]:
     if len(points) < 3:
         return []
 
+    # Close the polygon if not already closed
     first = points[0]
     last = points[-1]
     if first.x != last.x or first.y != last.y:

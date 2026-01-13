@@ -258,12 +258,81 @@ def _classify_layer(
 
     # ---- fmt == "gerber" ----
 
+    # 4A) Use extensions first for reliable copper/mask/silk classification
+    # This prevents misclassification when filename doesn't include extension in name_lower
+    
+    # Copper layers - check extensions first
+    if ext == ".gtl":
+        logical_layer = "TopCopper"
+        side = "Top"
+        layer_type = "copper"
+        return logical_layer, side, layer_type, is_plated
+
+    if ext == ".gbl":
+        logical_layer = "BottomCopper"
+        side = "Bottom"
+        layer_type = "copper"
+        return logical_layer, side, layer_type, is_plated
+
+    # Solder mask - check extensions first
+    if ext == ".gts":
+        logical_layer = "TopSolderMask"
+        side = "Top"
+        layer_type = "mask"
+        return logical_layer, side, layer_type, is_plated
+
+    if ext == ".gbs":
+        logical_layer = "BottomSolderMask"
+        side = "Bottom"
+        layer_type = "mask"
+        return logical_layer, side, layer_type, is_plated
+
+    # Silkscreen - check extensions first
+    if ext == ".gto":
+        logical_layer = "TopSilkscreen"
+        side = "Top"
+        layer_type = "silkscreen"
+        return logical_layer, side, layer_type, is_plated
+
+    if ext == ".gbo":
+        logical_layer = "BottomSilkscreen"
+        side = "Bottom"
+        layer_type = "silkscreen"
+        return logical_layer, side, layer_type, is_plated
+
+    # Paste - check extensions first
+    if ext == ".gtp":
+        logical_layer = "Other"
+        side = "Top"
+        layer_type = "other"
+        return logical_layer, side, layer_type, is_plated
+
+    if ext == ".gbp":
+        logical_layer = "Other"
+        side = "Bottom"
+        layer_type = "other"
+        return logical_layer, side, layer_type, is_plated
+
+    # Outline - check extensions first
+    if ext in {".gko", ".gm1", ".gml"}:
+        logical_layer = "Outline"
+        side = "None"
+        layer_type = "outline"
+        return logical_layer, side, layer_type, is_plated
+
+    # Mechanical - check extensions first
+    if ext == ".gm2":
+        logical_layer = "Mechanical"
+        side = "None"
+        layer_type = "mechanical"
+        return logical_layer, side, layer_type, is_plated
+
     # Normalize common KiCad tokens
     # KiCad: F_Cu, B_Cu, Edge_Cuts, F_Mask, B_Mask, F_Silkscreen, B_Silkscreen, F_Paste, B_Paste
     is_f = any(t in name_lower for t in ["f_", "-f_", ".f_", "_f_"]) or "fcu" in name_lower
     is_b = any(t in name_lower for t in ["b_", "-b_", ".b_", "_b_"]) or "bcu" in name_lower
 
-    # Copper layers
+    # Copper layers - fallback to name heuristics for .gbr and unknown extensions
     if ("f_cu" in name_lower) or ("fcu" in name_lower) or ("gtl" in name_lower) or ("top" in name_lower and ("cu" in name_lower or "copper" in name_lower or "sig" in name_lower)):
         logical_layer = "TopCopper"
         side = "Top"
@@ -301,7 +370,7 @@ def _classify_layer(
         layer_type = "copper"
         return logical_layer, side, layer_type, is_plated
 
-    # Solder mask
+    # Solder mask - fallback to name heuristics
     if ("f_mask" in name_lower) or ("fmask" in name_lower) or ("gts" in name_lower) or (("top" in name_lower) and ("mask" in name_lower)):
         logical_layer = "TopSolderMask"
         side = "Top"
@@ -314,7 +383,7 @@ def _classify_layer(
         layer_type = "mask"
         return logical_layer, side, layer_type, is_plated
 
-    # Silkscreen
+    # Silkscreen - fallback to name heuristics
     if ("f_silkscreen" in name_lower) or ("fsilkscreen" in name_lower) or ("gto" in name_lower) or (("top" in name_lower) and ("silk" in name_lower or "ss" in name_lower)):
         logical_layer = "TopSilkscreen"
         side = "Top"
@@ -327,7 +396,7 @@ def _classify_layer(
         layer_type = "silkscreen"
         return logical_layer, side, layer_type, is_plated
 
-    # Paste
+    # Paste - fallback to name heuristics
     if ("f_paste" in name_lower) or ("fpaste" in name_lower) or ("gtp" in name_lower) or (("top" in name_lower) and ("paste" in name_lower)):
         logical_layer = "Other"
         side = "Top"
@@ -340,14 +409,16 @@ def _classify_layer(
         layer_type = "other"
         return logical_layer, side, layer_type, is_plated
 
-    # Outline and mechanical
-    if ("edge_cuts" in name_lower) or ("edgecuts" in name_lower) or (ext in {".gko", ".gm1", ".gml"}) or any(t in name_lower for t in ["outline", "boardoutline"]):
+    # 4B) Outline classification - enhanced for .gbr names like Edge_Cuts
+    # Check extensions first (already done above), then name heuristics
+    if ("edge_cuts" in name_lower) or ("edgecuts" in name_lower) or any(t in name_lower for t in ["outline", "boardoutline", "boardoutline", "board_edge", "board-edge"]):
         logical_layer = "Outline"
         side = "None"
         layer_type = "outline"
         return logical_layer, side, layer_type, is_plated
 
-    if ext in {".gm2"} or "mech" in name_lower or "mechanical" in name_lower:
+    # Mechanical - fallback to name heuristics
+    if "mech" in name_lower or "mechanical" in name_lower:
         logical_layer = "Mechanical"
         side = "None"
         layer_type = "mechanical"

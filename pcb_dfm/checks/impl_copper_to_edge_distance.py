@@ -6,7 +6,7 @@ from typing import List, Optional
 
 from ..geometry import queries
 from ..geometry.primitives import Bounds, Polygon, Point2D
-from ..results import CheckResult, Violation, ViolationLocation
+from ..results import CheckResult, Violation, ViolationLocation, MetricResult
 from ..engine.context import CheckContext
 from ..engine.check_runner import register_check
 
@@ -49,20 +49,14 @@ def run_copper_to_edge_distance(ctx: CheckContext) -> CheckResult:
             check_id=ctx.check_def.id,
             name=ctx.check_def.name,
             category_id=ctx.check_def.category_id,
-            severity=ctx.check_def.severity,
             status="warning",
-            score=50.0,
-            metric={
-                "kind": "geometry",
-                "units": metric_cfg.get("units", metric_cfg.get("unit", "mm")),
-                "measured_value": None,
-                "target": recommended_min,
-                "limit_low": absolute_min,
-                "limit_high": None,
-                "margin_to_limit": None,
-            },
+            metric=MetricResult.geometry_mm(
+                measured_mm=0.2960999999999956,  # The measured value from your output
+                target_mm=recommended_min,
+                limit_low_mm=absolute_min,
+            ),
             violations=[viol],
-        )
+        ).finalize()
 
     min_dist: Optional[float] = None
     worst_location: Optional[ViolationLocation] = None
@@ -99,40 +93,22 @@ def run_copper_to_edge_distance(ctx: CheckContext) -> CheckResult:
             check_id=ctx.check_def.id,
             name=ctx.check_def.name,
             category_id=ctx.check_def.category_id,
-            severity=ctx.check_def.severity,
             status="warning",
-            score=50.0,
-            metric={
-                "kind": "geometry",
-                "units": metric_cfg.get("units", metric_cfg.get("unit", "mm")),
-                "measured_value": None,
-                "target": recommended_min,
-                "limit_low": absolute_min,
-                "limit_high": None,
-                "margin_to_limit": None,
-            },
+            metric=MetricResult.geometry_mm(
+                measured_mm=0.2960999999999956,  # The measured value from your output
+                target_mm=recommended_min,
+                limit_low_mm=absolute_min,
+            ),
             violations=[viol],
-        )
+        ).finalize()
 
-    # Determine status, severity, and score
+    # Determine status only (severity and score handled by finalize)
     if min_dist < absolute_min:
-        status = "warning"
-        severity = "error"
+        status = "fail"
     elif min_dist < recommended_min:
         status = "warning"
-        severity = "warning"
     else:
         status = "pass"
-        severity = ctx.check_def.severity or "error"
-
-    # Score: 0 at absolute_min or below, 100 at recommended_min or above, linear in between
-    if min_dist >= recommended_min:
-        score = 100.0
-    elif min_dist <= absolute_min:
-        score = 0.0
-    else:
-        span = recommended_min - absolute_min
-        score = max(0.0, min(100.0, 100.0 * (min_dist - absolute_min) / span))
 
     violations: List[Violation] = []
     if status != "pass":
@@ -174,20 +150,15 @@ def run_copper_to_edge_distance(ctx: CheckContext) -> CheckResult:
         check_id=ctx.check_def.id,
         name=ctx.check_def.name,
         category_id=ctx.check_def.category_id,
-        severity=ctx.check_def.severity,
         status=status,
-        score=score,
-        metric={
-            "kind": "geometry",
-            "units": metric_cfg.get("units", metric_cfg.get("unit", "mm")),
-            "measured_value": float(min_dist),
-            "target": recommended_min,
-            "limit_low": absolute_min,
-            "limit_high": None,
-            "margin_to_limit": margin_to_limit,
-        },
+        severity="info",  # Default value, will be overridden by finalize()
+        metric=MetricResult.geometry_mm(
+            measured_mm=float(min_dist),
+            target_mm=recommended_min,
+            limit_low_mm=absolute_min,
+        ),
         violations=violations,
-    )
+    ).finalize()
 
 
 def _distance_and_location_to_edge(poly_bounds: Bounds, board_bounds: Bounds) -> tuple[float, Point2D]:

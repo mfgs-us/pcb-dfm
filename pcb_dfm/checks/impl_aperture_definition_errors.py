@@ -429,12 +429,12 @@ def run_aperture_definition_errors(ctx: CheckContext) -> CheckResult:
     HARD_REASONS = {
         "parse_failed",
         "no_usable_dimension",
-        "macro_no_size",
         "extremely_small",
         "extremely_large",
     }
 
     SOFT_REASONS = {
+        "macro_no_size",
         "unknown_shape",
     }
 
@@ -442,17 +442,19 @@ def run_aperture_definition_errors(ctx: CheckContext) -> CheckResult:
     soft = [s for s in suspicious if s.reason in SOFT_REASONS]
 
     # Metric should reflect real risk, not low-confidence parsing quirks.
-    count = float(len(hard))
+    invalid_count = float(len(hard))
+    suspicious_count = float(len(soft))
+    count = invalid_count  # For backward compatibility
 
-    if count <= target_max:
+    if invalid_count <= target_max:
         status = "pass"
         sev = ctx.check_def.severity or ctx.check_def.severity_default
         score = 100.0
-    elif (limit_max > 0.0) and (count <= limit_max):
+    elif (limit_max > 0.0) and (invalid_count <= limit_max):
         status = "warning"
         sev = "warning"
         if limit_max > target_max:
-            frac = min(1.0, max(0.0, (count - target_max) / (limit_max - target_max)))
+            frac = min(1.0, max(0.0, (invalid_count - target_max) / (limit_max - target_max)))
             score = max(60.0, 100.0 - 40.0 * frac)
         else:
             score = 60.0
@@ -463,15 +465,18 @@ def run_aperture_definition_errors(ctx: CheckContext) -> CheckResult:
 
     margin_to_limit = None
     if limit_max > 0.0:
-        margin_to_limit = float(limit_max - count)
+        margin_to_limit = float(limit_max - invalid_count)
 
     violations: List[Violation] = []
 
-    if count == 0:
+    if invalid_count == 0:
+        msg = "No invalid aperture definitions detected across Gerber layers."
+        if suspicious_count > 0:
+            msg += f" Found {int(suspicious_count)} suspicious aperture(s) that do not affect renderability."
         violations.append(
             Violation(
                 severity="info",
-                message="No suspicious aperture definitions detected across Gerber layers.",
+                message=msg,
                 location=None,
             )
         )
@@ -481,9 +486,12 @@ def run_aperture_definition_errors(ctx: CheckContext) -> CheckResult:
 
         # Summary violation
         summary = (
-            f"Detected {int(count)} suspicious aperture definition(s) across Gerber layers "
-            f"(target {target_max:.0f}, limit {limit_max:.0f})."
+            f"Detected {int(invalid_count)} invalid aperture definition(s) across Gerber layers "
+            f"(target {target_max:.0f}, limit {limit_max:.0f})"
         )
+        if suspicious_count > 0:
+            summary += f" plus {int(suspicious_count)} suspicious aperture(s)."
+        summary += "."
         violations.append(
             Violation(
                 severity=sev,
@@ -527,7 +535,7 @@ def run_aperture_definition_errors(ctx: CheckContext) -> CheckResult:
                 if loc is not None:
                     loc.layer = s.layer_name
 
-            item_sev = "warning" if s.reason == "unknown_shape" else sev
+            item_sev = "warning" if s.reason in SOFT_REASONS else sev
 
             violations.append(
                 Violation(
@@ -565,11 +573,13 @@ def run_aperture_definition_errors(ctx: CheckContext) -> CheckResult:
         metric={
             "kind": "count",
             "units": units,
-            "measured_value": count,
+            "measured_value": invalid_count,
             "target": target_max,
             "limit_low": None,
             "limit_high": limit_max,
             "margin_to_limit": margin_to_limit,
+            "invalid_apertures_count": invalid_count,
+            "suspicious_apertures_count": suspicious_count,
         },
         violations=violations,
     )

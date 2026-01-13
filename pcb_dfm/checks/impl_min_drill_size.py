@@ -64,7 +64,7 @@ def run_min_drill_size(ctx: CheckContext) -> CheckResult:
             score=50.0,
             metric=MetricResult(
                 kind="geometry",
-                units=units,
+                units="mm",  # Pydantic requires geometry metrics to use mm
                 measured_value=None,
                 target=recommended_min,
                 limit_low=absolute_min,
@@ -95,7 +95,7 @@ def run_min_drill_size(ctx: CheckContext) -> CheckResult:
             score=50.0,
             metric=MetricResult(
                 kind="geometry",
-                units=units,
+                units="mm",  # Pydantic requires geometry metrics to use mm
                 measured_value=None,
                 target=recommended_min,
                 limit_low=absolute_min,
@@ -161,12 +161,12 @@ def run_min_drill_size(ctx: CheckContext) -> CheckResult:
         score=score,
         metric=MetricResult(
             kind="geometry",
-            units=units,
-            measured_value=float(measured),
-            target=target,
-            limit_low=limit_low,
+            units="mm",  # Pydantic requires geometry metrics to use mm
+            measured_value=min_d_mm,
+            target=recommended_min,
+            limit_low=absolute_min,
             limit_high=None,
-            margin_to_limit=margin_to_limit * (1000.0 if units == "um" else 1.0),
+            margin_to_limit=min_d_mm - absolute_min,
         ),
         violations=violations,
     ).finalize()

@@ -80,6 +80,20 @@ class MetricResult(BaseModel):
     limit_high: Optional[float] = None
     margin_to_limit: Optional[float] = None
 
+    @model_validator(mode='before')
+    @classmethod
+    def coerce_and_validate(cls, data):
+        # Coerce dict inputs to MetricResult for compatibility
+        if isinstance(data, dict):
+            # Validate units for ratio metrics
+            if data.get('kind') == 'ratio' and data.get('units') != '%':
+                raise ValueError("ratio metrics must use units='%'")
+            # Validate units for geometry metrics  
+            if data.get('kind') == 'geometry' and data.get('units') != 'mm':
+                raise ValueError("geometry metrics must use units='mm'")
+            return data
+        return data
+
     @staticmethod
     def geometry_mm(measured_mm: float,
                     target_mm: Optional[float] = None,
@@ -147,7 +161,7 @@ class CheckResult(BaseModel):
     violations: List[Violation] = Field(default_factory=list)
 
     def finalize(self) -> "CheckResult":
-        # Clean invariant: if violations empty, severity derived from status only
+        # ENFORCED: Always recompute severity, ignore any manual assignment
         if not self.violations:
             final_severity = (
                 "info" if self.status in ("pass", "not_applicable")
@@ -170,13 +184,13 @@ class CheckResult(BaseModel):
         else:
             final_score = self.score
 
-        # Return a new instance with normalized values
+        # Return new instance with enforced invariants
         return CheckResult(
             check_id=self.check_id,
             name=self.name,
             category_id=self.category_id,
             status=self.status,
-            severity=final_severity,
+            severity=final_severity,  # ENFORCED: Cannot be overridden
             score=final_score,
             metric=self.metric,
             violations=self.violations,

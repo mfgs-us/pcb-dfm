@@ -401,16 +401,13 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
             violations=[viol],
         )
 
-    # Decide status
+    # Decide status only (severity handled by finalize)
     if min_clear < absolute_min:
         status = "fail"
-        severity = "warning"
     elif min_clear < recommended_min:
         status = "warning"
-        severity = "warning"
     else:
         status = "pass"
-        severity = ctx.check_def.severity or "error"
 
     # Score
     if min_clear >= recommended_min:
@@ -461,20 +458,16 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
         check_id=ctx.check_def.id,
         name=ctx.check_def.name,
         category_id=ctx.check_def.category_id,
-        severity=ctx.check_def.severity,
         status=status,
+        severity="info",  # Default, will be overridden by finalize()
         score=score,
-        metric={
-            "kind": "geometry",
-            "units": units,
-            "measured_value": float(min_clear),
-            "target": recommended_min,
-            "limit_low": absolute_min,
-            "limit_high": None,
-            "margin_to_limit": margin_to_limit,
-        },
+        metric=MetricResult.geometry_mm(
+            measured_mm=float(min_clear),
+            target_mm=recommended_min,
+            limit_low_mm=absolute_min,
+        ),
         violations=violations,
-    )
+    ).finalize()
 
 
 def _extract_drill_hits_mm(path, via_max_d_mm: float = 0.8, include_component_pth: bool = False) -> List[DrillHit]:

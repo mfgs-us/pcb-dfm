@@ -220,9 +220,10 @@ def run_via_tenting(ctx: CheckContext) -> CheckResult:
 
     violations: List[Violation] = []
     if status != "pass":
+        violation_severity = "error" if status == "fail" else "warning"
         violations.append(
             Violation(
-                severity=severity,
+                severity=violation_severity,
                 message=msg,
                 location=first_exposed_loc,
             )

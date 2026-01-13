@@ -139,6 +139,15 @@ def run_checks(
         result = runner(ctx)
         t_run = time.perf_counter() - t1
 
+        # Auto-finalize and coerce results for robustness
+        if isinstance(result, dict):
+            # Coerce dict to CheckResult
+            result = CheckResult(**result)
+        
+        if isinstance(result, CheckResult):
+            # Always finalize to enforce invariants
+            result = result.finalize()
+
         print(
             f"[DFM TIMING] {check_def.id:<40} "
             f"run={t_run:6.3f}s"

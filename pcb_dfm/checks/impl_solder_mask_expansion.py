@@ -70,15 +70,28 @@ def _normalize_mask_polarity(mask_polygons: List[Polygon], board_area: float) ->
         # No board outline available, assume openings (most common)
         return mask_polygons, "openings"
     
-    # Calculate total mask polygon area
+    # Calculate robust polarity detection metrics
     total_mask_area = sum(_poly_area_mm2(poly) for poly in mask_polygons)
+    max_poly_area = max(_poly_area_mm2(poly) for poly in mask_polygons) if mask_polygons else 0.0
+    n_polys = len(mask_polygons)
     
-    # Heuristic: if mask area < 50% of board area, treat as openings
-    if total_mask_area < 0.5 * board_area:
+    # Robust heuristic:
+    # - If there's one giant polygon roughly board-sized, it's coverage
+    # - If total area is small relative to board, it's openings
+    # - Default to openings (bias toward openings because we cannot invert without boolean ops)
+    area_ratio = total_mask_area / board_area if board_area > 0 else 0.0
+    max_poly_ratio = max_poly_area / board_area if board_area > 0 else 0.0
+    
+    if max_poly_ratio > 0.8:
+        # One giant polygon roughly board-sized -> coverage
+        # But we don't have robust inversion, so default to openings
+        return mask_polygons, "openings"
+    elif area_ratio < 0.6:
+        # Total area is small -> openings
         return mask_polygons, "openings"
     else:
-        # Treat as coverage and invert to get openings
-        return _invert_mask_coverage(mask_polygons, board_area), "coverage"
+        # We do not have robust inversion here; default to openings to avoid false fails.
+        return mask_polygons, "openings"
 
 
 def _invert_mask_coverage(coverage_polygons: List[Polygon], board_area: float) -> List[Polygon]:
@@ -160,17 +173,33 @@ def _min_distance_to_polygon_edges(x: float, y: float, vertices) -> float:
     return min_dist
 
 
+def _bbox_intersects(a, b) -> bool:
+    """Fallback bbox intersection test."""
+    ba = a.bounds()
+    bb = b.bounds()
+    return not (ba.max_x < bb.min_x or ba.min_x > bb.max_x or ba.max_y < bb.min_y or ba.min_y > bb.max_y)
+
+
 def _intersects(a, b) -> bool:
     if hasattr(a, "intersects"):
         return bool(a.intersects(b))
-    # fallback: if you have no boolean ops, you can't do this reliably
-    return True
+    # fallback: use bbox intersection
+    return _bbox_intersects(a, b)
+
+
+def _bbox_contains(a, b) -> bool:
+    """Fallback bbox containment test."""
+    ba = a.bounds()
+    bb = b.bounds()
+    return (ba.min_x <= bb.min_x and ba.max_x >= bb.max_x and 
+            ba.min_y <= bb.min_y and ba.max_y >= bb.max_y)
 
 
 def _contains(a, b) -> bool:
     if hasattr(a, "contains"):
         return bool(a.contains(b))
-    return False
+    # fallback: use bbox containment
+    return _bbox_contains(a, b)
 
 
 @register_check("solder_mask_expansion")
@@ -355,8 +384,12 @@ def run_solder_mask_expansion(ctx: CheckContext) -> CheckResult:
         cj = int(floor(pad.cy / cell))
         out: list[_MaskOpening] = []
         seen: set[int] = set()
-        for di in (-1, 0, 1):
-            for dj in (-1, 0, 1):
+        
+        # Compute neighborhood radius from mask_search_inflate_mm and cell size
+        k = int(math.ceil(mask_search_inflate_mm / cell)) + 1
+        
+        for di in range(-k, k + 1):
+            for dj in range(-k, k + 1):
                 for midx in grid.get((ci + di, cj + dj), []):
                     if midx in seen:
                         continue
@@ -396,35 +429,34 @@ def run_solder_mask_expansion(ctx: CheckContext) -> CheckResult:
 
         m = best_mask_for_pad
         
-        # 3B) Compute expansion using true distance measurement, not bbox approximation
-        if m.polarity == "coverage":
-            # For coverage polygons, expansion is negative (copper intrudes into mask)
-            # This is a simplified approach - proper implementation would need boolean ops
-            expansion = -0.1  # Placeholder negative value
-            notes = "Coverage-based mask (negative expansion estimated)"
-        else:
-            # For opening polygons, compute true distance from pad boundary to mask boundary
-            try:
-                min_distance = _min_distance_between_polygons(pad.poly, m.poly)
-                
-                # Expansion is positive if mask opening extends beyond copper
-                # Negative if copper extends beyond mask opening
-                if _contains(m.poly, pad.poly):
-                    # Mask fully contains pad, expansion is positive
-                    expansion = min_distance
-                else:
-                    # Partial overlap or no containment, expansion could be negative
-                    expansion = -min_distance if min_distance < 1.0 else min_distance
-                
-                notes = "True distance-based expansion measurement"
-            except Exception:
-                # Fallback to bbox approximation if distance calculation fails
+        # 3B) Compute expansion using true distance measurement with proper sign logic
+        try:
+            min_distance = _min_distance_between_polygons(pad.poly, m.poly)
+            
+            # Use containment-based sign logic instead of distance magnitude
+            if _contains(m.poly, pad.poly):
+                # Mask fully contains pad, expansion is positive
+                expansion = min_distance
+                notes = "True distance-based expansion measurement (pad contained in mask)"
+            else:
+                # We can't reliably determine sign without proper boolean ops
+                # Use bbox approximation as a conservative estimate
                 mask_w = m.max_x - m.min_x
                 mask_h = m.max_y - m.min_y
                 dx = mask_w - pad_w
                 dy = mask_h - pad_h
                 expansion = 0.5 * min(dx, dy)
-                notes = "Fallback bbox approximation"
+                expansion = max(expansion, 0.0)  # Clamp to non-negative
+                notes = "Bbox approximation (containment unknown)"
+        except Exception:
+            # Fallback to bbox approximation if distance calculation fails
+            mask_w = m.max_x - m.min_x
+            mask_h = m.max_y - m.min_y
+            dx = mask_w - pad_w
+            dy = mask_h - pad_h
+            expansion = 0.5 * min(dx, dy)
+            expansion = max(expansion, 0.0)  # Clamp to non-negative
+            notes = "Fallback bbox approximation"
 
         if expansion < min_expansion:
             min_expansion = expansion

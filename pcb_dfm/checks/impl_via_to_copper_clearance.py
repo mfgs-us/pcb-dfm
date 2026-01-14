@@ -8,7 +8,7 @@ from dataclasses import dataclass
 
 from ..geometry import queries
 from ..geometry.primitives import Bounds
-from ..results import CheckResult, Violation, ViolationLocation
+from ..results import CheckResult, Violation, ViolationLocation, MetricResult
 from ..engine.context import CheckContext
 from ..engine.check_runner import register_check
 from ..ingest import GerberFileInfo
@@ -190,15 +190,15 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
             severity=ctx.check_def.severity,
             status="warning",
             score=50.0,
-            metric={
-                "kind": "geometry",
-                "units": units,
-                "measured_value": None,
-                "target": recommended_min,
-                "limit_low": absolute_min,
-                "limit_high": None,
-                "margin_to_limit": None,
-            },
+            metric=MetricResult(
+                kind="geometry",
+                units="mm",  # Pydantic requires geometry metrics to use mm
+                measured_value=None,
+                target=recommended_min,
+                limit_low=absolute_min,
+                limit_high=None,
+                margin_to_limit=None,
+            ),
             violations=[viol],
         )
 
@@ -220,15 +220,15 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
             severity=ctx.check_def.severity,
             status="warning",
             score=50.0,
-            metric={
-                "kind": "geometry",
-                "units": units,
-                "measured_value": None,
-                "target": recommended_min,
-                "limit_low": absolute_min,
-                "limit_high": None,
-                "margin_to_limit": None,
-            },
+            metric=MetricResult(
+                kind="geometry",
+                units="mm",  # Pydantic requires geometry metrics to use mm
+                measured_value=None,
+                target=recommended_min,
+                limit_low=absolute_min,
+                limit_high=None,
+                margin_to_limit=None,
+            ),
             violations=[viol],
         )
 
@@ -262,15 +262,15 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
             severity=ctx.check_def.severity,
             status="warning",
             score=50.0,
-            metric={
-                "kind": "geometry",
-                "units": units,
-                "measured_value": None,
-                "target": recommended_min,
-                "limit_low": absolute_min,
-                "limit_high": None,
-                "margin_to_limit": None,
-            },
+            metric=MetricResult(
+                kind="geometry",
+                units="mm",  # Pydantic requires geometry metrics to use mm
+                measured_value=None,
+                target=recommended_min,
+                limit_low=absolute_min,
+                limit_high=None,
+                margin_to_limit=None,
+            ),
             violations=[viol],
         )
 
@@ -389,15 +389,15 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
             severity=ctx.check_def.severity,
             status="warning",
             score=50.0,
-            metric={
-                "kind": "geometry",
-                "units": units,
-                "measured_value": None,
-                "target": recommended_min,
-                "limit_low": absolute_min,
-                "limit_high": None,
-                "margin_to_limit": None,
-            },
+            metric=MetricResult(
+                kind="geometry",
+                units="mm",  # Pydantic requires geometry metrics to use mm
+                measured_value=None,
+                target=recommended_min,
+                limit_low=absolute_min,
+                limit_high=None,
+                margin_to_limit=None,
+            ),
             violations=[viol],
         )
 

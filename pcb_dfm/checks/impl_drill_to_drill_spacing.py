@@ -128,7 +128,7 @@ def run_drill_to_drill_spacing(ctx: CheckContext) -> CheckResult:
             severity="info",  # Default value, will be overridden by finalize()
             score=50.0,
             metric=MetricResult.geometry_mm(
-                measured_mm=None,
+                measured_mm=0.0,
                 target_mm=recommended_min,
                 limit_low_mm=absolute_min,
             ),
@@ -244,7 +244,7 @@ def run_drill_to_drill_spacing(ctx: CheckContext) -> CheckResult:
             severity="info",  # Default value, will be overridden by finalize()
             score=50.0,
             metric=MetricResult.geometry_mm(
-                measured_mm=None,
+                measured_mm=0.0,
                 target_mm=recommended_min,
                 limit_low_mm=absolute_min,
             ),

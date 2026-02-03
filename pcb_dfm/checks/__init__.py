@@ -7,11 +7,38 @@ We keep imports of impl_* modules lazy to avoid circular imports with
 pcb_dfm.engine.context.
 """
 
+from __future__ import annotations
+
+import importlib
+import pkgutil
+from types import ModuleType
+
 from .definitions import (
     CheckDefinition,
     load_check_definition,
     load_all_check_definitions,
 )
+
+
+def load_all_checks() -> list[ModuleType]:
+    """
+    Import every module under pcb_dfm.checks so @register_check side effects run.
+    Auto-discovers all check modules without hardcoding imports.
+    """
+    imported = []
+    pkg_name = __name__  # "pcb_dfm.checks"
+    
+    _SKIP_MODULE_SUFFIXES = {
+        "all_checks",   # legacy
+        "__init__",
+    }
+    
+    for m in pkgutil.walk_packages(__path__, prefix=pkg_name + "."):
+        leaf = m.name.split(".")[-1]
+        if leaf.startswith("_") or leaf in _SKIP_MODULE_SUFFIXES:
+            continue
+        imported.append(importlib.import_module(m.name))
+    return imported
 
 
 def _ensure_impls_loaded() -> None:
@@ -65,5 +92,6 @@ __all__ = [
     "CheckDefinition",
     "load_check_definition",
     "load_all_check_definitions",
+    "load_all_checks",
     "_ensure_impls_loaded",
 ]

@@ -434,6 +434,9 @@ def run_min_annular_ring(ctx: CheckContext) -> CheckResult:
 
     violations: List[Violation] = []
     if status != "pass":
+        # Determine severity based on status
+        severity = "error" if status == "fail" else "warning"
+        
         msg = (
             f"Minimum annular ring {min_ring:.3f} mm is below "
             f"recommended {recommended_min:.3f} mm (absolute minimum {absolute_min:.3f} mm)."

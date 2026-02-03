@@ -205,6 +205,9 @@ def run_min_trace_spacing(ctx: CheckContext) -> CheckResult:
 
     violations: List[Violation] = []
     if status != "pass":
+        # Define severity based on status
+        severity = "error" if status == "fail" else "warning"
+        
         offenders_sorted = sorted(offenders, key=lambda t: t[0])
         if offenders_sorted:
             for spacing_mm, layer_name, mx_mm, my_mm in offenders_sorted[:MAX_REPORTED_VIOLATIONS]:

@@ -94,7 +94,7 @@ def run_copper_thermal_area(ctx: CheckContext) -> CheckResult:
     limits_raw = metric_cfg.get("limits", {}) or {}
 
     # Metric is ratio in percent.
-    units = metric_cfg.get("units", "%")
+    units = metric_cfg.get("units", "%") or "%"  # Ensure units is never None/empty
 
     if isinstance(target_raw, dict):
         recommended_min_pct = float(target_raw.get("min", 30.0))
@@ -124,7 +124,7 @@ def run_copper_thermal_area(ctx: CheckContext) -> CheckResult:
             score=50.0,
             metric=MetricResult(
                 kind="ratio",
-                units=units,
+                units="%",  # Hardcode to "%" to avoid validation error
                 measured_value=None,
                 target=recommended_min_pct,
                 limit_low=absolute_min_pct,

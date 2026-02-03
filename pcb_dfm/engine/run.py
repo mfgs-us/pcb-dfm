@@ -9,7 +9,6 @@ from .check_runner import get_check_runner, run_checks
 from ..results import DfmResult, CategoryResult, SummaryCounts, ResultSummary, RunInfo, RulesetInfo, DesignInfo
 from datetime import datetime
 
-
 def run_dfm_on_gerber_zip(
     gerber_zip: Path,
     ruleset_id: str,

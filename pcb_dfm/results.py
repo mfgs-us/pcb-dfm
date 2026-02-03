@@ -115,18 +115,18 @@ class MetricResult(BaseModel):
         return m
 
     @staticmethod
-    def ratio_percent(measured_pct: float,
+    def ratio_percent(measured_pct: Optional[float],
                       target_pct: Optional[float] = None,
                       limit_high_pct: Optional[float] = None) -> "MetricResult":
         m = MetricResult(
             kind="ratio",
             units="%",
-            measured_value=float(measured_pct),
+            measured_value=None if measured_pct is None else float(measured_pct),
             target=None if target_pct is None else float(target_pct),
             limit_low=None,
             limit_high=None if limit_high_pct is None else float(limit_high_pct),
         )
-        if m.limit_high is not None:
+        if m.limit_high is not None and m.measured_value is not None:
             m.margin_to_limit = m.limit_high - float(m.measured_value)
         return m
 

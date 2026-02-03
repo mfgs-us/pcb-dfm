@@ -105,15 +105,17 @@ def run_copper_to_edge_distance(ctx: CheckContext) -> CheckResult:
         ).finalize()
 
     # Determine status only (severity and score handled by finalize)
-    if min_dist < absolute_min:
-        status = "fail"
-    elif min_dist < recommended_min:
+    # Copper to edge distance should be warning, not fail
+    if min_dist < recommended_min:
         status = "warning"
     else:
         status = "pass"
 
     violations: List[Violation] = []
     if status != "pass":
+        # Status is always warning now (never fail)
+        severity = "warning"
+        
         offenders_sorted = sorted(offenders, key=lambda t: t[0])
         if offenders_sorted:
             for dist_mm, layer_name, x_mm, y_mm in offenders_sorted[:MAX_REPORTED_VIOLATIONS]:
@@ -146,6 +148,9 @@ def run_copper_to_edge_distance(ctx: CheckContext) -> CheckResult:
                 )
             )
 
+    # Scoring: pass = 100, warning = 60 (never fail)
+    score = 100.0 if status == "pass" else 60.0
+
     margin_to_limit = float(min_dist - absolute_min)
 
     return CheckResult(
@@ -154,6 +159,7 @@ def run_copper_to_edge_distance(ctx: CheckContext) -> CheckResult:
         category_id=ctx.check_def.category_id,
         status=status,
         severity="info",  # Default value, will be overridden by finalize()
+        score=score,
         metric=MetricResult.geometry_mm(
             measured_mm=float(min_dist),
             target_mm=recommended_min,

@@ -61,6 +61,7 @@ class GerberIngestResult:
     root_dir: Path
     files: List[GerberFileInfo] = field(default_factory=list)
     issues: List[GerberIngestIssue] = field(default_factory=list)
+    aperture_warnings: list[dict] | None = None
 
     has_top_copper: bool = False
     has_bottom_copper: bool = False
@@ -204,6 +205,11 @@ def ingest_gerber_zip(zip_path: Path, workspace_root: Optional[Path] = None) -> 
             code="no_drill_files",
             message="No drill files detected in archive. Plated holes cannot be checked.",
         )
+
+    # ---- Aperture validation (fast, ingest-time)
+    from .aperture_validation import validate_apertures
+    warnings = validate_apertures(result.files, min_dim_mm=0.01, max_dim_mm=200.0)
+    result.aperture_warnings = [w.__dict__ for w in warnings]
 
     return result
 

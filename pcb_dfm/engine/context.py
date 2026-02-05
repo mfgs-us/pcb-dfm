@@ -9,6 +9,7 @@ from pathlib import Path
 from ..checks.definitions import CheckDefinition
 from ..ingest import GerberIngestResult
 from ..geometry import BoardGeometry
+from .geometry_cache import GeometryCache
 
 
 @dataclass
@@ -25,6 +26,7 @@ class CheckContext:
     check_def: CheckDefinition
     ingest: GerberIngestResult
     geometry: BoardGeometry
+    geometry_cache: GeometryCache
     ruleset_id: str
     design_id: str
     gerber_zip: Path

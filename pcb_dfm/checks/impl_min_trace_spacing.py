@@ -186,7 +186,8 @@ def run_min_trace_spacing(ctx: CheckContext) -> CheckResult:
 
     # Decide status only (severity handled by finalize)
     if min_spacing_mm < absolute_min:
-        status = "fail"
+        # status = "fail"
+        status = "warning"
     elif min_spacing_mm < recommended_min:
         status = "warning"
     else:

@@ -10,6 +10,7 @@ from ..ingest import ingest_gerber_zip
 from ..geometry import build_board_geometry
 from ..results import CheckResult
 from .context import CheckContext
+from .geometry_cache import GeometryCache
 
 from .check_defs import load_check_definition as _load_check_definition
 from .check_defs import CheckDefinition as EngineCheckDefinition, PathLike as _PathLike
@@ -56,10 +57,13 @@ def run_single_check(
     geom = build_board_geometry(ingest_result)
     t_setup = time.perf_counter() - t0
 
+    cache = GeometryCache()
+
     ctx = CheckContext(
         check_def=check_def,
         ingest=ingest_result,
         geometry=geom,
+        geometry_cache=cache,
         ruleset_id=ruleset_id,
         design_id=design_id,
         gerber_zip=gerber_zip,
@@ -119,6 +123,8 @@ def run_checks(
     geom = build_board_geometry(ingest_result)
     setup_time = time.perf_counter() - t0
 
+    cache = GeometryCache()
+
     print(f"[DFM TIMING] shared setup (ingest+geometry): {setup_time:.3f}s")
 
     results: list[CheckResult] = []
@@ -128,6 +134,7 @@ def run_checks(
             check_def=check_def,
             ingest=ingest_result,
             geometry=geom,
+            geometry_cache=cache,
             ruleset_id=ruleset_id,
             design_id=design_id,
             gerber_zip=gerber_zip,

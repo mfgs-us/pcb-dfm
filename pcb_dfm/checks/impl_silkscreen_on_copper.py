@@ -4,7 +4,7 @@ import os
 from collections import defaultdict
 from functools import lru_cache
 from math import floor
-from typing import Dict, List, Optional, Tuple
+from typing import Any, Dict, List, Optional, Tuple
 
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
@@ -78,6 +78,106 @@ def _bbox_intersects(
     if a_max_y < b_min_y or a_min_y > b_max_y:
         return False
     return True
+
+
+def _build_copper_bboxes_by_side(ctx: CheckContext) -> Dict[str, List[Tuple[float, float, float, float, str]]]:
+    copper_layers = queries.get_copper_layers(ctx.geometry)
+    out = defaultdict(list)
+    for layer in copper_layers:
+        side = _norm_side(getattr(layer, "side", None))
+        lname = getattr(layer, "logical_layer", "Copper")
+        for poly in getattr(layer, "polygons", []):
+            b = poly.bounds()
+            out[side].append((b.min_x, b.max_x, b.min_y, b.max_y, lname))
+    return dict(out)
+
+
+def _build_mask_openings_by_side(ctx: CheckContext) -> Dict[str, List[Tuple[float, float, float, float]]]:
+    out = defaultdict(list)
+
+    mask_layers = []
+    get_mask_layers = getattr(queries, "get_solder_mask_layers", None)
+    if callable(get_mask_layers):
+        try:
+            mask_layers = list(get_mask_layers(ctx.geometry))
+        except Exception:
+            mask_layers = []
+    else:
+        for lyr in getattr(ctx.geometry, "layers", []):
+            if getattr(lyr, "layer_type", None) == "mask":
+                mask_layers.append(lyr)
+
+    for layer in mask_layers:
+        side = _norm_side(getattr(layer, "side", None))
+        for poly in getattr(layer, "polygons", []):
+            b = poly.bounds()
+            out[side].append((b.min_x, b.max_x, b.min_y, b.max_y))
+
+    return dict(out)
+
+
+def _build_grid_for_bboxes(
+    boxes: List[Tuple[float, float, float, float, Any]],
+    cell_mm: float,
+) -> Dict[Tuple[int, int], List[int]]:
+    g = defaultdict(list)
+    for idx, (min_x, max_x, min_y, max_y, _tag) in enumerate(boxes):
+        ix0 = int(floor(min_x / cell_mm))
+        ix1 = int(floor(max_x / cell_mm))
+        iy0 = int(floor(min_y / cell_mm))
+        iy1 = int(floor(max_y / cell_mm))
+        for iy in range(iy0, iy1 + 1):
+            for ix in range(ix0, ix1 + 1):
+                g[(ix, iy)].append(idx)
+    return dict(g)
+
+
+def _filter_exposed_copper(
+    copper_boxes: List[Tuple[float, float, float, float, str]],
+    mask_boxes: List[Tuple[float, float, float, float]],
+    cell_mm: float,
+) -> List[Tuple[float, float, float, float, str]]:
+    if not copper_boxes or not mask_boxes:
+        return copper_boxes
+
+    # Build mask grid
+    mask_grid = defaultdict(list)
+    for mi, (mnx, mxx, mny, mxy) in enumerate(mask_boxes):
+        ix0 = int(floor(mnx / cell_mm))
+        ix1 = int(floor(mxx / cell_mm))
+        iy0 = int(floor(mny / cell_mm))
+        iy1 = int(floor(mxy / cell_mm))
+        for iy in range(iy0, iy1 + 1):
+            for ix in range(ix0, ix1 + 1):
+                mask_grid[(ix, iy)].append(mi)
+
+    exposed = []
+    for (cminx, cmaxx, cminy, cmaxy, lname) in copper_boxes:
+        ix0 = int(floor(cminx / cell_mm))
+        ix1 = int(floor(cmaxx / cell_mm))
+        iy0 = int(floor(cminy / cell_mm))
+        iy1 = int(floor(cmaxy / cell_mm))
+
+        hit = False
+        seen = set()
+        for iy in range(iy0 - 1, iy1 + 2):
+            for ix in range(ix0 - 1, ix1 + 2):
+                for mi in mask_grid.get((ix, iy), []):
+                    if mi in seen:
+                        continue
+                    seen.add(mi)
+                    if _bbox_intersects((cminx, cmaxx, cminy, cmaxy), mask_boxes[mi]):
+                        hit = True
+                        break
+                if hit:
+                    break
+            if hit:
+                break
+
+        if hit:
+            exposed.append((cminx, cmaxx, cminy, cmaxy, lname))
+
+    return exposed or copper_boxes
 
 
 @lru_cache(maxsize=64)
@@ -160,107 +260,42 @@ def run_silkscreen_on_copper(ctx: CheckContext) -> CheckResult:
             violations=[viol],
         ).finalize()
 
-    # ---- Collect copper bboxes per side
-    copper_layers = queries.get_copper_layers(ctx.geometry)
-    copper_bboxes_by_side: Dict[str, List[Tuple[float, float, float, float, str]]] = defaultdict(list)
-    for layer in copper_layers:
-        side = _norm_side(getattr(layer, "side", None))
-        lname = getattr(layer, "logical_layer", "Copper")
-        for poly in getattr(layer, "polygons", []):
-            b = poly.bounds()
-            copper_bboxes_by_side[side].append((b.min_x, b.max_x, b.min_y, b.max_y, lname))
+    cache = ctx.geometry_cache
 
-    # ---- Collect soldermask opening bboxes per side (optional, best effort)
-    mask_openings_by_side: Dict[str, List[Tuple[float, float, float, float]]] = defaultdict(list)
+    copper_bboxes_by_side = cache.get_or_compute(
+        cache.key("silk", "copper_bboxes_by_side"),
+        lambda: _build_copper_bboxes_by_side(ctx),
+    )
+
+    mask_openings_by_side = {}
     if focus_exposed_only:
-        # Prefer a helper if it exists, otherwise scan geometry layers by attributes.
-        mask_layers = []
-        get_mask_layers = getattr(queries, "get_solder_mask_layers", None)
-        if callable(get_mask_layers):
-            try:
-                mask_layers = list(get_mask_layers(ctx.geometry))
-            except Exception:
-                mask_layers = []
-        else:
-            # Best-effort fallback: look for layers whose layer_type looks like "mask"
-            for lyr in getattr(ctx.geometry, "layers", []):
-                if getattr(lyr, "layer_type", None) == "mask":
-                    mask_layers.append(lyr)
+        mask_openings_by_side = cache.get_or_compute(
+            cache.key("silk", "mask_openings_by_side"),
+            lambda: _build_mask_openings_by_side(ctx),
+        )
 
-        for layer in mask_layers:
-            side = _norm_side(getattr(layer, "side", None))
-            # Convention: mask polygons often represent openings (or inversions). We can only do bbox-level best effort.
-            for poly in getattr(layer, "polygons", []):
-                b = poly.bounds()
-                mask_openings_by_side[side].append((b.min_x, b.max_x, b.min_y, b.max_y))
-
-    # If we have mask openings, restrict copper bboxes to those that intersect an opening.
-    # This drastically improves focus: "silk over exposed copper".
+    # Optionally restrict copper to "exposed" copper, param dependent
     if focus_exposed_only and any(mask_openings_by_side.values()):
-        exposed_copper_by_side: Dict[str, List[Tuple[float, float, float, float, str]]] = defaultdict(list)
+        copper_bboxes_by_side = cache.get_or_compute(
+            cache.key("silk", "exposed_copper_bboxes_by_side", cell_mm),
+            lambda: {
+                side: _filter_exposed_copper(
+                    copper_boxes=copper_bboxes_by_side.get(side, []),
+                    mask_boxes=mask_openings_by_side.get(side, []),
+                    cell_mm=cell_mm,
+                )
+                for side in set(list(copper_bboxes_by_side.keys()) + list(mask_openings_by_side.keys()))
+            },
+        )
 
-        # Build mask grids for quick intersection tests
-        mask_grid: Dict[str, Dict[Tuple[int, int], List[int]]] = {}
-        for side, mboxes in mask_openings_by_side.items():
-            g: Dict[Tuple[int, int], List[int]] = defaultdict(list)
-            for mi, (mnx, mxx, mny, mxy) in enumerate(mboxes):
-                ix0 = int(floor(mnx / cell_mm))
-                ix1 = int(floor(mxx / cell_mm))
-                iy0 = int(floor(mny / cell_mm))
-                iy1 = int(floor(mxy / cell_mm))
-                for iy in range(iy0, iy1 + 1):
-                    for ix in range(ix0, ix1 + 1):
-                        g[(ix, iy)].append(mi)
-            mask_grid[side] = g
-
-        for side, cboxes in copper_bboxes_by_side.items():
-            mboxes = mask_openings_by_side.get(side, [])
-            g = mask_grid.get(side)
-            if not mboxes or not g:
-                continue
-
-            for (cminx, cmaxx, cminy, cmaxy, lname) in cboxes:
-                ix0 = int(floor(cminx / cell_mm))
-                ix1 = int(floor(cmaxx / cell_mm))
-                iy0 = int(floor(cminy / cell_mm))
-                iy1 = int(floor(cmaxy / cell_mm))
-
-                hit = False
-                seen: set[int] = set()
-                for iy in range(iy0 - 1, iy1 + 2):
-                    for ix in range(ix0 - 1, ix1 + 2):
-                        for mi in g.get((ix, iy), []):
-                            if mi in seen:
-                                continue
-                            seen.add(mi)
-                            if _bbox_intersects((cminx, cmaxx, cminy, cmaxy), mboxes[mi]):
-                                hit = True
-                                break
-                        if hit:
-                            break
-                    if hit:
-                        break
-
-                if hit:
-                    exposed_copper_by_side[side].append((cminx, cmaxx, cminy, cmaxy, lname))
-
-        # Only replace if we found anything; otherwise keep full copper fallback.
-        if any(exposed_copper_by_side.values()):
-            copper_bboxes_by_side = exposed_copper_by_side
-
-    # ---- Build copper grids per side (bbox coverage -> cells)
-    copper_grids: Dict[str, Dict[Tuple[int, int], List[int]]] = {}
-    for side, boxes in copper_bboxes_by_side.items():
-        g: Dict[Tuple[int, int], List[int]] = defaultdict(list)
-        for idx, (min_x, max_x, min_y, max_y, _layer) in enumerate(boxes):
-            ix0 = int(floor(min_x / cell_mm))
-            ix1 = int(floor(max_x / cell_mm))
-            iy0 = int(floor(min_y / cell_mm))
-            iy1 = int(floor(max_y / cell_mm))
-            for iy in range(iy0, iy1 + 1):
-                for ix in range(ix0, ix1 + 1):
-                    g[(ix, iy)].append(idx)
-        copper_grids[side] = g
+    # Build copper grids per side, param dependent (cell size matters)
+    copper_grids = cache.get_or_compute(
+        cache.key("silk", "copper_grids_by_side", cell_mm, focus_exposed_only),
+        lambda: {
+            side: _build_grid_for_bboxes(boxes, cell_mm)
+            for side, boxes in copper_bboxes_by_side.items()
+        },
+    )
 
     # ---- Collect silkscreen primitive bboxes per side (mm)
     silk_bboxes_by_side: Dict[str, List[Tuple[float, float, float, float, str]]] = defaultdict(list)

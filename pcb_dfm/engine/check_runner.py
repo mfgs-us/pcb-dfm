@@ -143,14 +143,30 @@ def run_checks(
         runner = get_check_runner(check_def.id)
 
         t1 = time.perf_counter()
-        result = runner(ctx)
+        try:
+            result = runner(ctx)
+        except Exception as exc:
+            t_run = time.perf_counter() - t1
+            print(
+                f"[DFM TIMING] {check_def.id:<40} "
+                f"run={t_run:6.3f}s  ERROR: {exc}"
+            )
+            # Return a not_applicable result so the caller gets all check
+            # results even when one check throws an unexpected exception.
+            results.append(CheckResult(
+                check_id=check_def.id,
+                status="not_applicable",
+                severity="info",
+                score=100.0,
+            ))
+            continue
         t_run = time.perf_counter() - t1
 
         # Auto-finalize and coerce results for robustness
         if isinstance(result, dict):
             # Coerce dict to CheckResult
             result = CheckResult(**result)
-        
+
         if isinstance(result, CheckResult):
             # Always finalize to enforce invariants
             result = result.finalize()

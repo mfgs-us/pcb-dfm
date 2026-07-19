@@ -26,6 +26,14 @@ dev = [
   "mypy>=1.8"
 ]
 
+[project.scripts]
+pcb-dfm = "pcb_dfm.cli.main:main"
+
+[tool.pytest.ini_options]
+# The repo-root test_*.py files are the real suite. scripts/ holds demo/debug
+# helpers that execute at import and must not be collected as tests.
+testpaths = ["test_run_dfm_bundle.py", "test_run_dfm_bundle_unit.py", "test_end_to_end.py"]
+
 [project.urls]
 Homepage = "https://github.com/mfgs-us/pcb-dfm"
 

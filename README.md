@@ -235,6 +235,21 @@ MetricResult.ratio_percent(
 
 ## 3. Quickstart: Run a Single Check from CLI
 
+> A small runnable fixture ships with the repo at `testdata/mini_board.zip`, so
+> you can try everything below without supplying your own Gerbers.
+
+After `pip install -e .` you also get a `pcb-dfm` command (and `python -m pcb_dfm`):
+
+```bash
+pcb-dfm run testdata/mini_board.zip --format text     # full ruleset, text report
+pcb-dfm run testdata/mini_board.zip --format json -o out/result.json
+pcb-dfm check testdata/mini_board.zip min_trace_width # single check, JSON to stdout
+pcb-dfm list-checks                                    # list every check id
+```
+
+Diagnostic `[DFM TIMING]` lines are written to stderr, so `stdout` stays clean
+for JSON piping.
+
 1. Place your Gerber archive in the repository root:
    ```
    pcb-dfm/
@@ -258,7 +273,7 @@ Example output:
   "name": "Minimum trace width",
   "category_id": "copper_geometry",
   "status": "pass",
-  "severity": "error",
+  "severity": "info",
   "score": 100.0,
   "metric": {
     "kind": "geometry",

@@ -2,3 +2,6 @@
 __pycache__
 *.zip
 ignore*
+
+# ...but keep committed test fixtures so the repo runs from a clean clone.
+!testdata/*.zip

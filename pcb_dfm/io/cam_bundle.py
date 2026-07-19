@@ -112,7 +112,14 @@ def classify_cam_layers(files: List[Path], root: Path) -> CamBundlePaths:
     )
 
 def extract_zip_to_dir(zip_path: Path, out_dir: Path) -> None:
+    # Guard against path traversal ("Zip Slip"): reject any member that would
+    # resolve outside out_dir before extracting anything.
+    out_dir = Path(out_dir).resolve()
     with zipfile.ZipFile(zip_path, "r") as zf:
+        for member in zf.namelist():
+            dest = (out_dir / member).resolve()
+            if dest != out_dir and out_dir not in dest.parents:
+                raise ValueError(f"Unsafe zip member path (path traversal): {member!r}")
         zf.extractall(out_dir)
 
 def load_cam_bundle_from_zip(zip_path: Path, tmp_root: Path) -> Tuple[CamBundlePaths, List[Path]]:

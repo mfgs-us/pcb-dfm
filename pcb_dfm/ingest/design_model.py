@@ -13,7 +13,11 @@ adapter, not a change to every check.
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Dict, List, Optional
+from typing import Dict, List, Optional, Tuple
+
+# A routed segment in board mm-space: ((x0, y0), (x1, y1)).
+Point = Tuple[float, float]
+Segment = Tuple[Point, Point]
 
 
 @dataclass
@@ -67,9 +71,17 @@ class Stackup:
 
 @dataclass
 class NetFeature:
-    """A routed feature belonging to a net (enough to sum routed length)."""
+    """A routed feature belonging to a net.
+
+    ``length_mm`` is always populated (summed by the adapter); ``segments`` and
+    ``width_mm`` carry the actual routed geometry when the source provides it
+    (e.g. IPC-2581 <Line>/<Arc>), enabling geometry-aware checks like diff-pair
+    spacing. When only a length is known, ``segments`` is empty.
+    """
     layer: Optional[str] = None
     length_mm: float = 0.0
+    width_mm: Optional[float] = None
+    segments: List[Segment] = field(default_factory=list)
 
 
 @dataclass
@@ -80,6 +92,17 @@ class Net:
 
     def routed_length_mm(self) -> float:
         return sum(f.length_mm for f in self.features)
+
+    def route_segments(self) -> List[Tuple[Segment, Optional[str], Optional[float]]]:
+        """All routed segments as (segment, layer, width_mm) across features."""
+        out: List[Tuple[Segment, Optional[str], Optional[float]]] = []
+        for f in self.features:
+            for seg in f.segments:
+                out.append((seg, f.layer, f.width_mm))
+        return out
+
+    def has_geometry(self) -> bool:
+        return any(f.segments for f in self.features)
 
 
 @dataclass

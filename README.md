@@ -395,11 +395,12 @@ model (`pcb_dfm/ingest/design_model.py`) so checks are format-agnostic:
   `pcb_dfm/ingest/adapters/sidecar.py`.
 
 This powers `impedance_control` (microstrip Z0 estimate), `diff_pair_skew`
-(per-net length skew), and `dielectric_thickness_uniformity`. An **ODB++**
-adapter is the planned next format; net-aware checks that also need geometry
-correlation (`diff_pair_spacing`, `return_path_interruptions`) build on the same
-model. When no design data is supplied, these checks are honestly
-`not_applicable`.
+(per-net length skew), `dielectric_thickness_uniformity`, and
+`diff_pair_spacing` (intra-pair gap consistency from per-net routing geometry —
+IPC-2581 `<Line>`/`<Arc>` segments, or sidecar net `segments`). Still to come:
+Gerber-only net inference (tagging untagged copper by nearest net),
+`return_path_interruptions`, and an **ODB++** adapter. When no design data is
+supplied, these checks are honestly `not_applicable`.
 
 1. Place your Gerber archive in the repository root:
    ```

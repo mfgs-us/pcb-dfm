@@ -99,10 +99,29 @@ def from_sidecar(data: Dict[str, Any]) -> DesignData:
     if isinstance(nets, dict):
         for name, ninfo in nets.items():
             ninfo = ninfo if isinstance(ninfo, dict) else {}
-            length = ninfo.get("routed_length_mm", 0.0)
             features = []
-            if isinstance(length, (int, float)):
-                features.append(NetFeature(layer=None, length_mm=float(length)))
+            raw_segs = ninfo.get("segments")
+            if isinstance(raw_segs, list) and raw_segs:
+                segments = []
+                total = 0.0
+                for s in raw_segs:
+                    # each segment is [[x0, y0], [x1, y1]]
+                    try:
+                        (x0, y0), (x1, y1) = s
+                        seg = ((float(x0), float(y0)), (float(x1), float(y1)))
+                    except (TypeError, ValueError):
+                        continue
+                    segments.append(seg)
+                    total += ((seg[1][0] - seg[0][0]) ** 2 + (seg[1][1] - seg[0][1]) ** 2) ** 0.5
+                width = ninfo.get("width_mm")
+                features.append(NetFeature(
+                    layer=ninfo.get("layer"), length_mm=total,
+                    width_mm=float(width) if isinstance(width, (int, float)) else None,
+                    segments=segments))
+            else:
+                length = ninfo.get("routed_length_mm", 0.0)
+                if isinstance(length, (int, float)):
+                    features.append(NetFeature(layer=None, length_mm=float(length)))
             dd.add_net(Net(
                 name=str(name),
                 features=features,

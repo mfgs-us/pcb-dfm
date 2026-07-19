@@ -65,6 +65,7 @@ def _ensure_impls_loaded() -> None:
         impl_copper_to_edge_distance,  # noqa: F401
         impl_dielectric_thickness_uniformity,  # noqa: F401
         impl_diff_pair_skew,  # noqa: F401
+        impl_diff_pair_spacing,  # noqa: F401
         impl_drill_aspect_ratio,  # noqa: F401
         impl_drill_to_drill_spacing,  # noqa: F401
         impl_drill_wander_budget,  # noqa: F401

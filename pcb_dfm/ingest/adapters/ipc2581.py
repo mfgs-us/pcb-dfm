@@ -106,18 +106,31 @@ def _parse_stackup(root: ET.Element) -> Optional[Stackup]:
     return Stackup(layers=layers) if layers else None
 
 
-def _segment_length(el: ET.Element) -> float:
-    lname = _ln(el)
+def _line_segment(el: ET.Element):
+    """Return ((sx, sy), (ex, ey)) for a Line/Arc, or None. Arcs are taken as
+    their chord (endpoints) -- a documented approximation."""
     sx = _fattr(el, "startX")
     sy = _fattr(el, "startY")
     ex = _fattr(el, "endX")
     ey = _fattr(el, "endY")
     if None in (sx, sy, ex, ey):
-        return 0.0
-    # Arc: approximate by its chord (endpoints), documented limitation.
-    if lname in ("Line", "Arc"):
-        return math.hypot(ex - sx, ey - sy)  # type: ignore[operator]
-    return 0.0
+        return None
+    return ((sx, sy), (ex, ey))
+
+
+def _seg_len(seg) -> float:
+    (sx, sy), (ex, ey) = seg
+    return math.hypot(ex - sx, ey - sy)
+
+
+def _set_width(st: ET.Element) -> Optional[float]:
+    """Trace width from a lineWidth/width attribute on any descendant (e.g. a
+    <LineDesc lineWidth="...">), if present."""
+    for e in st.iter():
+        w = _fattr(e, "lineWidth", "lineWidthMm", "width")
+        if w is not None:
+            return w
+    return None
 
 
 def _parse_nets(root: ET.Element) -> (
@@ -147,18 +160,27 @@ def _parse_nets(root: ET.Element) -> (
                 tolerance_pct=_fattr(ln_el, "tolerancePct", "toleranceP") or 10.0,
             ))
 
-    # Routed geometry: sum <Line>/<Arc> lengths per <Set net="..."> per layer.
+    # Routed geometry: capture <Line>/<Arc> segments per <Set net="..."> per
+    # layer, keeping both the summed length and the actual segments (for
+    # geometry-aware checks like diff-pair spacing).
     for lf in _find_all(root, "LayerFeature"):
         layer = lf.attrib.get("layerRef") or lf.attrib.get("layer")
         for st in _find_all(lf, "Set"):
             net_name = st.attrib.get("net")
             if not net_name:
                 continue
-            length = sum(_segment_length(e) for e in st.iter()
-                         if _ln(e) in ("Line", "Arc"))
-            if length > 0.0:
-                _ensure(net_name).features.append(
-                    NetFeature(layer=layer, length_mm=length))
+            segments = []
+            total = 0.0
+            for e in st.iter():
+                if _ln(e) in ("Line", "Arc"):
+                    seg = _line_segment(e)
+                    if seg is not None:
+                        segments.append(seg)
+                        total += _seg_len(seg)
+            if total > 0.0:
+                _ensure(net_name).features.append(NetFeature(
+                    layer=layer, length_mm=total,
+                    width_mm=_set_width(st), segments=segments))
 
     return nets, ci
 

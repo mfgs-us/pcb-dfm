@@ -1,5 +1,8 @@
 from __future__ import annotations
 
+import html as _html
+from typing import Optional
+
 from .results import DfmResult
 
 
@@ -90,3 +93,225 @@ def generate_markdown_report(result: DfmResult) -> str:
         lines.append("")
 
     return "\n".join(lines)
+
+
+# ---------------------------------------------------------------------------
+# Self-contained HTML report (board render + violation overlays)
+# ---------------------------------------------------------------------------
+
+_SEV_COLOR = {
+    "critical": "#e5484d", "error": "#e5484d",
+    "warning": "#f5a623", "info": "#4c8dff",
+}
+_STATUS_COLOR = {
+    "pass": "#30a46c", "warning": "#f5a623",
+    "fail": "#e5484d", "not_applicable": "#8b8b8b",
+}
+# fill / stroke per layer type for the board render
+_LAYER_STYLE = {
+    "copper": ("#c98a3b", None, 0.55),
+    "mask": ("#1f6b47", None, 0.30),
+    "silkscreen": ("#e8e8e8", None, 0.55),
+    "outline": (None, "#9fb3c8", 1.0),
+    "mechanical": (None, "#9fb3c8", 0.8),
+}
+
+
+def _esc(s) -> str:
+    return _html.escape("" if s is None else str(s))
+
+
+def _render_board_svg(geometry, located) -> str:
+    """SVG of the board polygons with a marker for each located violation.
+    ``located`` is a list of (global_index, violation). Returns "" if there is
+    no drawable geometry."""
+    if geometry is None:
+        return ""
+    b = geometry.board_bounds()
+    if b is None:
+        return ""
+    minx, miny, maxx, maxy = b.min_x, b.min_y, b.max_x, b.max_y
+    w, h = maxx - minx, maxy - miny
+    if w <= 0 or h <= 0:
+        return ""
+    pad = max(w, h) * 0.04
+    flip = miny + maxy  # svg_y = flip - y  (PCB Y-up -> SVG Y-down)
+
+    parts = [
+        f'<svg viewBox="{minx - pad:.3f} {miny - pad:.3f} {w + 2 * pad:.3f} '
+        f'{h + 2 * pad:.3f}" class="board" xmlns="http://www.w3.org/2000/svg">',
+        f'<rect x="{minx:.3f}" y="{miny:.3f}" width="{w:.3f}" height="{h:.3f}" '
+        f'class="board-bg"/>',
+    ]
+
+    # Draw non-outline fills first, outline strokes last (on top).
+    order = ["copper", "mask", "silkscreen", "mechanical", "outline"]
+    for lt in order:
+        fill, stroke, opacity = _LAYER_STYLE.get(lt, (None, "#888", 0.5))
+        for layer in geometry.get_layers_by_type(lt):
+            for poly in layer.polygons:
+                pts = " ".join(
+                    f"{v.x:.3f},{flip - v.y:.3f}" for v in poly.vertices)
+                if not pts:
+                    continue
+                attrs = f'opacity="{opacity}"'
+                attrs += f' fill="{fill}"' if fill else ' fill="none"'
+                if stroke:
+                    attrs += f' stroke="{stroke}" stroke-width="{max(w, h) * 0.004:.3f}"'
+                parts.append(f'<polygon points="{pts}" {attrs}/>')
+
+    r = max(w, h) * 0.014
+    for gi, v in located:
+        loc = v.location
+        x = loc.x_mm
+        y = flip - loc.y_mm
+        color = _SEV_COLOR.get(v.severity, "#4c8dff")
+        parts.append(
+            f'<g class="marker" id="m{gi}">'
+            f'<circle class="halo" cx="{x:.3f}" cy="{y:.3f}" r="{r * 2.4:.3f}" '
+            f'fill="none" stroke="{color}"/>'
+            f'<circle cx="{x:.3f}" cy="{y:.3f}" r="{r:.3f}" fill="{color}" '
+            f'stroke="#fff" stroke-width="{r * 0.25:.3f}">'
+            f'<title>{_esc(v.message)}</title></circle></g>')
+    parts.append("</svg>")
+    return "".join(parts)
+
+
+def generate_html_report(result: DfmResult, geometry: Optional[object] = None) -> str:
+    """Render a single self-contained HTML report: summary, the board with
+    violation markers overlaid, and per-category findings cross-linked to the
+    markers. No external assets (safe to open locally or archive)."""
+    s = result.summary
+    status = s.status
+    status_color = _STATUS_COLOR.get(status, "#8b8b8b")
+
+    # Assign a stable global index to every violation that has coordinates.
+    located = []
+    marker_of = {}  # id(violation) -> global index
+    gi = 0
+    for cat in result.categories:
+        for chk in cat.checks:
+            for v in chk.violations:
+                loc = v.location
+                if loc is not None and loc.x_mm is not None and loc.y_mm is not None:
+                    located.append((gi, v))
+                    marker_of[id(v)] = gi
+                    gi += 1
+
+    svg = _render_board_svg(geometry, located)
+
+    counts = s.violations_by_severity
+    out = []
+    out.append("<!doctype html><html lang='en'><head><meta charset='utf-8'>")
+    out.append("<meta name='viewport' content='width=device-width, initial-scale=1'>")
+    out.append(f"<title>DFM report - {_esc(result.design.name)}</title>")
+    out.append("<style>" + _REPORT_CSS + "</style></head><body>")
+
+    # Header / summary
+    out.append("<header class='summary'>")
+    out.append(f"<h1>DFM report <span class='dim'>{_esc(result.design.name)}</span></h1>")
+    out.append(
+        f"<div class='badges'>"
+        f"<span class='status' style='background:{status_color}'>{_esc(status.upper())}</span>"
+        f"<span class='score'>score {s.overall_score:.0f}</span>"
+        f"<span class='muted'>ruleset {_esc(result.ruleset.name)} {_esc(result.ruleset.version)}</span>"
+        f"</div>")
+    out.append(
+        f"<div class='counts'>{s.violations_total} violations &middot; "
+        f"<b class='sev-error'>{counts.error} error</b> &middot; "
+        f"<b class='sev-warning'>{counts.warning} warning</b> &middot; "
+        f"<b class='sev-info'>{counts.info} info</b> &middot; "
+        f"<b>{counts.critical} critical</b></div>")
+    out.append("</header>")
+
+    out.append("<div class='layout'>")
+
+    # Board panel
+    out.append("<div class='board-panel'>")
+    if svg:
+        out.append(svg)
+        out.append("<p class='hint'>Click a &#128205; finding to highlight it on the board.</p>")
+    else:
+        out.append("<p class='hint'>No drawable board geometry available.</p>")
+    out.append("</div>")
+
+    # Findings panel
+    out.append("<div class='findings'>")
+    for cat in result.categories:
+        cstatus = cat.status or "n/a"
+        ccolor = _STATUS_COLOR.get(cat.status or "", "#8b8b8b")
+        out.append(
+            f"<h2><span class='dot' style='background:{ccolor}'></span>"
+            f"{_esc(cat.name or cat.category_id)} "
+            f"<span class='muted'>{_esc(cstatus)} &middot; {cat.violations_count} viol.</span></h2>")
+        for chk in cat.checks:
+            scolor = _SEV_COLOR.get(chk.severity or "info", "#4c8dff")
+            measured = ""
+            if chk.metric and chk.metric.measured_value is not None:
+                measured = f"<span class='measured'>{chk.metric.measured_value} {_esc(chk.metric.units or '')}</span>"
+            out.append(
+                f"<div class='check'><div class='check-head'>"
+                f"<span class='sev' style='background:{scolor}'></span>"
+                f"<code>{_esc(chk.check_id)}</code> "
+                f"<span class='st'>{_esc(chk.status)}</span> {measured}</div>")
+            for v in chk.violations:
+                mi = marker_of.get(id(v))
+                pin = ""
+                if mi is not None:
+                    pin = (f"<button class='pin' onclick=\"hl('m{mi}')\" "
+                           f"title='highlight on board'>&#128205;</button>")
+                out.append(
+                    f"<div class='viol sev-{_esc(v.severity)}'>{pin}"
+                    f"<span>{_esc(v.message)}</span></div>")
+            out.append("</div>")
+    out.append("</div>")  # findings
+
+    out.append("</div>")  # layout
+    out.append("<script>" + _REPORT_JS + "</script>")
+    out.append("</body></html>")
+    return "".join(out)
+
+
+_REPORT_CSS = """
+:root{--bg:#fff;--fg:#1a1a1a;--muted:#6b7280;--card:#f6f7f9;--border:#e5e7eb;}
+@media (prefers-color-scheme:dark){:root{--bg:#0e1116;--fg:#e6e6e6;--muted:#9aa4b2;--card:#171b22;--border:#2a2f3a;}}
+*{box-sizing:border-box}
+body{margin:0;font-family:-apple-system,Segoe UI,Roboto,Helvetica,Arial,sans-serif;background:var(--bg);color:var(--fg);}
+.summary{padding:18px 22px;border-bottom:1px solid var(--border);}
+h1{margin:0 0 8px;font-size:22px;font-weight:700}
+h1 .dim{color:var(--muted);font-weight:500}
+.badges{display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+.status{color:#fff;font-weight:700;padding:3px 12px;border-radius:6px;font-size:14px}
+.score{font-weight:600}.muted{color:var(--muted);font-size:13px}
+.counts{margin-top:8px;color:var(--muted);font-size:13px}
+.sev-error{color:#e5484d}.sev-warning{color:#f5a623}.sev-info{color:#4c8dff}
+.layout{display:flex;gap:0;align-items:flex-start}
+.board-panel{flex:1 1 55%;position:sticky;top:0;padding:16px;min-width:0}
+.findings{flex:1 1 45%;padding:16px 20px;max-height:100vh;overflow:auto}
+svg.board{width:100%;height:auto;max-height:82vh;background:#08130d;border-radius:10px;border:1px solid var(--border)}
+.board-bg{fill:#0c2a1c}
+.marker .halo{opacity:0;stroke-width:2;transition:opacity .2s}
+.marker.hl .halo{opacity:.95;animation:pulse 1s ease-out 2}
+@keyframes pulse{0%{opacity:.2}50%{opacity:1}100%{opacity:.4}}
+.hint{color:var(--muted);font-size:12px;margin:8px 2px}
+h2{font-size:15px;margin:18px 0 8px;display:flex;align-items:center;gap:8px}
+.dot{width:10px;height:10px;border-radius:50%;display:inline-block}
+.check{border:1px solid var(--border);border-radius:8px;padding:8px 10px;margin:6px 0;background:var(--card)}
+.check-head{display:flex;align-items:center;gap:8px;font-size:13px}
+.sev{width:8px;height:8px;border-radius:50%;display:inline-block;flex:none}
+.st{color:var(--muted);text-transform:uppercase;font-size:11px;letter-spacing:.03em}
+.measured{margin-left:auto;color:var(--muted);font-size:12px}
+code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px}
+.viol{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;color:var(--muted);padding:4px 0 2px 16px}
+.viol.sev-error{color:#e5484d}.viol.sev-warning{color:#c8861a}
+.pin{border:none;background:none;cursor:pointer;font-size:13px;padding:0;line-height:1.2}
+@media(max-width:820px){.layout{flex-direction:column}.board-panel{position:static;width:100%}.findings{max-height:none}}
+"""
+
+_REPORT_JS = """
+function hl(id){
+  document.querySelectorAll('.marker.hl').forEach(function(m){m.classList.remove('hl')});
+  var el=document.getElementById(id);
+  if(el){el.classList.add('hl');el.parentNode.appendChild(el);el.scrollIntoView({block:'nearest'});}
+}
+"""

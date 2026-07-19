@@ -48,6 +48,17 @@ def run_dfm_on_gerber_zip(
     return dfm_result
 
 
+def build_geometry_for(gerber_zip: Path):
+    """Ingest + build the board geometry for a Gerber zip (for rendering).
+
+    Runs inside the pcb-tools shim. Independent of check execution; used by the
+    HTML report so it can draw the board.
+    """
+    with rU_open_shim():
+        ingest_result = ingest_gerber_zip(gerber_zip)
+        return build_board_geometry(ingest_result)
+
+
 def run_dfm_bundle(
     gerber_zip: Path,
     ruleset_id: str = "default",

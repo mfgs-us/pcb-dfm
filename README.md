@@ -333,9 +333,15 @@ After `pip install -e .` you also get a `pcb-dfm` command (and `python -m pcb_df
 ```bash
 pcb-dfm run testdata/mini_board.zip --format text     # full ruleset, text report
 pcb-dfm run testdata/mini_board.zip --format json -o out/result.json
+pcb-dfm run testdata/mini_board.zip --format html -o report.html  # visual report
 pcb-dfm check testdata/mini_board.zip min_trace_width # single check, JSON to stdout
 pcb-dfm list-checks                                    # list every check id
 ```
+
+The `html` format writes a **single self-contained page** (no external assets):
+the board rendered from its polygons with every located violation overlaid as a
+severity-colored marker, alongside per-category findings that highlight their
+marker on click. Light/dark aware.
 
 Diagnostic `[DFM TIMING]` lines are written to stderr, so `stdout` stays clean
 for JSON piping.

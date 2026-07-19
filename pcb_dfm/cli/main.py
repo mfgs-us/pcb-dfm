@@ -18,8 +18,12 @@ from pathlib import Path
 
 
 def _cmd_run(args: argparse.Namespace) -> int:
-    from ..engine.run import run_dfm_on_gerber_zip
-    from ..report import generate_markdown_report, generate_text_report
+    from ..engine.run import build_geometry_for, run_dfm_on_gerber_zip
+    from ..report import (
+        generate_html_report,
+        generate_markdown_report,
+        generate_text_report,
+    )
 
     result = run_dfm_on_gerber_zip(
         Path(args.gerber_zip),
@@ -32,6 +36,9 @@ def _cmd_run(args: argparse.Namespace) -> int:
         text = result.to_json()
     elif args.format == "markdown":
         text = generate_markdown_report(result)
+    elif args.format == "html":
+        geometry = build_geometry_for(Path(args.gerber_zip))
+        text = generate_html_report(result, geometry)
     else:
         text = generate_text_report(result)
 
@@ -111,7 +118,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument("--design-id", default="board")
     p_run.add_argument("--design-data", default=None,
                        help="optional JSON sidecar with stackup / controlled-impedance info")
-    p_run.add_argument("--format", choices=["text", "markdown", "json"], default="text")
+    p_run.add_argument("--format", choices=["text", "markdown", "json", "html"], default="text")
     p_run.add_argument("-o", "--output", default=None)
     p_run.set_defaults(func=_cmd_run)
 

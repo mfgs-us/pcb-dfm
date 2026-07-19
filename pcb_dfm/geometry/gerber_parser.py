@@ -7,7 +7,9 @@ from pathlib import Path
 from typing import Dict, Tuple, List, Optional
 import math
 import re
+import sys
 import builtins
+import warnings
 
 from ..ingest import GerberIngestResult
 from .layer_model import BoardLayer, BoardGeometry
@@ -84,6 +86,19 @@ def build_board_geometry(ingest: GerberIngestResult) -> BoardGeometry:
     if gerber is not None:
         for layer in geom.layers:
             _populate_layer_polygons_with_gerber(layer)
+    else:
+        # pcb-tools is a declared hard dependency. If its import failed we
+        # cannot extract copper/mask/silk geometry at all, so every geometry
+        # based check would pass vacuously. Make this degradation loud rather
+        # than silently producing an empty (but "clean") board. The outline
+        # fallback below still runs so basic outline checks can proceed.
+        msg = (
+            "pcb-tools ('gerber') failed to import: copper/mask/silkscreen "
+            "polygons will NOT be extracted and geometry-based DFM checks will "
+            "pass vacuously. Only the naive outline fallback is available."
+        )
+        warnings.warn(msg, RuntimeWarning, stacklevel=2)
+        print(f"WARNING: {msg}", file=sys.stderr)
 
     # Fallback: ensure outline has at least one polygon
     for layer in geom.layers:
@@ -352,57 +367,97 @@ def _is_strong_outline_candidate(path: Path, original_name: str) -> bool:
 
 def _extract_outline_polygons_from_file_fallback(path: Path) -> List[Polygon]:
     """
-    4C) Improved outline polygon extractor:
-    
-    - Only parses files strongly identified as outlines
-    - Only extracts coordinates from draw commands (D01)
-    - Filters out non-outline moves and apertures
-    - Uses header to guess units and format
-    - Converts integers with implicit decimals -> mm
+    Naive outline polygon extractor (used when pcb-tools is unavailable or the
+    primary path yields nothing).
+
+    Handles the parts of RS-274X coordinate handling that matter for outlines:
+
+    - Modal coordinates: a line may specify only X or only Y; the unspecified
+      axis carries forward from the current point.
+    - Pen-up moves (D02) separate contours. Each D02 starts a NEW contour and
+      the move-to point becomes that contour's first vertex. This keeps a
+      board-with-cutout as multiple polygons instead of one garbage polygon.
+    - Draw moves (D01) append their endpoint to the current contour.
+    - Flashes (D03) are ignored for outlines.
+    - Arcs (G02/G03) are approximated by a straight segment to their endpoint.
+      This is a known limitation: curved edges become chords. It avoids
+      silently dropping the arc (which would corrupt the outline), but does not
+      reconstruct the true arc geometry (I/J center offsets are not used).
+
+    One Polygon is emitted per contour that has >= 3 points.
     """
     text = path.read_text(errors="ignore")
 
     fmt = _detect_gerber_format(text)
     scale = _format_to_scale(fmt)
 
-    points: List[Point2D] = []
+    # Parse X, Y, and the operation D-code independently so we correctly handle
+    # lines that start with a G-code (e.g. "G02X..Y..D01") or specify only one
+    # axis (modal moves like "Y10000D01").
+    x_re = re.compile(r"X(-?\d+)", re.IGNORECASE)
+    y_re = re.compile(r"Y(-?\d+)", re.IGNORECASE)
+    d_re = re.compile(r"D0?([123])\b", re.IGNORECASE)
 
-    # 4C) Only look for coordinates in draw commands (D01), not all X/Y coordinates
-    # This prevents capturing non-outline moves, flashes, and apertures
-    draw_cmd_re = re.compile(r".*X(-?\d+)Y(-?\d+)D01.*", re.IGNORECASE)
+    contours: List[List[Point2D]] = []
+    current: List[Point2D] = []
 
-    for line in text.splitlines():
-        line = line.strip()
-        
-        # Skip lines that don't contain draw commands
-        if "D01" not in line.upper():
+    cur_x: Optional[int] = None
+    cur_y: Optional[int] = None
+
+    for raw_line in text.splitlines():
+        line = raw_line.strip()
+        upper = line.upper()
+
+        # Skip parameter / macro / comment / control lines outright.
+        if any(cmd in upper for cmd in ["AD", "AM", "SR", "G04", "M02", "M00", "%"]):
             continue
-            
-        # Skip lines that look like aperture definitions or other non-draw commands
-        if any(cmd in line.upper() for cmd in ["D02", "D03", "AD", "AM", "SR", "G04", "M02", "M00"]):
+
+        d_match = d_re.search(line)
+        if not d_match:
+            continue
+        d_tok = d_match.group(1)
+
+        x_match = x_re.search(line)
+        y_match = y_re.search(line)
+
+        # Modal coordinates: carry forward the axis not specified on this line.
+        if x_match is not None:
+            cur_x = int(x_match.group(1))
+        if y_match is not None:
+            cur_y = int(y_match.group(1))
+
+        # Need a fully defined current point before we can emit a vertex.
+        if cur_x is None or cur_y is None:
             continue
 
-        m = draw_cmd_re.match(line)
-        if not m:
-            continue
+        pt = Point2D(x=cur_x * scale, y=cur_y * scale)
 
-        raw_x = int(m.group(1))
-        raw_y = int(m.group(2))
+        if d_tok == "2":
+            # Pen-up move: close out the previous contour and start a new one,
+            # seeding it with the move-to point.
+            if len(current) >= 3:
+                contours.append(current)
+            current = [pt]
+        elif d_tok in ("1",):
+            # Pen-down draw (or arc, approximated as a straight segment to the
+            # endpoint): append endpoint to the current contour.
+            current.append(pt)
+        # d_tok == "3" (flash) is ignored for outlines.
 
-        x_mm = raw_x * scale
-        y_mm = raw_y * scale
-        points.append(Point2D(x=x_mm, y=y_mm))
+    if len(current) >= 3:
+        contours.append(current)
 
-    if len(points) < 3:
-        return []
+    polys: List[Polygon] = []
+    for pts in contours:
+        # Close the contour if not already closed.
+        first = pts[0]
+        last = pts[-1]
+        if first.x != last.x or first.y != last.y:
+            pts = pts + [Point2D(x=first.x, y=first.y)]
+        if len(pts) >= 3:
+            polys.append(Polygon(vertices=pts))
 
-    # Close the polygon if not already closed
-    first = points[0]
-    last = points[-1]
-    if first.x != last.x or first.y != last.y:
-        points.append(Point2D(x=first.x, y=first.y))
-
-    return [Polygon(vertices=points)]
+    return polys
 
 
 def _detect_gerber_format(text: str) -> GerberFormatInfo:

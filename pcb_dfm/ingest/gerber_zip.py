@@ -10,6 +10,9 @@ import tempfile
 import shutil
 
 
+# Cap total uncompressed extraction size to guard against zip bombs (512 MiB).
+_MAX_TOTAL_UNCOMPRESSED_BYTES = 512 * 1024 * 1024
+
 GerberFormat = Literal["gerber", "excellon", "unknown"]
 LogicalLayer = Literal[
     "TopCopper",
@@ -119,9 +122,28 @@ def ingest_gerber_zip(zip_path: Path, workspace_root: Optional[Path] = None) -> 
             shutil.rmtree(root_dir)
         root_dir.mkdir(parents=True, exist_ok=True)
 
-    # Extract all contents
+    # Extract all contents safely: guard against path traversal (Zip Slip) and
+    # zip bombs. extractall() is unsafe because a member named "../x" or with an
+    # absolute path can write outside root_dir.
+    root_resolved = root_dir.resolve()
+    total_uncompressed = 0
     with zipfile.ZipFile(zip_path, "r") as zf:
-        zf.extractall(root_dir)
+        for member in zf.infolist():
+            # Enforce a total uncompressed size cap to prevent zip bombs.
+            total_uncompressed += member.file_size
+            if total_uncompressed > _MAX_TOTAL_UNCOMPRESSED_BYTES:
+                raise ValueError(
+                    f"Zip archive uncompressed size exceeds "
+                    f"{_MAX_TOTAL_UNCOMPRESSED_BYTES} bytes; refusing to extract."
+                )
+
+            # Reject members that resolve outside root_dir.
+            dest = (root_dir / member.filename).resolve()
+            if dest != root_resolved and root_resolved not in dest.parents:
+                # Skip unsafe members (absolute paths or ../ traversal).
+                continue
+
+            zf.extract(member, root_dir)
 
     result = GerberIngestResult(root_dir=root_dir, is_temporary_root=is_temp)
 
@@ -220,7 +242,7 @@ def _guess_format(ext: str, name_lower: str) -> GerberFormat:
 
     We keep this heuristic simple on purpose; geometry layer can be stricter later.
     """
-    if ext in {".gtl", ".gbl", ".gts", ".gbs", ".gto", ".gbo", ".gko", ".gml", ".gm1", ".gm2", ".gbr"}:
+    if ext in {".gtl", ".gbl", ".gts", ".gbs", ".gto", ".gbo", ".gtp", ".gbp", ".gko", ".gml", ".gm1", ".gm2", ".gbr"}:
         return "gerber"
 
     if ext in {".drl", ".xln"} or _looks_like_drill(name_lower):
@@ -332,11 +354,6 @@ def _classify_layer(
         side = "None"
         layer_type = "mechanical"
         return logical_layer, side, layer_type, is_plated
-
-    # Normalize common KiCad tokens
-    # KiCad: F_Cu, B_Cu, Edge_Cuts, F_Mask, B_Mask, F_Silkscreen, B_Silkscreen, F_Paste, B_Paste
-    is_f = any(t in name_lower for t in ["f_", "-f_", ".f_", "_f_"]) or "fcu" in name_lower
-    is_b = any(t in name_lower for t in ["b_", "-b_", ".b_", "_b_"]) or "bcu" in name_lower
 
     # Copper layers - fallback to name heuristics for .gbr and unknown extensions
     if ("f_cu" in name_lower) or ("fcu" in name_lower) or ("gtl" in name_lower) or ("top" in name_lower and ("cu" in name_lower or "copper" in name_lower or "sig" in name_lower)):

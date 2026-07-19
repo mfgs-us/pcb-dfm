@@ -143,26 +143,34 @@ def _normalize_shape(ap: Any) -> str:
     return "unknown"
 
 
-def _extract_aperture_dim_mm(ap: Any) -> Tuple[Optional[float], str]:
+def _extract_aperture_dim_mm(ap: Any) -> Tuple[Optional[float], Optional[float], str]:
+    """Return (min_dim_mm, max_dim_mm, detail).
+
+    The MIN real positive dimension drives the "too small" (minimum feature)
+    check so that sliver apertures (e.g. 0.002mm x 4mm) are caught, while the
+    MAX dimension drives the "too large" check. Both are None when no usable
+    dimension is found.
+    """
     dims_inch, notes = _extract_dims_inch(ap)
     if not dims_inch:
         detail = "no numeric dimension found"
         if notes:
             detail += f" ({', '.join(notes)})"
-        return None, detail
+        return None, None, detail
 
     dims_inch = [d for d in dims_inch if math.isfinite(d) and d > 0.0]
     if not dims_inch:
         detail = "numeric dims present but nonpositive/nonfinite"
         if notes:
             detail += f" ({', '.join(notes)})"
-        return None, detail
+        return None, None, detail
 
+    min_dim_mm = min(dims_inch) * _INCH_TO_MM
     max_dim_mm = max(dims_inch) * _INCH_TO_MM
-    detail = f"extracted {len(dims_inch)} dim(s), max={max_dim_mm:.4f}mm"
+    detail = f"extracted {len(dims_inch)} dim(s), min={min_dim_mm:.4f}mm, max={max_dim_mm:.4f}mm"
     if notes:
         detail += f" ({', '.join(notes)})"
-    return max_dim_mm, detail
+    return min_dim_mm, max_dim_mm, detail
 
 
 def validate_apertures(
@@ -200,12 +208,18 @@ def validate_apertures(
         layer_label = str(info.logical_layer or info.path.name)
         file_label = str(info.path.name)
 
+        unit_ok = True
         try:
             layer = gerber.read(str(info.path))
             try:
                 layer.to_inch()
             except Exception:
-                pass
+                # Unit conversion failed: dims are NOT guaranteed to be in
+                # inches. Since _extract_aperture_dim_mm multiplies by 25.4
+                # assuming inches, a mm-native aperture would be inflated ~25x
+                # and produce a bogus "too_large". Flag as indeterminate
+                # instead of running the numeric size comparisons.
+                unit_ok = False
         except Exception:
             suspicious.append(
                 ApertureWarning(
@@ -238,9 +252,9 @@ def validate_apertures(
                 break
 
             shape_norm = _normalize_shape(ap)
-            dim_mm_val, dim_detail = _extract_aperture_dim_mm(ap)
+            min_dim_mm_val, max_dim_mm_val, dim_detail = _extract_aperture_dim_mm(ap)
 
-            if shape_norm == "macro" and dim_mm_val is None:
+            if shape_norm == "macro" and min_dim_mm_val is None:
                 suspicious.append(
                     ApertureWarning(
                         file_label=file_label,
@@ -254,7 +268,7 @@ def validate_apertures(
                 )
                 continue
 
-            if dim_mm_val is None:
+            if min_dim_mm_val is None or max_dim_mm_val is None:
                 suspicious.append(
                     ApertureWarning(
                         file_label=file_label,
@@ -268,30 +282,49 @@ def validate_apertures(
                 )
                 continue
 
-            if dim_mm_val < min_dim_mm:
+            if not unit_ok:
+                # Unit conversion failed; the dimensions cannot be trusted in
+                # mm-space, so we cannot reliably compare against thresholds.
                 suspicious.append(
                     ApertureWarning(
                         file_label=file_label,
                         layer_name=layer_label,
                         code=str(code),
                         shape_norm=shape_norm,
-                        dim_mm=dim_mm_val,
-                        reason="too_small",
-                        detail=f"{dim_mm_val:.6f}mm < min {min_dim_mm:.6f}mm ({dim_detail})",
+                        dim_mm=None,
+                        reason="unit_indeterminate",
+                        detail=f"unit conversion failed, size indeterminate ({dim_detail})",
                     )
                 )
                 continue
 
-            if dim_mm_val > max_dim_mm:
+            # Minimum-feature check uses the SMALLEST real dimension so that
+            # thin slivers (e.g. 0.002mm x 4mm) are caught.
+            if min_dim_mm_val < min_dim_mm:
                 suspicious.append(
                     ApertureWarning(
                         file_label=file_label,
                         layer_name=layer_label,
                         code=str(code),
                         shape_norm=shape_norm,
-                        dim_mm=dim_mm_val,
+                        dim_mm=min_dim_mm_val,
+                        reason="too_small",
+                        detail=f"{min_dim_mm_val:.6f}mm < min {min_dim_mm:.6f}mm ({dim_detail})",
+                    )
+                )
+                continue
+
+            # Oversized check uses the LARGEST dimension.
+            if max_dim_mm_val > max_dim_mm:
+                suspicious.append(
+                    ApertureWarning(
+                        file_label=file_label,
+                        layer_name=layer_label,
+                        code=str(code),
+                        shape_norm=shape_norm,
+                        dim_mm=max_dim_mm_val,
                         reason="too_large",
-                        detail=f"{dim_mm_val:.3f}mm > max {max_dim_mm:.3f}mm ({dim_detail})",
+                        detail=f"{max_dim_mm_val:.3f}mm > max {max_dim_mm:.3f}mm ({dim_detail})",
                     )
                 )
                 continue

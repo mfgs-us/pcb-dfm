@@ -1,6 +1,12 @@
-# PCB Design for Manufacturing (DFM) Engine
+<p align="center">
+  <img src="assets/banner.svg" alt="pcb-dfm — schema-driven Design-for-Manufacturing engine for PCB Gerbers" width="900">
+</p>
 
-[![CI](https://github.com/mfgs-us/pcb-dfm/actions/workflows/ci.yml/badge.svg)](https://github.com/mfgs-us/pcb-dfm/actions/workflows/ci.yml)
+<p align="center">
+  <a href="https://github.com/mfgs-us/pcb-dfm/actions/workflows/ci.yml"><img src="https://github.com/mfgs-us/pcb-dfm/actions/workflows/ci.yml/badge.svg" alt="CI"></a>
+</p>
+
+# PCB Design for Manufacturing (DFM) Engine
 
 `pcb-dfm` is a schema-driven Design For Manufacturability (DFM) engine for PCB Gerbers.
 

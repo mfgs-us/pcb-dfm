@@ -346,6 +346,34 @@ marker on click. Light/dark aware.
 Diagnostic `[DFM TIMING]` lines are written to stderr, so `stdout` stays clean
 for JSON piping.
 
+### GitHub Action (PR-native DFM)
+
+Run DFM automatically on every pull request — it posts a findings summary as a
+sticky PR comment, uploads the visual HTML report as an artifact, and can gate
+the build:
+
+```yaml
+# .github/workflows/dfm.yml
+name: DFM
+on: { pull_request: { branches: [main] } }
+jobs:
+  dfm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: mfgs-us/pcb-dfm@v1
+        with:
+          gerbers: hardware/gerbers.zip
+          ruleset: advanced_hdi          # optional fab profile
+          design-data: hardware/board.ipc2581.xml   # optional stackup/nets
+          fail-on: fail                  # never | warning | fail
+          # min-score: 80                # optional score gate
+```
+
+The same logic is available locally as `pcb-dfm gate` (writes `--json`,
+`--html`, and a Markdown `--summary`, and exits non-zero per `--fail-on` /
+`--min-score`).
+
 ### Fab capability profiles (rulesets)
 
 The same board is manufacturable at one fab and not another, so thresholds are

@@ -1,0 +1,22 @@
+name: DFM (self-check)
+
+# Dogfoods this repo's own Action against the committed fixture. Report-only
+# (the tiny fixture intentionally has findings), so it never reds the build; it
+# proves the gate runs and the HTML report artifact is produced end to end.
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch: {}
+
+jobs:
+  dfm:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: ./
+        with:
+          gerbers: testdata/mini_board.zip
+          ruleset: default
+          fail-on: never
+          comment: false

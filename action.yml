@@ -1,0 +1,92 @@
+name: 'PCB DFM'
+description: 'Run pcb-dfm on a Gerber archive; comment findings on the PR, upload an HTML report, and gate the build.'
+branding:
+  icon: 'check-circle'
+  color: 'green'
+
+inputs:
+  gerbers:
+    description: 'Path to the Gerber .zip archive (relative to the repo).'
+    required: true
+  ruleset:
+    description: 'Fab capability profile id (see `pcb-dfm list-rulesets`).'
+    default: 'default'
+  design-data:
+    description: 'Optional path to an IPC-2581 .xml or JSON design-data sidecar.'
+    default: ''
+  fail-on:
+    description: 'Fail the job when the overall status reaches this level: never | warning | fail.'
+    default: 'fail'
+  min-score:
+    description: 'Also fail when the overall score is below this (0-100). Empty to disable.'
+    default: ''
+  comment:
+    description: 'Post/update a sticky PR comment with the summary (true|false).'
+    default: 'true'
+  python-version:
+    description: 'Python version used to run pcb-dfm.'
+    default: '3.11'
+
+runs:
+  using: composite
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Install pcb-dfm
+      shell: bash
+      run: pip install "${{ github.action_path }}"
+
+    - name: Run DFM gate
+      id: gate
+      shell: bash
+      run: |
+        set +e
+        extra=()
+        [ -n "${{ inputs.design-data }}" ] && extra+=(--design-data "${{ inputs.design-data }}")
+        [ -n "${{ inputs.min-score }}" ] && extra+=(--min-score "${{ inputs.min-score }}")
+        pcb-dfm gate "${{ inputs.gerbers }}" \
+          --ruleset "${{ inputs.ruleset }}" \
+          --fail-on "${{ inputs.fail-on }}" \
+          --html "${RUNNER_TEMP}/dfm-report.html" \
+          --json "${RUNNER_TEMP}/dfm-result.json" \
+          --summary "${RUNNER_TEMP}/dfm-summary.md" \
+          "${extra[@]}"
+        echo "exit=$?" >> "$GITHUB_OUTPUT"
+        # Also surface the summary in the job summary panel.
+        cat "${RUNNER_TEMP}/dfm-summary.md" >> "$GITHUB_STEP_SUMMARY"
+
+    - name: Upload HTML report
+      uses: actions/upload-artifact@v4
+      with:
+        name: dfm-report
+        path: ${{ runner.temp }}/dfm-report.html
+        if-no-files-found: warn
+
+    - name: Comment on PR
+      if: ${{ inputs.comment == 'true' && github.event_name == 'pull_request' }}
+      uses: actions/github-script@v7
+      with:
+        script: |
+          const fs = require('fs');
+          const marker = '<!-- pcb-dfm -->';
+          const body = marker + '\n' + fs.readFileSync(process.env.RUNNER_TEMP + '/dfm-summary.md', 'utf8');
+          const { owner, repo } = context.repo;
+          const issue_number = context.issue.number;
+          const { data: comments } = await github.rest.issues.listComments({ owner, repo, issue_number });
+          const existing = comments.find(c => c.body && c.body.includes(marker));
+          if (existing) {
+            await github.rest.issues.updateComment({ owner, repo, comment_id: existing.id, body });
+          } else {
+            await github.rest.issues.createComment({ owner, repo, issue_number, body });
+          }
+
+    - name: Enforce gate
+      shell: bash
+      run: |
+        if [ "${{ steps.gate.outputs.exit }}" != "0" ]; then
+          echo "::error::pcb-dfm gate failed (fail-on=${{ inputs.fail-on }})."
+          exit 1
+        fi

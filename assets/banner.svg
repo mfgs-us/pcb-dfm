@@ -22,41 +22,6 @@
   <rect x="0" y="0" width="1200" height="300" rx="18" fill="url(#fab)"/>
   <rect x="1.5" y="1.5" width="1197" height="297" rx="17" fill="none" stroke="#2a8a5c" stroke-opacity="0.45"/>
 
-  <!-- right-side circuit motif -->
-  <g fill="none" stroke-linecap="round" stroke-linejoin="round">
-    <!-- copper traces -->
-    <g stroke="#d29a4d" stroke-opacity="0.85" stroke-width="3">
-      <path d="M1000 150 H1080 L1120 110 H1150"/>
-      <path d="M1000 110 H1040 L1070 80"/>
-      <path d="M1000 190 H1060 L1090 220 H1150"/>
-    </g>
-    <!-- signal traces -->
-    <g stroke="#3ddc84" stroke-opacity="0.9" stroke-width="3">
-      <path d="M905 90 V60 H820"/>
-      <path d="M960 90 V45 H1030"/>
-      <path d="M905 210 V245 H835"/>
-      <path d="M820 150 H770 L740 180 V225"/>
-    </g>
-    <!-- chip body -->
-    <rect x="900" y="115" width="120" height="70" rx="8" fill="none" stroke="#7ef0b0" stroke-opacity="0.9" stroke-width="3"/>
-    <!-- chip pins -->
-    <g stroke="#7ef0b0" stroke-opacity="0.7" stroke-width="3">
-      <path d="M905 115 V100"/><path d="M935 115 V100"/><path d="M965 115 V100"/><path d="M995 115 V100"/>
-      <path d="M905 185 V200"/><path d="M935 185 V200"/><path d="M965 185 V200"/><path d="M995 185 V200"/>
-    </g>
-  </g>
-
-  <!-- vias / pads -->
-  <g>
-    <circle cx="1150" cy="110" r="7" fill="#04140c" stroke="#d29a4d" stroke-width="3"/>
-    <circle cx="1150" cy="220" r="7" fill="#04140c" stroke="#d29a4d" stroke-width="3"/>
-    <circle cx="820" cy="60" r="6" fill="#04140c" stroke="#3ddc84" stroke-width="3"/>
-    <circle cx="1030" cy="45" r="6" fill="#04140c" stroke="#3ddc84" stroke-width="3"/>
-    <circle cx="740" cy="225" r="6" fill="#04140c" stroke="#3ddc84" stroke-width="3"/>
-    <circle cx="835" cy="245" r="6" fill="#04140c" stroke="#3ddc84" stroke-width="3"/>
-    <rect x="953" y="143" width="14" height="14" rx="2" fill="#7ef0b0" fill-opacity="0.85"/>
-  </g>
-
   <!-- title block -->
   <text x="80" y="140" font-family="ui-monospace, SFMono-Regular, Menlo, Consolas, monospace" font-size="88" font-weight="700" fill="url(#title)" letter-spacing="1">pcb-dfm</text>
   <rect x="84" y="158" width="360" height="4" rx="2" fill="url(#rule)"/>

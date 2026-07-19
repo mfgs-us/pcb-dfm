@@ -120,6 +120,60 @@ explicit.
 
 This version includes major improvements to align with industry-standard tools like Integr8tor and fix fundamental consistency issues:
 
+### 🛡️ Reliability & Correctness Overhaul (latest)
+
+A pass over the engine closed a class of bugs where a defective board could be
+reported as clean. The whole pipeline now runs end-to-end and is covered by a
+committed fixture (`testdata/mini_board.zip`) and a passing test suite.
+
+**A crash can never look like a pass**
+- ✅ **Crashes surface as failures**: if a check raises, the runner records a
+  `status="fail"` with an `error` violation (`Check crashed: …`) — never the
+  old silent `not_applicable` / score 100. The rest of the batch keeps running.
+- ✅ **Missing implementations don't abort the run**: definitions with no
+  registered check are reported as `not_applicable` instead of throwing an
+  uncaught `KeyError` that killed the whole batch.
+- ✅ **Consistent finalization**: `run_single_check` now finalizes like the
+  batch path, so the single-check path can no longer emit `pass` + `error`.
+
+**Flagship check crashes fixed** (these crashed *only on violating boards*, so
+they used to hide real defects):
+- ✅ Unbound-`severity` `NameError` in `min_trace_width`, `min_drill_size`,
+  `drill_aspect_ratio`, `via_to_copper_clearance`.
+- ✅ Tuple-unpack `ValueError` in `via_in_pad_thermal_balance`.
+
+**High-level entry points work**
+- ✅ `run_dfm_on_gerber_zip` fixed (aggregation no longer references an
+  undefined variable) and `run_dfm_bundle` implemented (issues-only results +
+  `stats` + `error` contract).
+- ✅ **Worst-status-wins aggregation**: a `warning` after a `fail` no longer
+  downgrades a category/overall status, so `status` and `score` can't disagree.
+
+**Parsing / ingest hardening**
+- ✅ **Aperture minimum-feature check** compares the *minimum* dimension (was
+  `max`, which never caught slivers); a failed unit conversion no longer
+  inflates mm dimensions ~25×.
+- ✅ **Outline fallback parser** splits contours on pen-up (`D02`) moves and
+  carries modal coordinates, instead of merging disjoint loops into one polygon.
+- ✅ **Zip-slip / zip-bomb guards** on archive extraction.
+- ✅ **Loud degradation**: a missing `pcb-tools` now warns instead of silently
+  producing empty geometry (which made every check pass vacuously).
+
+**Honest, not fabricated, results**
+- ✅ Removed a hard-coded fabricated `0.296 mm` measurement in
+  `copper_to_edge_distance`.
+- ✅ Checks that need data not present in Gerbers (backdrill depth, stackup,
+  impedance constraints) return an honest `not_applicable` with an explanation
+  instead of keying off attributes that never existed.
+
+**Tooling & hygiene**
+- ✅ **Working CLI**: `pcb-dfm run|check|list-checks` (and `python -m pcb_dfm`);
+  `[DFM TIMING]` diagnostics moved to stderr so stdout stays clean for JSON.
+- ✅ `pcb_dfm.io` is a proper package again (no module/package shadowing); the
+  result **JSON schema** is realigned to the models and the sample validates.
+- ✅ Metric labeling fixed: aspect ratios report `:1` (not `%`); via-tenting
+  margin is no longer inverted; violation `location.notes` is preserved.
+
 ### 🎯 Geometric Accuracy Improvements
 
 **Annular Ring Check (`impl_min_annular_ring.py`)**
@@ -202,18 +256,34 @@ PCB-DFM now enforces global consistency through a unified `MetricResult` system:
 
 **Metric Constructors:**
 ```python
-# Geometry metrics (distances, sizes)
+# Geometry metrics (distances, sizes). measured_mm may be None to mean
+# "could not measure" (e.g. no copper present) without raising.
 MetricResult.geometry_mm(
     measured_mm=0.296,
     target_mm=0.25,
     limit_low_mm=0.15
 )
 
-# Ratio metrics (percentages, ratios)
+# Ratio metrics where higher-is-worse and the bound is a maximum (%).
 MetricResult.ratio_percent(
     measured_pct=96.6,
     target_pct=20.0,
     limit_high_pct=30.0
+)
+
+# Ratio metrics where higher-is-better and the bound is a minimum (%),
+# e.g. via tenting — margin = measured - limit_low (positive when good).
+MetricResult.ratio_min_percent(
+    measured_pct=90.0,
+    target_pct=80.0,
+    limit_low_pct=50.0
+)
+
+# Unit-less metrics such as an aspect ratio (renders as ":1", not "%").
+MetricResult.dimensionless(
+    measured=8.0,
+    target=8.0,
+    limit_high=10.0
 )
 ```
 
@@ -230,8 +300,13 @@ MetricResult.ratio_percent(
 - ✅ Consistent scoring (pass=100, warning=75, fail=0)
 - ✅ No more "pass + error" contradictions
 
-**Updated Checks (14 working):**
-`copper_to_edge_distance`, `copper_density_balance`, `min_drill_size`, `copper_thermal_area`, `aperture_definition_errors`, `acid_trap_angle`, `backdrill_stub_length`, `component_to_component_spacing`, `copper_sliver_width`, `min_annular_ring`, `drill_aspect_ratio`, `silkscreen_on_copper`, `solder_mask_expansion`, `via_tenting`
+**Check coverage:** all 30 implemented checks now run without crashing on the
+bundled fixture. The 15 definitions that are not yet implemented (e.g.
+`diff_pair_skew`, `min_slot_width`, `tombstoning_risk`) are reported as
+`not_applicable` rather than aborting the run. Checks that require data absent
+from Gerbers (`backdrill_stub_length`, `impedance_control`,
+`dielectric_thickness_uniformity`) return `not_applicable`/`warning` with an
+explanation until stackup/netlist input is wired in.
 
 ## 3. Quickstart: Run a Single Check from CLI
 

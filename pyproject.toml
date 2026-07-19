@@ -23,7 +23,8 @@ dependencies = [
 [project.optional-dependencies]
 dev = [
   "pytest>=8.0",
-  "mypy>=1.8"
+  "mypy>=1.8",
+  "jsonschema>=4.0"
 ]
 
 [project.scripts]

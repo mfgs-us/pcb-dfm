@@ -1,5 +1,7 @@
 # PCB Design for Manufacturing (DFM) Engine
 
+[![CI](https://github.com/mfgs-us/pcb-dfm/actions/workflows/ci.yml/badge.svg)](https://github.com/mfgs-us/pcb-dfm/actions/workflows/ci.yml)
+
 `pcb-dfm` is a schema-driven Design For Manufacturability (DFM) engine for PCB Gerbers.
 
 - **Input**: Gerber `.zip` (copper, mask, silkscreen, outline, drills, etc.)

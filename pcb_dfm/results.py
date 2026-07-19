@@ -62,6 +62,9 @@ class ViolationLocation(BaseModel):
     height_mm: Optional[float] = None
     net: Optional[str] = None
     component: Optional[str] = None
+    # Free-form annotation carried through from checks (previously silently
+    # dropped because the field did not exist on the model).
+    notes: Optional[str] = None
 
 
 class Violation(BaseModel):
@@ -95,23 +98,75 @@ class MetricResult(BaseModel):
         return data
 
     @staticmethod
-    def geometry_mm(measured_mm: float,
+    def geometry_mm(measured_mm: Optional[float],
                     target_mm: Optional[float] = None,
                     limit_low_mm: Optional[float] = None,
                     limit_high_mm: Optional[float] = None) -> "MetricResult":
+        # A None measurement is legitimate: it means "could not measure"
+        # (e.g. no copper present). Previously this raised TypeError via
+        # float(None) and the caller's not-applicable branch crashed.
         m = MetricResult(
             kind="geometry",
             units="mm",
-            measured_value=float(measured_mm),
+            measured_value=None if measured_mm is None else float(measured_mm),
             target=None if target_mm is None else float(target_mm),
             limit_low=None if limit_low_mm is None else float(limit_low_mm),
             limit_high=None if limit_high_mm is None else float(limit_high_mm),
         )
-        # Compute margin if a bound exists
-        if m.limit_low is not None:
+        # Compute margin only when we have both a measurement and a bound.
+        if m.measured_value is not None:
+            if m.limit_low is not None:
+                m.margin_to_limit = float(m.measured_value) - m.limit_low
+            elif m.limit_high is not None:
+                m.margin_to_limit = m.limit_high - float(m.measured_value)
+        return m
+
+    @staticmethod
+    def dimensionless(measured: Optional[float],
+                      target: Optional[float] = None,
+                      limit_low: Optional[float] = None,
+                      limit_high: Optional[float] = None) -> "MetricResult":
+        """
+        A unit-less metric (e.g. an aspect ratio like 8:1).
+
+        Uses kind=None so the geometry/ratio unit validators do not apply,
+        and labels the units ":1" so reports do not render a ratio as "%".
+        """
+        m = MetricResult(
+            kind="dimensionless",
+            units=":1",
+            measured_value=None if measured is None else float(measured),
+            target=None if target is None else float(target),
+            limit_low=None if limit_low is None else float(limit_low),
+            limit_high=None if limit_high is None else float(limit_high),
+        )
+        if m.measured_value is not None:
+            if m.limit_high is not None:
+                m.margin_to_limit = m.limit_high - float(m.measured_value)
+            elif m.limit_low is not None:
+                m.margin_to_limit = float(m.measured_value) - m.limit_low
+        return m
+
+    @staticmethod
+    def ratio_min_percent(measured_pct: Optional[float],
+                          target_pct: Optional[float] = None,
+                          limit_low_pct: Optional[float] = None) -> "MetricResult":
+        """
+        A percentage metric where higher is better and the bound is a
+        *minimum* (e.g. via tenting coverage). margin = measured - limit_low,
+        so a well-tented board gets a positive margin instead of the
+        inverted negative value produced by stuffing a minimum into limit_high.
+        """
+        m = MetricResult(
+            kind="ratio",
+            units="%",
+            measured_value=None if measured_pct is None else float(measured_pct),
+            target=None if target_pct is None else float(target_pct),
+            limit_low=None if limit_low_pct is None else float(limit_low_pct),
+            limit_high=None,
+        )
+        if m.limit_low is not None and m.measured_value is not None:
             m.margin_to_limit = float(m.measured_value) - m.limit_low
-        elif m.limit_high is not None:
-            m.margin_to_limit = m.limit_high - float(m.measured_value)
         return m
 
     @staticmethod
@@ -159,6 +214,9 @@ class CheckResult(BaseModel):
     score: Optional[float] = Field(default=None, ge=0, le=100)
     metric: Optional[MetricResult] = None
     violations: List[Violation] = Field(default_factory=list)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return self.model_dump()
 
     def finalize(self) -> "CheckResult":
         # ENFORCED: Always recompute severity, ignore any manual assignment

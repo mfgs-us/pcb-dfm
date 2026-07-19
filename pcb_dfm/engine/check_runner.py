@@ -2,13 +2,20 @@ from __future__ import annotations
 
 from pathlib import Path
 from typing import Callable, Dict, Iterable
+import sys
 import time
+
+
+def _log(msg: str) -> None:
+    # Diagnostics go to stderr so stdout stays clean for machine-readable
+    # output (e.g. the CLI emitting JSON).
+    print(msg, file=sys.stderr)
 
 from ..checks import _ensure_impls_loaded
 from ..checks.definitions import CheckDefinition
 from ..ingest import ingest_gerber_zip
 from ..geometry import build_board_geometry
-from ..results import CheckResult
+from ..results import CheckResult, Violation
 from .context import CheckContext
 from .geometry_cache import GeometryCache
 
@@ -75,10 +82,18 @@ def run_single_check(
     result = runner(ctx)
     t_run = time.perf_counter() - t1
 
-    print(
+    _log(
         f"[DFM TIMING] {check_def.id:<40} "
         f"setup={t_setup:6.3f}s  run={t_run:6.3f}s  total={t_setup + t_run:6.3f}s"
     )
+
+    # Enforce the same invariants as the batch runner (severity/score
+    # consistency). Previously only run_checks() finalized, so this path
+    # could emit contradictions like status="pass" with severity="error".
+    if isinstance(result, dict):
+        result = CheckResult(**result)
+    if isinstance(result, CheckResult):
+        result = result.finalize()
 
     return result
 
@@ -125,7 +140,7 @@ def run_checks(
 
     cache = GeometryCache()
 
-    print(f"[DFM TIMING] shared setup (ingest+geometry): {setup_time:.3f}s")
+    _log(f"[DFM TIMING] shared setup (ingest+geometry): {setup_time:.3f}s")
 
     results: list[CheckResult] = []
 
@@ -140,25 +155,50 @@ def run_checks(
             gerber_zip=gerber_zip,
         )
 
-        runner = get_check_runner(check_def.id)
+        # A check with no registered implementation is genuinely
+        # "not applicable" (it was never wired up) -- but it must NOT abort
+        # the whole batch, which the previous unguarded get_check_runner()
+        # call did via an uncaught KeyError.
+        try:
+            runner = get_check_runner(check_def.id)
+        except KeyError:
+            _log(
+                f"[DFM TIMING] {check_def.id:<40} "
+                f"SKIPPED: no registered implementation"
+            )
+            results.append(CheckResult(
+                check_id=check_def.id,
+                category_id=check_def.category_id,
+                status="not_applicable",
+                severity="info",
+                score=None,
+            ).finalize())
+            continue
 
         t1 = time.perf_counter()
         try:
             result = runner(ctx)
         except Exception as exc:
             t_run = time.perf_counter() - t1
-            print(
+            _log(
                 f"[DFM TIMING] {check_def.id:<40} "
                 f"run={t_run:6.3f}s  ERROR: {exc}"
             )
-            # Return a not_applicable result so the caller gets all check
-            # results even when one check throws an unexpected exception.
+            # A crash is NOT a pass. For a manufacturing gate, silently
+            # returning not_applicable/100 here would hide real defects on
+            # exactly the boards a check crashes on. Surface it as a failed
+            # check with an error violation so it is visible and scores 0.
             results.append(CheckResult(
                 check_id=check_def.id,
-                status="not_applicable",
-                severity="info",
-                score=100.0,
-            ))
+                category_id=check_def.category_id,
+                status="fail",
+                severity="error",
+                score=0.0,
+                violations=[Violation(
+                    message=f"Check crashed: {type(exc).__name__}: {exc}",
+                    severity="error",
+                )],
+            ).finalize())
             continue
         t_run = time.perf_counter() - t1
 
@@ -171,7 +211,7 @@ def run_checks(
             # Always finalize to enforce invariants
             result = result.finalize()
 
-        print(
+        _log(
             f"[DFM TIMING] {check_def.id:<40} "
             f"run={t_run:6.3f}s"
         )

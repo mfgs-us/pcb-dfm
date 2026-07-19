@@ -63,7 +63,22 @@ def _default_checks_dir() -> Path:
 
 
 
-def load_check_definition(path: Path) -> CheckDefinition:
+def load_check_definition(path: "Path | str") -> CheckDefinition:
+    """
+    Load a check definition by either a JSON file path or a built-in check id.
+
+    Passing a bare string that is not an existing file path is treated as a
+    check id and resolved against the installed check definitions (this is what
+    the README examples and the CLI rely on).
+    """
+    # A string that is not an existing file is treated as a check id.
+    if isinstance(path, str) and not Path(path).exists():
+        for d in load_all_check_definitions():
+            if d.id == path:
+                return d
+        raise KeyError(f"Unknown check id: {path!r}")
+
+    path = Path(path)
     data = json.loads(path.read_text())
     # If JSON does not have id, fall back to filename stem
     if "id" not in data:

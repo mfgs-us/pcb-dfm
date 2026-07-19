@@ -1,0 +1,22 @@
+{
+  "schema_version": "1.0.0",
+  "metadata": {
+    "name": "Conservative 2-layer",
+    "version": "1.0.0",
+    "organization": "MFGS",
+    "process_notes": "Illustrative economy 2-layer capability window (~5-6 mil trace/space, 0.2 mm min drill). High-speed SI checks are disabled because economy processes do not offer controlled-impedance service. Numbers are starting defaults to be tuned against a specific fab datasheet."
+  },
+  "extends": "default",
+  "disabled_categories": ["high_speed_si"],
+  "overrides": {
+    "min_trace_width":  { "limits": { "recommended_min": 0.152, "absolute_min": 0.127 } },
+    "min_trace_spacing":{ "limits": { "recommended_min": 0.152, "absolute_min": 0.127 } },
+    "min_drill_size":   { "limits": { "recommended_min": 0.30, "absolute_min": 0.20 } },
+    "min_annular_ring": { "limits": { "recommended_min": 0.15, "absolute_min": 0.13 } },
+    "drill_aspect_ratio": { "limits": { "recommended_max": 6.0, "absolute_max": 8.0 } },
+    "via_to_copper_clearance": { "limits": { "recommended_min": 0.20, "absolute_min": 0.13 } }
+  },
+  "policy": {
+    "fab_clips_silkscreen": true
+  }
+}

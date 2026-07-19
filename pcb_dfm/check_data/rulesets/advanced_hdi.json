@@ -1,0 +1,21 @@
+{
+  "schema_version": "1.0.0",
+  "metadata": {
+    "name": "Advanced HDI",
+    "version": "1.0.0",
+    "organization": "MFGS",
+    "process_notes": "Illustrative fine-line HDI capability window (laser microvias, ~3 mil trace/space). Numbers are starting defaults to be tuned against a specific fab datasheet, not a manufacturer guarantee."
+  },
+  "extends": "default",
+  "overrides": {
+    "min_trace_width":  { "limits": { "recommended_min": 0.10, "absolute_min": 0.075 } },
+    "min_trace_spacing":{ "limits": { "recommended_min": 0.10, "absolute_min": 0.075 } },
+    "min_drill_size":   { "limits": { "recommended_min": 0.15, "absolute_min": 0.10 } },
+    "min_annular_ring": { "limits": { "recommended_min": 0.075, "absolute_min": 0.05 } },
+    "drill_aspect_ratio": { "limits": { "recommended_max": 10.0, "absolute_max": 12.0 } },
+    "via_to_copper_clearance": { "limits": { "recommended_min": 0.125, "absolute_min": 0.075 } }
+  },
+  "policy": {
+    "strict_plating_mode": true
+  }
+}

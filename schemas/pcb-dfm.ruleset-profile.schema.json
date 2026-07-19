@@ -1,0 +1,50 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://mfgs.org/schemas/pcb-dfm/ruleset-profile.schema.json",
+  "title": "pcb-dfm Fab Capability Profile (ruleset)",
+  "description": "A named fab capability profile that selects checks and overrides their thresholds/policy. Lives at pcb_dfm/check_data/rulesets/<id>.json and is applied by load_check_definitions_for_ruleset.",
+  "type": "object",
+  "required": ["schema_version", "metadata"],
+  "properties": {
+    "schema_version": { "type": "string" },
+    "metadata": {
+      "type": "object",
+      "required": ["name", "version"],
+      "properties": {
+        "name": { "type": "string" },
+        "version": { "type": "string" },
+        "organization": { "type": "string" },
+        "process_notes": { "type": "string" }
+      },
+      "additionalProperties": true
+    },
+    "extends": {
+      "type": "string",
+      "description": "Id of a base profile to inherit from (overrides/policy deep-merged, disabled lists unioned)."
+    },
+    "enabled_checks": {
+      "type": ["array", "null"],
+      "description": "Whitelist of check ids; null means all checks (minus disabled).",
+      "items": { "type": "string" }
+    },
+    "disabled_checks": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "disabled_categories": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "overrides": {
+      "type": "object",
+      "description": "Map of check_id -> partial check JSON, deep-merged onto the base check definition (e.g. inject a top-level `limits` block).",
+      "additionalProperties": { "type": "object" }
+    },
+    "policy": {
+      "type": "object",
+      "description": "Global flags injected into every check's config (e.g. strict_plating_mode, fab_clips_silkscreen).",
+      "additionalProperties": true
+    }
+  },
+  "additionalProperties": false
+}

@@ -51,6 +51,16 @@ pcb-dfm list-checks
 3. Register it by adding an import in `pcb_dfm/checks/__init__.py`
    (`_ensure_impls_loaded`).
 
+## Adding a fab capability profile (ruleset)
+
+Drop a `pcb_dfm/check_data/rulesets/<id>.json` (schema:
+`schemas/pcb-dfm.ruleset-profile.schema.json`). It can select checks
+(`enabled_checks`/`disabled_checks`/`disabled_categories`), override any check
+via `overrides: { <check_id>: <partial check JSON> }` (deep-merged — typically a
+top-level `limits` block, since the capability checks read
+`check_def.limits.{recommended,absolute}_{min,max}`), set global `policy` flags,
+and inherit via `extends`. Run it with `pcb-dfm run --ruleset <id>`.
+
 ### Rules of the road for checks
 
 - **Never fabricate a measurement.** If the data you need isn't present

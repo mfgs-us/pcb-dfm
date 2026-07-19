@@ -1,0 +1,14 @@
+{
+  "schema_version": "1.0.0",
+  "metadata": {
+    "name": "Default",
+    "version": "1.0.0",
+    "organization": "MFGS",
+    "process_notes": "Baseline profile: every check enabled with the engine's built-in default thresholds. Serves as the base for `extends` and as back-compatible behavior."
+  },
+  "enabled_checks": null,
+  "disabled_checks": [],
+  "disabled_categories": [],
+  "overrides": {},
+  "policy": {}
+}

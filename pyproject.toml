@@ -56,7 +56,8 @@ exclude = ["tests*", "scripts*", "schemas*", "testdata*"]
 # These JSON rule files get installed WITH the package
 pcb_dfm = [
   "check_data/checks/*.json",
-  "check_data/categories.json"
+  "check_data/categories.json",
+  "check_data/rulesets/*.json"
 ]
 
 # -------------------------------------------------------

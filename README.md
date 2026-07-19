@@ -340,6 +340,39 @@ pcb-dfm list-checks                                    # list every check id
 Diagnostic `[DFM TIMING]` lines are written to stderr, so `stdout` stays clean
 for JSON piping.
 
+### Fab capability profiles (rulesets)
+
+The same board is manufacturable at one fab and not another, so thresholds are
+not universal. A **ruleset** is a named fab capability profile that both selects
+which checks run and overrides their thresholds/policy:
+
+```bash
+pcb-dfm list-rulesets                                 # available profiles
+pcb-dfm run testdata/mini_board.zip --ruleset advanced_hdi
+pcb-dfm run testdata/mini_board.zip --ruleset conservative_2layer
+pcb-dfm check board.zip min_trace_width --ruleset conservative_2layer
+```
+
+Starter profiles ship in `pcb_dfm/check_data/rulesets/`:
+
+- **`default`** — every check, built-in default thresholds (back-compatible).
+- **`advanced_hdi`** — fine-line HDI window (~3 mil trace/space, laser vias).
+- **`conservative_2layer`** — economy 2-layer window (~5–6 mil, 0.2 mm drill);
+  disables the high-speed SI category (no controlled-impedance service).
+
+A profile (schema: `schemas/pcb-dfm.ruleset-profile.schema.json`) can:
+
+- **select** checks — `enabled_checks` (whitelist), `disabled_checks`,
+  `disabled_categories`;
+- **override** any check — `overrides: { <check_id>: <partial check JSON> }`,
+  deep-merged onto the base (e.g. inject a top-level `limits` block);
+- set global **policy** flags injected into every check
+  (`strict_plating_mode`, `fab_clips_silkscreen`, …);
+- inherit via **`extends`**.
+
+The shipped thresholds are illustrative starting points — tune them against a
+specific fab's datasheet.
+
 ### Design data (stackup / netlist)
 
 Some checks need information bare Gerbers don't carry — the layer stackup and

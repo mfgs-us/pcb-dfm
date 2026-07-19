@@ -45,10 +45,21 @@ def _cmd_run(args: argparse.Namespace) -> int:
 
 
 def _cmd_check(args: argparse.Namespace) -> int:
-    from ..checks.definitions import load_check_definition
+    from ..checks.definitions import (
+        load_check_definition,
+        load_check_definitions_for_ruleset,
+    )
     from ..engine.check_runner import run_single_check
 
-    check_def = load_check_definition(args.check_id)
+    # Honor ruleset threshold overrides for the single check, if any.
+    check_def = None
+    if args.ruleset and args.ruleset != "default":
+        for d in load_check_definitions_for_ruleset(args.ruleset):
+            if d.id == args.check_id:
+                check_def = d
+                break
+    if check_def is None:
+        check_def = load_check_definition(args.check_id)
     result = run_single_check(
         gerber_zip=Path(args.gerber_zip),
         check_def=check_def,
@@ -61,10 +72,32 @@ def _cmd_check(args: argparse.Namespace) -> int:
 
 
 def _cmd_list_checks(args: argparse.Namespace) -> int:
-    from ..checks.definitions import load_all_check_definitions
+    from ..checks.definitions import (
+        load_all_check_definitions,
+        load_check_definitions_for_ruleset,
+    )
 
-    for d in load_all_check_definitions():
+    defs = (load_check_definitions_for_ruleset(args.ruleset)
+            if args.ruleset and args.ruleset != "default"
+            else load_all_check_definitions())
+    for d in defs:
         print(f"{d.id:<40} [{d.category_id}] {d.name}")
+    return 0
+
+
+def _cmd_list_rulesets(args: argparse.Namespace) -> int:
+    from ..checks.definitions import _load_ruleset_profile, list_ruleset_ids
+
+    for rid in list_ruleset_ids():
+        try:
+            meta = _load_ruleset_profile(rid).get("metadata", {})
+        except Exception:
+            meta = {}
+        name = meta.get("name", rid)
+        notes = meta.get("process_notes", "")
+        print(f"{rid:<22} {name}")
+        if notes:
+            print(f"{'':<22} {notes}")
     return 0
 
 
@@ -91,8 +124,13 @@ def build_parser() -> argparse.ArgumentParser:
                          help="optional JSON sidecar with stackup / controlled-impedance info")
     p_check.set_defaults(func=_cmd_check)
 
-    p_list = sub.add_parser("list-checks", help="List all available check ids")
+    p_list = sub.add_parser("list-checks", help="List available check ids")
+    p_list.add_argument("--ruleset", default="default",
+                        help="show the checks a ruleset selects")
     p_list.set_defaults(func=_cmd_list_checks)
+
+    p_rs = sub.add_parser("list-rulesets", help="List available fab capability profiles")
+    p_rs.set_defaults(func=_cmd_list_rulesets)
 
     return parser
 

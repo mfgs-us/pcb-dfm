@@ -28,12 +28,11 @@ def run_dielectric_thickness_uniformity(ctx: CheckContext) -> CheckResult:
     target_um = _nested_max(metric_cfg, "target", 10.0)
     limit_um = _nested_max(metric_cfg, "limits", 25.0)
 
-    dd = ctx.design_data or {}
-    stackup = dd.get("stackup") or {}
-    layers = stackup.get("dielectric_layers_mm")
+    dd = ctx.design_data
+    stackup = dd.stackup if dd is not None else None
+    thicknesses = stackup.dielectric_thicknesses_mm() if stackup is not None else []
 
-    usable = [float(x) for x in layers if isinstance(x, (int, float)) and x > 0] \
-        if isinstance(layers, list) else []
+    usable = [float(x) for x in thicknesses if x > 0]
 
     if len(usable) < 2:
         return CheckResult(

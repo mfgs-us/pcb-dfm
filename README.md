@@ -340,6 +340,34 @@ pcb-dfm list-checks                                    # list every check id
 Diagnostic `[DFM TIMING]` lines are written to stderr, so `stdout` stays clean
 for JSON piping.
 
+### Design data (stackup / netlist)
+
+Some checks need information bare Gerbers don't carry — the layer stackup and
+which features belong to which net. Supply it with `--design-data` and those
+checks compute real results instead of reporting `not_applicable`:
+
+```bash
+pcb-dfm run testdata/mini_board.zip --design-data board.ipc2581.xml   # IPC-2581
+pcb-dfm check testdata/mini_board.zip diff_pair_skew --design-data design.json
+```
+
+Two input formats are supported, both mapped onto one internal `DesignData`
+model (`pcb_dfm/ingest/design_model.py`) so checks are format-agnostic:
+
+- **IPC-2581** (`.xml`) — a documented subset: stackup layers (thickness + Er),
+  logical nets, per-net routed length, controlled-impedance hints, and diff
+  pairs (explicit or inferred from `_P`/`_N` naming). See
+  `testdata/sample_design.xml`.
+- **JSON sidecar** — a lightweight shape documented in
+  `pcb_dfm/ingest/adapters/sidecar.py`.
+
+This powers `impedance_control` (microstrip Z0 estimate), `diff_pair_skew`
+(per-net length skew), and `dielectric_thickness_uniformity`. An **ODB++**
+adapter is the planned next format; net-aware checks that also need geometry
+correlation (`diff_pair_spacing`, `return_path_interruptions`) build on the same
+model. When no design data is supplied, these checks are honestly
+`not_applicable`.
+
 1. Place your Gerber archive in the repository root:
    ```
    pcb-dfm/

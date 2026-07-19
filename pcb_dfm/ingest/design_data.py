@@ -1,31 +1,17 @@
 """
-Optional design-data sidecar: stackup / controlled-impedance / net information
-that cannot be recovered from bare Gerber artwork.
+Design-data loading: normalize any supported input into the internal
+``DesignData`` model.
 
-Bare Gerbers carry no connectivity or layer-stack information, so a whole tier
-of DFM checks (controlled impedance, dielectric uniformity, differential pairs,
-return paths) can only be *estimated* or must report ``not_applicable``. When
-the user supplies a small JSON sidecar describing the stackup and the
-controlled nets, those checks can compute real results.
+Supported sources (see also ``pcb_dfm.ingest.adapters``):
+  * ``None``                      -> None
+  * a ``DesignData`` instance     -> returned as-is
+  * a ``dict``                    -> JSON sidecar shape (adapters.sidecar)
+  * a path to ``*.json``          -> parsed then treated as the sidecar shape
+  * a path to IPC-2581 XML        -> adapters.ipc2581
+  * a path to ODB++               -> not yet implemented (planned adapter)
 
-This is intentionally a lightweight, tool-agnostic interchange format — a
-stepping stone toward full IPC-2581 / ODB++ ingestion, not a replacement for it.
-
-Expected shape (all keys optional; checks degrade to not_applicable if the
-piece they need is absent)::
-
-    {
-      "stackup": {
-        "er": 4.3,                         # dielectric constant
-        "dielectric_thickness_mm": 0.20,   # substrate height under the layer
-        "copper_thickness_mm": 0.035,      # finished copper (1oz ~= 0.035mm)
-        "dielectric_layers_mm": [0.10, 0.20, 0.20, 0.10]  # per-prepreg/core
-      },
-      "controlled_impedance": [
-        {"name": "USB_D+", "width_mm": 0.20, "target_ohm": 90, "tolerance_pct": 10},
-        {"name": "CLK",    "width_mm": 0.18, "target_ohm": 50, "tolerance_pct": 10}
-      ]
-    }
+Bare Gerbers carry no connectivity or stackup, so this is how the impedance,
+dielectric-uniformity, and differential-pair checks obtain the data they need.
 """
 
 from __future__ import annotations
@@ -34,25 +20,34 @@ import json
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
-DesignDataLike = Union[Dict[str, Any], str, Path, None]
+from .adapters import from_ipc2581, from_sidecar, looks_like_ipc2581
+from .design_model import DesignData
+
+DesignDataLike = Union[DesignData, Dict[str, Any], str, Path, None]
 
 
-def load_design_data(source: DesignDataLike) -> Optional[Dict[str, Any]]:
-    """
-    Normalize a design-data input to a dict (or None).
-
-    Accepts an already-parsed dict, a path to a JSON file, or None. Raises
-    ValueError if a provided path does not exist or does not parse to an object.
-    """
+def load_design_data(source: DesignDataLike) -> Optional[DesignData]:
     if source is None:
         return None
-    if isinstance(source, dict):
+    if isinstance(source, DesignData):
         return source
+    if isinstance(source, dict):
+        return from_sidecar(source)
 
     path = Path(source)
     if not path.exists():
         raise ValueError(f"design-data file not found: {path}")
-    data = json.loads(path.read_text(encoding="utf-8"))
-    if not isinstance(data, dict):
-        raise ValueError("design-data JSON must be an object at the top level")
-    return data
+
+    if looks_like_ipc2581(path):
+        return from_ipc2581(path)
+
+    if path.suffix.lower() == ".json":
+        data = json.loads(path.read_text(encoding="utf-8"))
+        if not isinstance(data, dict):
+            raise ValueError("design-data JSON must be an object at the top level")
+        return from_sidecar(data)
+
+    raise ValueError(
+        f"unrecognized design-data source: {path} "
+        f"(expected a .json sidecar or an IPC-2581 .xml file)"
+    )

@@ -51,18 +51,19 @@ def run_impedance_control(ctx: CheckContext) -> CheckResult:
     target_dev_pct = _nested_max(metric_cfg, "target", 8.0)
     limit_dev_pct = _nested_max(metric_cfg, "limits", 10.0)
 
-    dd = ctx.design_data or {}
-    stackup = dd.get("stackup") or {}
-    controlled = dd.get("controlled_impedance") or []
+    dd = ctx.design_data
+    stackup = dd.stackup if dd is not None else None
+    controlled = dd.controlled_impedance if dd is not None else []
 
-    er = stackup.get("er")
-    h_mm = stackup.get("dielectric_thickness_mm")
-    t_mm = stackup.get("copper_thickness_mm", 0.035)
+    er = stackup.er if stackup is not None else None
+    h_mm = stackup.dielectric_thickness_mm if stackup is not None else None
+    t_mm = (stackup.copper_thickness_mm if stackup is not None else None)
+    if t_mm is None:
+        t_mm = 0.035  # default 1oz finished copper
 
     have_inputs = (
         isinstance(er, (int, float))
         and isinstance(h_mm, (int, float))
-        and isinstance(controlled, list)
         and len(controlled) > 0
     )
 
@@ -88,12 +89,12 @@ def run_impedance_control(ctx: CheckContext) -> CheckResult:
 
     violations = []
     worst_dev_pct = 0.0
-    for net in controlled:
-        name = str(net.get("name", "?"))
-        w_mm = net.get("width_mm")
-        target_ohm = net.get("target_ohm")
-        tol_pct = float(net.get("tolerance_pct", limit_dev_pct))
-        if not isinstance(w_mm, (int, float)) or not isinstance(target_ohm, (int, float)):
+    for spec in controlled:
+        name = spec.name
+        w_mm = spec.width_mm
+        target_ohm = spec.target_ohm
+        tol_pct = spec.tolerance_pct
+        if not isinstance(w_mm, (int, float)):
             continue
         try:
             z0 = _microstrip_z0(float(er), float(h_mm), float(w_mm), float(t_mm))

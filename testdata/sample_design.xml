@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  Minimal IPC-2581B design-data fixture for pcb-dfm tests. Exercises the
+  documented subset parsed by pcb_dfm/ingest/adapters/ipc2581.py:
+    - a 2-copper / 2-dielectric stackup (thickness in mm + dielectric constant)
+    - logical nets, one carrying a controlled-impedance hint (RF)
+    - routed Line geometry per net (CLK_P vs CLK_N differ in length -> skew)
+  CLK_P routed length = 20.0 mm, CLK_N = 21.2 mm  ->  skew 1.2 mm (fail).
+-->
+<IPC-2581 xmlns="http://webstds.ipc.org/2581" revision="B">
+  <Ecad name="board">
+    <CadData>
+      <Layer name="TOP"  layerFunction="CONDUCTOR"/>
+      <Layer name="DIE1" layerFunction="DIELECTRIC"/>
+      <Layer name="L2"   layerFunction="CONDUCTOR"/>
+      <Layer name="DIE2" layerFunction="DIELECTRIC"/>
+
+      <Stackup name="stk" overallThickness="0.470">
+        <StackupGroup name="grp">
+          <StackupLayer layerOrGroupRef="TOP"  thickness="0.035"/>
+          <StackupLayer layerOrGroupRef="DIE1" thickness="0.200" dielectricConstant="4.3"/>
+          <StackupLayer layerOrGroupRef="L2"   thickness="0.035"/>
+          <StackupLayer layerOrGroupRef="DIE2" thickness="0.200" dielectricConstant="4.3"/>
+        </StackupGroup>
+      </Stackup>
+
+      <Step name="board">
+        <LogicalNet name="CLK_P"/>
+        <LogicalNet name="CLK_N"/>
+        <LogicalNet name="RF" targetImpedanceOhm="50" traceWidthMm="0.20" tolerancePct="10"/>
+
+        <LayerFeature layerRef="TOP">
+          <Set net="CLK_P">
+            <Features><Line startX="0" startY="0" endX="20.0" endY="0"/></Features>
+          </Set>
+          <Set net="CLK_N">
+            <Features><Line startX="0" startY="1" endX="21.2" endY="1"/></Features>
+          </Set>
+          <Set net="RF">
+            <Features><Line startX="0" startY="5" endX="10.0" endY="5"/></Features>
+          </Set>
+        </LayerFeature>
+      </Step>
+    </CadData>
+  </Ecad>
+</IPC-2581>

@@ -4,11 +4,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Any, Dict, Optional
+from typing import Optional
 
 from ..checks.definitions import CheckDefinition
 from ..geometry import BoardGeometry
 from ..ingest import GerberIngestResult
+from ..ingest.design_model import DesignData
 from .geometry_cache import GeometryCache
 
 
@@ -32,4 +33,4 @@ class CheckContext:
     ruleset_id: str
     design_id: str
     gerber_zip: Path
-    design_data: Optional[Dict[str, Any]] = None
+    design_data: Optional[DesignData] = None

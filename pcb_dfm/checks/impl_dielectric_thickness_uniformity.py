@@ -1,53 +1,94 @@
 from __future__ import annotations
 
-from ..engine.context import CheckContext
 from ..engine.check_runner import register_check
-from ..results import CheckResult, Violation, MetricResult
+from ..engine.context import CheckContext
+from ..results import CheckResult, MetricResult, Violation
+
+
+def _nested_max(metric_cfg: dict, key: str, default: float) -> float:
+    node = metric_cfg.get(key)
+    if isinstance(node, dict) and isinstance(node.get("max"), (int, float)):
+        return float(node["max"])
+    if isinstance(node, (int, float)):
+        return float(node)
+    return default
 
 
 @register_check("dielectric_thickness_uniformity")
 def run_dielectric_thickness_uniformity(ctx: CheckContext) -> CheckResult:
     """
-    Placeholder / informational implementation.
+    Dielectric thickness uniformity.
 
-    True dielectric thickness uniformity requires stackup and process data:
-      - per-layer dielectric thicknesses
-      - material properties
-      - fabrication process tolerances
-
-    With ONLY a Gerber zip (no IPC-2581 / stackup JSON / fab spec), we cannot
-    compute a physically meaningful uniformity metric.
+    Requires per-layer dielectric thicknesses, which bare Gerbers do not carry.
+    When a design-data sidecar supplies ``stackup.dielectric_layers_mm`` we
+    compute the maximum deviation from the mean thickness (in microns) and
+    compare against the configured target/limit. Otherwise not_applicable.
     """
     metric_cfg = ctx.check_def.metric or {}
-    units = metric_cfg.get("units", metric_cfg.get("unit", "%"))
+    target_um = _nested_max(metric_cfg, "target", 10.0)
+    limit_um = _nested_max(metric_cfg, "limits", 25.0)
 
-    viol = Violation(
-        severity="info",
-        message=(
-            "Dielectric thickness uniformity cannot be evaluated from Gerbers "
-            "alone. Provide stackup / fabrication data (e.g. IPC-2581 or a "
-            "separate stackup JSON) to enable this check."
-        ),
-        location=None,
-    )
+    dd = ctx.design_data or {}
+    stackup = dd.get("stackup") or {}
+    layers = stackup.get("dielectric_layers_mm")
 
-    # We mark this as a warning-level status but info severity, so it shows up
-    # without tanking the overall score.
+    usable = [float(x) for x in layers if isinstance(x, (int, float)) and x > 0] \
+        if isinstance(layers, list) else []
+
+    if len(usable) < 2:
+        return CheckResult(
+            check_id=ctx.check_def.id,
+            name=ctx.check_def.name,
+            category_id=ctx.check_def.category_id,
+            status="not_applicable",
+            severity="info",
+            score=None,
+            metric=MetricResult(kind="distance", units="um", measured_value=None),
+            violations=[Violation(
+                message=(
+                    "Dielectric thickness uniformity cannot be evaluated from "
+                    "Gerbers alone. Provide a design-data sidecar with "
+                    "'stackup.dielectric_layers_mm' (>= 2 layers) to enable it."
+                ),
+                severity="info",
+            )],
+        )
+
+    mean = sum(usable) / len(usable)
+    max_dev_um = max(abs(x - mean) for x in usable) * 1000.0  # mm -> um
+
+    if max_dev_um > limit_um:
+        status = "fail"
+    elif max_dev_um > target_um:
+        status = "warning"
+    else:
+        status = "pass"
+
+    violations = []
+    if status != "pass":
+        violations.append(Violation(
+            message=(
+                f"Dielectric thickness deviates up to {max_dev_um:.1f} um from "
+                f"the {mean * 1000.0:.1f} um mean (target <= {target_um:.0f} um, "
+                f"absolute <= {limit_um:.0f} um)."
+            ),
+            severity=ctx.check_def.severity,
+        ))
+
     return CheckResult(
         check_id=ctx.check_def.id,
         name=ctx.check_def.name,
         category_id=ctx.check_def.category_id,
-        status="warning",
-        severity="info",  # Default value, will be overridden by finalize()
-        score=80.0,
+        status=status,
+        severity="info",
+        score=None,
         metric=MetricResult(
-            kind="ratio",
-            units="%",
-            measured_value=None,
-            target=None,
-            limit_low=None,
-            limit_high=None,
-            margin_to_limit=None,
+            kind="distance",
+            units="um",
+            measured_value=max_dev_um,
+            target=target_um,
+            limit_high=limit_um,
+            margin_to_limit=limit_um - max_dev_um,
         ),
-        violations=[viol],
+        violations=violations,
     ).finalize()

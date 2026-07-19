@@ -2,39 +2,28 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
-from pathlib import Path
-from typing import Dict, Tuple, List, Optional
+import logging
 import math
 import re
-import sys
-import builtins
 import warnings
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Dict, List, Optional, Tuple
 
 from ..ingest import GerberIngestResult
-from .layer_model import BoardLayer, BoardGeometry
+from .layer_model import BoardGeometry, BoardLayer
 from .primitives import Point2D, Polygon
 
-# ---------------------------------
-# Fix for pcb-tools using "rU" mode
-# ---------------------------------
-_builtin_open = open  # type: ignore[assignment]
-
-
-def fixed_open(filename, mode="r", *args, **kwargs):
-    if mode == "rU":
-        mode = "r"
-    return _builtin_open(filename, mode, *args, **kwargs)
-
-
-builtins.open = fixed_open
+# The legacy pcb-tools "rU" open-mode shim is applied by the engine around the
+# execution window (see pcb_dfm.geometry.gerber_compat.rU_open_shim), not
+# globally at import time. gerber.read() below therefore runs inside that shim.
 
 # ---------------------------------
 # Try to use pcb-tools (gerber)
 # ---------------------------------
 try:
     import gerber
-    from gerber.primitives import Circle, Rectangle, Line  # type: ignore
+    from gerber.primitives import Circle, Line, Rectangle  # type: ignore
 except Exception:
     gerber = None
     Circle = Rectangle = Line = object  # type: ignore
@@ -98,7 +87,7 @@ def build_board_geometry(ingest: GerberIngestResult) -> BoardGeometry:
             "pass vacuously. Only the naive outline fallback is available."
         )
         warnings.warn(msg, RuntimeWarning, stacklevel=2)
-        print(f"WARNING: {msg}", file=sys.stderr)
+        logging.getLogger("pcb_dfm.geometry").warning("%s", msg)
 
     # Fallback: ensure outline has at least one polygon
     for layer in geom.layers:
@@ -321,7 +310,7 @@ def _line_to_polygon_mm(prim: object) -> Optional[Polygon]:
 def _populate_outline_polygons_fallback(layer: BoardLayer) -> None:
     """
     4C) Improved fallback outline polygon extraction with selective parsing.
-    
+
     Only fallback parse if the file name strongly indicates outline,
     and only take coordinates from draw commands (D01) to avoid non-outline moves.
     """
@@ -329,7 +318,7 @@ def _populate_outline_polygons_fallback(layer: BoardLayer) -> None:
         # Only use fallback for files that strongly indicate outline content
         if not _is_strong_outline_candidate(f.path, f.original_name):
             continue
-            
+
         polys = _extract_outline_polygons_from_file_fallback(f.path)
         layer.polygons.extend(polys)
 
@@ -337,31 +326,31 @@ def _populate_outline_polygons_fallback(layer: BoardLayer) -> None:
 def _is_strong_outline_candidate(path: Path, original_name: str) -> bool:
     """
     Check if file is a strong outline candidate for fallback parsing.
-    
+
     This prevents parsing random X/Y coordinates from non-outline Gerbers.
     """
     name_lower = original_name.lower()
     ext = path.suffix.lower()
-    
+
     # Strong outline indicators
     strong_indicators = [
-        "edge_cuts", "edgecuts", "outline", "boardoutline", 
+        "edge_cuts", "edgecuts", "outline", "boardoutline",
         "board_edge", "board-edge", "profile", "contour"
     ]
-    
+
     # Check for strong indicators in name
     if any(indicator in name_lower for indicator in strong_indicators):
         return True
-    
+
     # Check for outline-specific extensions
     if ext in {".gko", ".gm1", ".gml"}:
         return True
-    
+
     # If it's a generic .gbr, be more cautious
     if ext == ".gbr":
         # Only proceed if there's at least one strong indicator
         return any(indicator in name_lower for indicator in strong_indicators)
-    
+
     return False
 
 

@@ -3,12 +3,12 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-
 from pathlib import Path
+from typing import Any, Dict, Optional
 
 from ..checks.definitions import CheckDefinition
-from ..ingest import GerberIngestResult
 from ..geometry import BoardGeometry
+from ..ingest import GerberIngestResult
 from .geometry_cache import GeometryCache
 
 
@@ -22,6 +22,8 @@ class CheckContext:
       - ingest metadata
       - geometry model
       - identifiers for ruleset and design
+      - optional design_data (stackup / controlled-impedance / net info that is
+        not recoverable from bare Gerbers); None when not supplied
     """
     check_def: CheckDefinition
     ingest: GerberIngestResult
@@ -30,3 +32,4 @@ class CheckContext:
     ruleset_id: str
     design_id: str
     gerber_zip: Path
+    design_data: Optional[Dict[str, Any]] = None

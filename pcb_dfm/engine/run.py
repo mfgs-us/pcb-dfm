@@ -1,20 +1,32 @@
 from __future__ import annotations
 
-from pathlib import Path
-from ..ingest import ingest_gerber_zip
-from ..geometry import build_board_geometry
-from ..checks.definitions import load_check_definitions_for_ruleset
-from .context import CheckContext
-from .check_runner import get_check_runner, run_checks
-from .geometry_cache import GeometryCache
-from ..results import CheckResult, Violation
-from ..results import DfmResult, CategoryResult, SummaryCounts, ResultSummary, RunInfo, RulesetInfo, DesignInfo
 from datetime import datetime
+from pathlib import Path
+
+from ..checks.definitions import load_check_definitions_for_ruleset
+from ..geometry import build_board_geometry
+from ..geometry.gerber_compat import rU_open_shim
+from ..ingest import ingest_gerber_zip
+from ..results import (
+    CategoryResult,
+    CheckResult,
+    DesignInfo,
+    DfmResult,
+    ResultSummary,
+    RulesetInfo,
+    RunInfo,
+    SummaryCounts,
+)
+from .check_runner import get_check_runner, run_checks
+from .context import CheckContext
+from .geometry_cache import GeometryCache
+
 
 def run_dfm_on_gerber_zip(
     gerber_zip: Path,
     ruleset_id: str,
     design_id: str = "board",
+    design_data=None,
 ) -> DfmResult:
     """
     High level entry point:
@@ -30,6 +42,7 @@ def run_dfm_on_gerber_zip(
         check_defs=check_defs,
         ruleset_id=ruleset_id,
         design_id=design_id,
+        design_data=design_data,
     )
     dfm_result = aggregate_check_results(check_results, ruleset_id, design_id, gerber_zip)
     return dfm_result
@@ -39,6 +52,7 @@ def run_dfm_bundle(
     gerber_zip: Path,
     ruleset_id: str = "default",
     design_id: str = "board",
+    design_data=None,
 ) -> dict:
     """
     Run a full DFM pass and return a plain-dict summary suitable for a JSON
@@ -56,12 +70,15 @@ def run_dfm_bundle(
     empty_stats = {"total": 0, "passed": 0, "warnings": 0, "failed": 0}
     try:
         from ..checks import _ensure_impls_loaded
+        from ..ingest.design_data import load_design_data
         _ensure_impls_loaded()
+        design_data = load_design_data(design_data)
 
         check_defs = load_check_definitions_for_ruleset(ruleset_id)
 
-        ingest_result = ingest_gerber_zip(gerber_zip)
-        geom = build_board_geometry(ingest_result)
+        with rU_open_shim():
+            ingest_result = ingest_gerber_zip(gerber_zip)
+            geom = build_board_geometry(ingest_result)
         cache = GeometryCache()
 
         stats = {"total": 0, "passed": 0, "warnings": 0, "failed": 0}
@@ -86,7 +103,8 @@ def run_dfm_bundle(
             )
 
             try:
-                result = runner(ctx)
+                with rU_open_shim():
+                    result = runner(ctx)
             except Exception as exc:
                 # A crash is a failure, never a silent pass.
                 stats["failed"] += 1
@@ -152,17 +170,17 @@ def aggregate_check_results(
     gerber_zip: Path | str | None = None,
 ) -> DfmResult:
     """Aggregate individual CheckResult objects into a DfmResult."""
-    
+
     # Group results by category
     categories: dict[str, list[CheckResult]] = {}
     summary_counts = SummaryCounts()
-    
+
     for result in check_results:
         cat_id = result.category_id or "other"
         if cat_id not in categories:
             categories[cat_id] = []
         categories[cat_id].append(result)
-        
+
         # Count violations by severity
         for violation in result.violations:
             if violation.severity == "info":
@@ -173,7 +191,7 @@ def aggregate_check_results(
                 summary_counts.error += 1
             elif violation.severity == "critical":
                 summary_counts.critical += 1
-    
+
     # Rank so the WORST status wins regardless of iteration order. The old
     # code was last-write-wins, so a warning check after a fail check would
     # downgrade the status back to "warning" while the score stayed 0.
@@ -209,13 +227,13 @@ def aggregate_check_results(
     overall_score = 100.0
 
     for cat in category_results:
-        overall_rank = max(overall_rank, _status_rank.get(cat.status, 0))
+        overall_rank = max(overall_rank, _status_rank.get(cat.status or "pass", 0))
         if cat.status == "fail":
             overall_score = min(overall_score, 0.0)
         elif cat.status == "warning":
             overall_score = min(overall_score, 75.0)
     overall_status = _rank_status[overall_rank]
-    
+
     # Create summary
     summary = ResultSummary(
         overall_score=overall_score,
@@ -223,7 +241,7 @@ def aggregate_check_results(
         violations_total=sum(cat.violations_count for cat in category_results),
         violations_by_severity=summary_counts
     )
-    
+
     # Create DfmResult
     return DfmResult(
         schema_version="1.0.0",

@@ -12,18 +12,20 @@ Examples::
 from __future__ import annotations
 
 import argparse
+import logging
 import sys
 from pathlib import Path
 
 
 def _cmd_run(args: argparse.Namespace) -> int:
     from ..engine.run import run_dfm_on_gerber_zip
-    from ..report import generate_text_report, generate_markdown_report
+    from ..report import generate_markdown_report, generate_text_report
 
     result = run_dfm_on_gerber_zip(
         Path(args.gerber_zip),
         ruleset_id=args.ruleset,
         design_id=args.design_id,
+        design_data=args.design_data,
     )
 
     if args.format == "json":
@@ -52,6 +54,7 @@ def _cmd_check(args: argparse.Namespace) -> int:
         check_def=check_def,
         ruleset_id=args.ruleset,
         design_id=args.design_id,
+        design_data=args.design_data,
     )
     print(result.to_json() if hasattr(result, "to_json") else result.model_dump_json(indent=2))
     return 0
@@ -73,6 +76,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument("gerber_zip")
     p_run.add_argument("--ruleset", default="default")
     p_run.add_argument("--design-id", default="board")
+    p_run.add_argument("--design-data", default=None,
+                       help="optional JSON sidecar with stackup / controlled-impedance info")
     p_run.add_argument("--format", choices=["text", "markdown", "json"], default="text")
     p_run.add_argument("-o", "--output", default=None)
     p_run.set_defaults(func=_cmd_run)
@@ -82,6 +87,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_check.add_argument("check_id")
     p_check.add_argument("--ruleset", default="default")
     p_check.add_argument("--design-id", default="board")
+    p_check.add_argument("--design-data", default=None,
+                         help="optional JSON sidecar with stackup / controlled-impedance info")
     p_check.set_defaults(func=_cmd_check)
 
     p_list = sub.add_parser("list-checks", help="List all available check ids")
@@ -92,7 +99,15 @@ def build_parser() -> argparse.ArgumentParser:
 
 def main(argv: list[str] | None = None) -> int:
     parser = build_parser()
+    parser.add_argument(
+        "-v", "--verbose", action="store_true",
+        help="emit timing/diagnostic logs to stderr",
+    )
     args = parser.parse_args(argv)
+    if getattr(args, "verbose", False):
+        logging.basicConfig(
+            level=logging.INFO, stream=sys.stderr, format="%(message)s"
+        )
     return args.func(args)
 
 

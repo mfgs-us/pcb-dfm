@@ -8,12 +8,12 @@ from typing import Any, Dict, List, Optional, Tuple
 
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
-from ..results import CheckResult, Violation, ViolationLocation, MetricResult
 from ..geometry import queries
+from ..results import CheckResult, MetricResult, Violation, ViolationLocation
 
 try:
     import gerber  # type: ignore
-    from gerber.primitives import Line, Circle, Rectangle  # type: ignore
+    from gerber.primitives import Circle, Line, Rectangle  # type: ignore
 except Exception:
     gerber = None  # type: ignore
     Line = Circle = Rectangle = None  # type: ignore
@@ -403,11 +403,11 @@ def run_silkscreen_on_copper(ctx: CheckContext) -> CheckResult:
 
     # 5A) Silkscreen over copper: default to warning (CAM clipping assumed)
     # Optionally add fab_clips_silkscreen=True profile default
-    
+
     # Check if user has indicated fab clips silkscreen (default behavior)
     raw_cfg = getattr(ctx.check_def, "raw", None) or {}
     fab_clips_silkscreen = raw_cfg.get("fab_clips_silkscreen", True)  # Default to True
-    
+
     # Determine status only (severity handled by finalize)
     if fab_clips_silkscreen:
         # Assume fab will clip silkscreen, so treat as warning

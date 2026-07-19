@@ -1,11 +1,10 @@
 from __future__ import annotations
 
-import math
 from typing import List, Optional
 
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
-from ..results import CheckResult, Violation, ViolationLocation, MetricResult
+from ..results import CheckResult, MetricResult, Violation, ViolationLocation
 
 
 def _poly_area_mm2(poly) -> float:
@@ -187,7 +186,7 @@ def run_via_tenting(ctx: CheckContext) -> CheckResult:
 
     # 5C) Default to Warning/Info instead of Fail to match Integr8tor
     # Integr8tor doesn't enforce tenting ratios
-    
+
     # Check if user has opted into strict assembly risk profile
     raw_cfg = getattr(ctx.check_def, "raw", None) or {}
     strict_assembly_mode = raw_cfg.get("strict_assembly_mode", False)

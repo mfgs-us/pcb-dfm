@@ -5,10 +5,10 @@ from collections import defaultdict
 from math import floor
 from typing import Dict, List, Optional, Tuple
 
-from ..results import CheckResult, Violation, ViolationLocation
-from ..engine.context import CheckContext
 from ..engine.check_runner import register_check
+from ..engine.context import CheckContext
 from ..ingest import GerberFileInfo
+from ..results import CheckResult, Violation, ViolationLocation
 
 # Use the same gerber backend as min_drill_size
 try:
@@ -276,8 +276,10 @@ def run_via_in_pad_thermal_balance(ctx: CheckContext) -> CheckResult:
                 continue
 
             b = poly.bounds()
-            min_x = float(b.min_x); max_x = float(b.max_x)
-            min_y = float(b.min_y); max_y = float(b.max_y)
+            min_x = float(b.min_x)
+            max_x = float(b.max_x)
+            min_y = float(b.min_y)
+            max_y = float(b.max_y)
             w = max(0.0, max_x - min_x)
             h = max(0.0, max_y - min_y)
 

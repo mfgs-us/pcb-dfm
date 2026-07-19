@@ -2,12 +2,11 @@
 
 from __future__ import annotations
 
+import json
 from dataclasses import dataclass
+from importlib.resources import files
 from pathlib import Path
 from typing import Any, Dict, List
-import json
-
-from importlib.resources import files
 
 
 @dataclass
@@ -59,7 +58,8 @@ def _default_checks_dir() -> Path:
 
     Assumes data lives at pcb_dfm/check_data/checks/*.json.
     """
-    return Path(files("pcb_dfm").joinpath("check_data", "checks"))
+    base = files("pcb_dfm")
+    return Path(str(base.joinpath("check_data").joinpath("checks")))
 
 
 

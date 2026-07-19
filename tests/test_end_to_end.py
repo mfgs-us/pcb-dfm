@@ -10,8 +10,9 @@ import pytest
 
 pytest.importorskip("gerber", reason="pcb-tools (gerber) not installed")
 
-FIXTURE = Path(__file__).parent / "testdata" / "mini_board.zip"
-SCHEMA = Path(__file__).parent / "schemas" / "dfm-result.schema.json"
+_REPO = Path(__file__).resolve().parent.parent
+FIXTURE = _REPO / "testdata" / "mini_board.zip"
+SCHEMA = _REPO / "schemas" / "dfm-result.schema.json"
 
 pytestmark = pytest.mark.skipif(
     not FIXTURE.exists(), reason="mini_board.zip fixture not present"

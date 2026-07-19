@@ -2,11 +2,10 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-from ..results import CheckResult, Violation, ViolationLocation, MetricResult
-from ..engine.context import CheckContext
 from ..engine.check_runner import register_check
+from ..engine.context import CheckContext
 from ..ingest import GerberFileInfo
-from ..geometry import queries
+from ..results import CheckResult, MetricResult, Violation, ViolationLocation
 
 # Use pcb-tools if available
 try:

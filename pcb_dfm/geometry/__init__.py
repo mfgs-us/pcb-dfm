@@ -1,9 +1,9 @@
 # pcb_dfm/geometry/__init__.py
 
-from .primitives import Point2D, Bounds, Polygon
-from .layer_model import BoardLayer, BoardGeometry
-from .gerber_parser import build_board_geometry
 from . import queries as queries
+from .gerber_parser import build_board_geometry
+from .layer_model import BoardGeometry, BoardLayer
+from .primitives import Bounds, Point2D, Polygon
 
 __all__ = [
     "Point2D",

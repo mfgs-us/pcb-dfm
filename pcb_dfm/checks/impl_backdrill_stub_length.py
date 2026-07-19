@@ -1,10 +1,8 @@
 from __future__ import annotations
 
-from typing import Optional, List
-
 from pcb_dfm.engine.check_runner import register_check
 from pcb_dfm.engine.context import CheckContext
-from pcb_dfm.results import CheckResult, MetricResult, Violation  # <- adjust names if needed
+from pcb_dfm.results import CheckResult, Violation  # <- adjust names if needed
 
 
 @register_check("backdrill_stub_length")

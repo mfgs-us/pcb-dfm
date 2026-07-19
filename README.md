@@ -39,7 +39,7 @@ The project is designed to be used both as a Python library (importable module) 
 
 ### 1.1 Requirements
 
-- Python 3.10 or newer
+- Python 3.9 or newer (CI runs 3.9–3.11)
 - `pip`
 - Git
 
@@ -125,6 +125,13 @@ This makes the difference between:
 explicit.
 
 ## 2.1 Recent Improvements: Integr8tor Alignment & Consistency Fixes
+
+> **Scope note.** Integr8tor alignment is a **design goal**, not a certification.
+> This engine is artwork-only (no netlist/stackup input yet), so several checks
+> are deliberately heuristic, and some are honest `not_applicable` placeholders
+> until connectivity/stackup data is wired in (see the coverage note at the end
+> of this section). The items below describe changes that have landed, but treat
+> the numeric thresholds as tunable defaults rather than a manufacturer spec.
 
 This version includes major improvements to align with industry-standard tools like Integr8tor and fix fundamental consistency issues:
 

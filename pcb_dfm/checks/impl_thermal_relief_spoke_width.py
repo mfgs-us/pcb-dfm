@@ -1,10 +1,10 @@
 from __future__ import annotations
 
-from typing import List, Optional, Tuple
+from typing import List, Tuple
 
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
-from ..results import CheckResult, Violation, ViolationLocation, MetricResult
+from ..results import CheckResult, MetricResult, Violation, ViolationLocation
 
 
 def _poly_area_mm2(poly) -> float:

@@ -1,9 +1,9 @@
 from __future__ import annotations
 
-from typing import ClassVar, Optional, Union, List, Dict, TYPE_CHECKING, Any
-from pydantic import BaseModel, Field, model_validator
 from datetime import datetime
+from typing import Any, Dict, List, Optional, Union
 
+from pydantic import BaseModel, Field, model_validator
 
 SEVERITY_RANK = {"info": 0, "warning": 1, "error": 2, "critical": 3}
 
@@ -91,7 +91,7 @@ class MetricResult(BaseModel):
             # Validate units for ratio metrics
             if data.get('kind') == 'ratio' and data.get('units') != '%':
                 raise ValueError("ratio metrics must use units='%'")
-            # Validate units for geometry metrics  
+            # Validate units for geometry metrics
             if data.get('kind') == 'geometry' and data.get('units') != 'mm':
                 raise ValueError("geometry metrics must use units='mm'")
             return data

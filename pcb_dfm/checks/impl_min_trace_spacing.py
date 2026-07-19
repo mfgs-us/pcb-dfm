@@ -3,10 +3,10 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import List, Optional, Tuple
 
-from ..results import CheckResult, Violation, ViolationLocation, MetricResult
-from ..engine.context import CheckContext
 from ..engine.check_runner import register_check
+from ..engine.context import CheckContext
 from ..ingest import GerberFileInfo
+from ..results import CheckResult, MetricResult, Violation, ViolationLocation
 
 # pcb-tools (same as min_trace_width impl)
 try:
@@ -207,7 +207,7 @@ def run_min_trace_spacing(ctx: CheckContext) -> CheckResult:
     if status != "pass":
         # Define severity based on status
         severity = "error" if status == "fail" else "warning"
-        
+
         offenders_sorted = sorted(offenders, key=lambda t: t[0])
         if offenders_sorted:
             for spacing_mm, layer_name, mx_mm, my_mm in offenders_sorted[:MAX_REPORTED_VIOLATIONS]:

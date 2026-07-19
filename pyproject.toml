@@ -24,16 +24,17 @@ dependencies = [
 dev = [
   "pytest>=8.0",
   "mypy>=1.8",
-  "jsonschema>=4.0"
+  "jsonschema>=4.0",
+  "ruff>=0.6"
 ]
 
 [project.scripts]
 pcb-dfm = "pcb_dfm.cli.main:main"
 
 [tool.pytest.ini_options]
-# The repo-root test_*.py files are the real suite. scripts/ holds demo/debug
-# helpers that execute at import and must not be collected as tests.
-testpaths = ["test_run_dfm_bundle.py", "test_run_dfm_bundle_unit.py", "test_end_to_end.py"]
+# All real tests live under tests/. scripts/ holds demo/debug helpers that
+# execute at import and must not be collected as tests.
+testpaths = ["tests"]
 
 [project.urls]
 Homepage = "https://github.com/mfgs-us/pcb-dfm"
@@ -57,3 +58,44 @@ pcb_dfm = [
   "check_data/checks/*.json",
   "check_data/categories.json"
 ]
+
+# -------------------------------------------------------
+# Lint / type-check configuration
+# -------------------------------------------------------
+
+[tool.ruff]
+target-version = "py39"
+line-length = 100
+extend-exclude = ["scripts", "testdata"]
+
+[tool.ruff.lint]
+# Pyflakes (real bugs: undefined names, unused imports) + pycodestyle + isort.
+select = ["E", "F", "W", "I"]
+# E501 line-length and a few stylistic rules are noisy on this codebase; the
+# high-signal correctness rules (F-series) stay on.
+ignore = ["E501", "E741", "E402"]
+
+[tool.ruff.lint.per-file-ignores]
+# The legacy check heuristics carry many dead intermediate assignments
+# (leftover from the pre-MetricResult inline metric construction). F841 stays
+# ON for the engine/geometry/ingest core, where an unused local is a real
+# smell, but is relaxed here to avoid 25+ low-value edits in heuristic code.
+"pcb_dfm/checks/impl_*.py" = ["F841"]
+
+[tool.mypy]
+python_version = "3.9"
+ignore_missing_imports = true   # pcb-tools / gerber ship no type hints
+warn_unused_ignores = false
+check_untyped_defs = false
+# Pragmatic: catch obvious type errors without demanding full annotations on a
+# codebase that predates typing. mypy gates the engine/geometry/ingest/results
+# core today; the legacy check heuristics are relaxed (see override below) and
+# should be brought under the type checker module-by-module over time.
+
+[[tool.mypy.overrides]]
+# The check-implementation package holds legacy heuristics that predate the
+# MetricResult/CheckDefinition typing and would need broad annotation work.
+# Relax it for now so the engine/geometry/ingest/results/io/cli core stays
+# strictly typed; bring these back under mypy module-by-module over time.
+module = "pcb_dfm.checks.*"
+ignore_errors = true

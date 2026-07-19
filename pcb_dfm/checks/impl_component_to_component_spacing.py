@@ -3,7 +3,7 @@ from __future__ import annotations
 import math
 from collections import defaultdict
 from math import floor
-from typing import Dict, List, Tuple, Optional
+from typing import Dict, List, Optional, Tuple
 
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext

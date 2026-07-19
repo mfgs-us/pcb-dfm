@@ -1,15 +1,14 @@
 from __future__ import annotations
 
+from collections import defaultdict
 from dataclasses import dataclass
 from math import floor, sqrt
 from typing import List, Optional
-from collections import defaultdict
-import re
 
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
-from ..results import CheckResult, Violation, ViolationLocation, MetricResult
 from ..geometry import queries
+from ..results import CheckResult, MetricResult, Violation, ViolationLocation
 
 # pcb-tools excellon reader (optional)
 try:
@@ -35,7 +34,7 @@ def _detect_excellon_units(drill_file) -> str:
         units = getattr(drill_file, 'units', None)
         if units in ('inch', 'mm'):
             return units
-    
+
     # Try to detect from header/comments
     if hasattr(drill_file, 'header'):
         header = getattr(drill_file, 'header', '')
@@ -44,7 +43,7 @@ def _detect_excellon_units(drill_file) -> str:
                 return 'mm'
             elif 'M72' in header.upper():
                 return 'inch'
-    
+
     # Default to inch if undetectable
     return 'inch'
 
@@ -53,22 +52,22 @@ def _point_in_polygon(x: float, y: float, vertices: List) -> bool:
     """Ray-casting algorithm for point-in-polygon test."""
     if len(vertices) < 3:
         return False
-    
+
     inside = False
     n = len(vertices)
     for i in range(n):
         j = (i + 1) % n
         xi, yi = vertices[i].x, vertices[i].y
         xj, yj = vertices[j].x, vertices[j].y
-        
+
         # Check if point is on an edge (considered inside)
         if _point_on_segment(x, y, xi, yi, xj, yj):
             return True
-        
+
         # Ray-casting test
         if ((yi > y) != (yj > y)) and (x < (xj - xi) * (y - yi) / (yj - yi) + xi):
             inside = not inside
-    
+
     return inside
 
 
@@ -78,12 +77,12 @@ def _point_on_segment(px: float, py: float, x1: float, y1: float, x2: float, y2:
     cross = (py - y1) * (x2 - x1) - (px - x1) * (y2 - y1)
     if abs(cross) > 1e-10:  # Not collinear
         return False
-    
+
     # Check if point is within segment bounds
     dot = (px - x1) * (px - x2) + (py - y1) * (py - y2)
     if dot > 1e-10:  # Outside segment bounds
         return False
-    
+
     return True
 
 
@@ -91,14 +90,14 @@ def _distance_point_to_segment(px: float, py: float, x1: float, y1: float, x2: f
     """Calculate minimum distance from point to line segment."""
     dx = x2 - x1
     dy = y2 - y1
-    
+
     if abs(dx) < 1e-10 and abs(dy) < 1e-10:
         # Segment is a point
         return sqrt((px - x1)**2 + (py - y1)**2)
-    
+
     # Parameter t determines closest point on infinite line
     t = ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy)
-    
+
     if t < 0:
         # Closest point is segment start
         return sqrt((px - x1)**2 + (py - y1)**2)
@@ -116,18 +115,18 @@ def _min_distance_to_polygon_edges(x: float, y: float, vertices: List) -> float:
     """Find minimum distance from point to any polygon edge."""
     if len(vertices) < 3:
         return float('inf')
-    
+
     min_dist = float('inf')
     n = len(vertices)
-    
+
     for i in range(n):
         j = (i + 1) % n
         x1, y1 = vertices[i].x, vertices[i].y
         x2, y2 = vertices[j].x, vertices[j].y
-        
+
         dist = _distance_point_to_segment(x, y, x1, y1, x2, y2)
         min_dist = min(min_dist, dist)
-    
+
     return min_dist
 
 
@@ -136,29 +135,29 @@ def _is_pad_like_polygon(poly, drill_diameter_mm: float, absolute_min: float) ->
     b = poly.bounds()
     if b is None:
         return False
-    
+
     width = b.max_x - b.min_x
     height = b.max_y - b.min_y
-    
+
     if width <= 0 or height <= 0:
         return False
-    
+
     # Exclude traces/regions with high aspect ratio
     aspect_ratio = max(width, height) / min(width, height)
     if aspect_ratio > 2.5:
         return False
-    
+
     # Exclude polygons too small to contain required annular ring
     min_required_size = drill_diameter_mm + 2 * absolute_min - 0.001  # small_eps
     if min(width, height) < min_required_size:
         return False
-    
+
     # Exclude huge polygons (likely planes)
     max_pad_size = 10.0  # 10mm max for typical pads
     diagonal = sqrt(width**2 + height**2)
     if diagonal > max_pad_size:
         return False
-    
+
     return True
 
 
@@ -173,7 +172,7 @@ def _collect_drills_from_excellon(ctx: CheckContext) -> List[DrillHole]:
             continue
         if f.format != "excellon":
             continue
-        
+
         # 1E) Only use plated drills, exclude NPTH
         if f.logical_layer == "DrillNonPlated" or f.is_plated is False:
             continue
@@ -185,7 +184,7 @@ def _collect_drills_from_excellon(ctx: CheckContext) -> List[DrillHole]:
 
         # 1D) Detect units and only convert if needed
         units = _detect_excellon_units(drill_file)
-        
+
         # Only convert to inch if the file is in mm and we need inch for internal processing
         if units == 'mm':
             # Convert mm to inch for internal processing, then to mm at the end
@@ -241,7 +240,7 @@ def _collect_drills_from_excellon(ctx: CheckContext) -> List[DrillHole]:
             else:
                 # File was in inch, coordinates are in inch
                 diameter_mm = d * _INCH_TO_MM
-            
+
             drills.append(
                 DrillHole(
                     x_mm=x * _INCH_TO_MM,
@@ -366,7 +365,7 @@ def run_min_annular_ring(ctx: CheckContext) -> CheckResult:
             for dj in (-1, 0, 1):
                 for idx in grid.get((ci + di, cj + dj), []):
                     poly, layer_name = pad_candidates[idx]
-                    
+
                     # 1B) Use point-in-polygon test instead of bbox containment
                     if not _point_in_polygon(hole.x_mm, hole.y_mm, poly.vertices):
                         continue
@@ -374,7 +373,7 @@ def run_min_annular_ring(ctx: CheckContext) -> CheckResult:
                     # 1C) Compute true annular ring as distance from drill edge to polygon edge
                     min_dist_to_edge = _min_distance_to_polygon_edges(hole.x_mm, hole.y_mm, poly.vertices)
                     ring = min_dist_to_edge - r_drill
-                    
+
                     # Clamp to 0 (negative ring means drill extends beyond pad)
                     if ring < 0.0:
                         ring = 0.0
@@ -436,7 +435,7 @@ def run_min_annular_ring(ctx: CheckContext) -> CheckResult:
     if status != "pass":
         # Determine severity based on status
         severity = "error" if status == "fail" else "warning"
-        
+
         msg = (
             f"Minimum annular ring {min_ring:.3f} mm is below "
             f"recommended {recommended_min:.3f} mm (absolute minimum {absolute_min:.3f} mm)."

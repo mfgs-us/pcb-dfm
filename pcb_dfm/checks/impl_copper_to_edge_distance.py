@@ -4,11 +4,11 @@ from __future__ import annotations
 
 from typing import List, Optional
 
-from ..geometry import queries
-from ..geometry.primitives import Bounds, Polygon, Point2D
-from ..results import CheckResult, Violation, ViolationLocation, MetricResult
-from ..engine.context import CheckContext
 from ..engine.check_runner import register_check
+from ..engine.context import CheckContext
+from ..geometry import queries
+from ..geometry.primitives import Bounds, Point2D
+from ..results import CheckResult, MetricResult, Violation, ViolationLocation
 
 MAX_REPORTED_VIOLATIONS = 100
 

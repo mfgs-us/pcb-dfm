@@ -2,7 +2,7 @@ from __future__ import annotations
 
 import math
 from dataclasses import dataclass
-from typing import Any, Dict, Iterable, List, Optional, Tuple
+from typing import Any, Iterable, List, Optional, Tuple
 
 from . import GerberFileInfo
 
@@ -239,11 +239,11 @@ def validate_apertures(
             continue
 
         if isinstance(apertures, dict):
-            ap_items = apertures.items()
+            ap_items = list(apertures.items())
         else:
             items_fn = getattr(apertures, "items", None)
             if callable(items_fn):
-                ap_items = items_fn()
+                ap_items = list(items_fn())
             else:
                 ap_items = [(f"(idx:{i})", ap) for i, ap in enumerate(list(apertures))]
 

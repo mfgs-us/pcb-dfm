@@ -1,14 +1,14 @@
 from __future__ import annotations
 
+import math
 from collections import defaultdict
 from dataclasses import dataclass
-from math import ceil, floor, hypot, inf, sqrt
-import math
+from math import floor, hypot, sqrt
 from typing import Dict, List, Optional, Tuple
 
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
-from ..results import CheckResult, Violation, ViolationLocation, MetricResult
+from ..results import CheckResult, MetricResult, Violation, ViolationLocation
 
 try:
     from gerber import excellon  # type: ignore

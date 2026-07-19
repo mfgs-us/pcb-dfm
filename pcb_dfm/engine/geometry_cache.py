@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass, field
 from threading import RLock
-from typing import Any, Callable, Dict, Generic, Hashable, Optional, TypeVar
+from typing import Any, Callable, Dict, Hashable, Optional, TypeVar
 
 T = TypeVar("T")
 

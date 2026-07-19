@@ -2,16 +2,16 @@ from __future__ import annotations
 
 import math
 from collections import defaultdict
+from dataclasses import dataclass
 from math import floor
 from typing import Dict, List, Optional, Tuple
-from dataclasses import dataclass
 
+from ..engine.check_runner import register_check
+from ..engine.context import CheckContext
 from ..geometry import queries
 from ..geometry.primitives import Bounds
-from ..results import CheckResult, Violation, ViolationLocation, MetricResult
-from ..engine.context import CheckContext
-from ..engine.check_runner import register_check
 from ..ingest import GerberFileInfo
+from ..results import CheckResult, MetricResult, Violation, ViolationLocation
 
 try:
     import gerber
@@ -29,7 +29,7 @@ def _detect_excellon_units(drill_file) -> str:
         units = getattr(drill_file, 'units', None)
         if units in ('inch', 'mm'):
             return units
-    
+
     # Try to detect from header/comments
     if hasattr(drill_file, 'header'):
         header = getattr(drill_file, 'header', '')
@@ -38,7 +38,7 @@ def _detect_excellon_units(drill_file) -> str:
                 return 'mm'
             elif 'M72' in header.upper():
                 return 'inch'
-    
+
     # Default to inch if undetectable
     return 'inch'
 
@@ -160,7 +160,7 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
     # Raw configuration parameters for via-centric optimization
     via_max_d_mm = float(raw_cfg.get("via_max_d_mm", 0.8))
     include_component_pth = bool(raw_cfg.get("include_component_pth", False))
-    
+
     # Ignore copper polygons close to board perimeter (band inwards from outline)
     perimeter_ignore_mm = float(raw_cfg.get("perimeter_ignore_mm", 0.0))
 
@@ -173,7 +173,7 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
 
     # Filter to plated drill files only (via-centric approach)
     drill_files: List[GerberFileInfo] = [
-        f for f in ctx.ingest.files 
+        f for f in ctx.ingest.files
         if f.layer_type == "drill" and getattr(f, "is_plated", None) is True
     ]
 
@@ -301,18 +301,18 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
 
         # Exclusion radius for copper considered to be "this via's own pad/annular ring"
         pad_exclusion_r = r + assumed_annular_ring_mm + pad_exclusion_margin_mm
-        
+
         # Compute search radius based on clearance thresholds
         # Only need to search up to recommended_min + exclusion radius + small safety margin
         search_radius = pad_exclusion_r + recommended_min + 0.05  # 0.05mm safety margin
-        
+
         # Compute grid neighborhood bounds
         ci, cj = _cell_key(cx, cy, cell)
         dk = int(math.ceil(search_radius / cell))
-        
+
         # Track seen indices to avoid duplicates
         seen: set[int] = set()
-        
+
         # Scan bounded neighborhood (constant-ish time per via)
         for di in range(-dk, dk + 1):
             for dj in range(-dk, dk + 1):
@@ -335,7 +335,7 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
                     # Skip if within pad exclusion radius
                     if dist_center <= pad_exclusion_r:
                         continue
-                        
+
                     # Skip if beyond search radius (early exit optimization)
                     if dist_center - r > search_radius:
                         continue
@@ -359,19 +359,19 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
 
                     if clearance < recommended_min:
                         offenders.append((clearance, layer_name, cx, cy, marker_x, marker_y))
-                    
+
                     # Early exit per via: if we found clearance at absolute_min or below, no need to search further
                     if clearance <= absolute_min:
                         break
-                
+
                 # Early exit if we already found the worst possible case
                 if min_clear is not None and min_clear <= absolute_min:
                     break
-            
+
             # Early exit if we already found the worst possible case
             if min_clear is not None and min_clear <= absolute_min:
                 break
-        
+
         # Global early exit: if we already hit absolute minimum, no need to check more vias
         if min_clear is not None and min_clear <= absolute_min:
             break
@@ -480,7 +480,7 @@ def _extract_drill_hits_mm(path, via_max_d_mm: float = 0.8, include_component_pt
 
     # Detect units first to avoid incorrect conversion
     units = _detect_excellon_units(drill_layer)
-    
+
     # Only convert to inch if the file is in mm and we need inch for internal processing
     if units == 'mm':
         try:
@@ -531,11 +531,11 @@ def _extract_drill_hits_mm(path, via_max_d_mm: float = 0.8, include_component_pt
         x_mm = x_in * _INCH_TO_MM
         y_mm = y_in * _INCH_TO_MM
         d_mm = d_in * _INCH_TO_MM
-        
+
         # Filter by diameter for via-like drills only
         if d_mm > via_max_d_mm:
             continue
-            
+
         # Additional filtering for component PTH if disabled
         if not include_component_pth and d_mm > 0.8:  # Typical component drill threshold
             continue

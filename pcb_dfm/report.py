@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from .results import DfmResult, CategoryResult, CheckResult
+from .results import DfmResult
 
 
 def summarize_status(counts) -> str:

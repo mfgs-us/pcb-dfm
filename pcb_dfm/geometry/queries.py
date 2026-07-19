@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from typing import List, Optional, Iterable
+from typing import Iterable, List, Optional
 
 from .layer_model import BoardGeometry, BoardLayer
 from .primitives import Bounds, Polygon

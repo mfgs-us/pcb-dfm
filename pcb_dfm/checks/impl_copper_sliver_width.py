@@ -4,8 +4,8 @@ from typing import List, Optional
 
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
-from ..results import CheckResult, Violation, ViolationLocation
 from ..geometry import queries
+from ..results import CheckResult, Violation, ViolationLocation
 
 
 @register_check("copper_sliver_width")

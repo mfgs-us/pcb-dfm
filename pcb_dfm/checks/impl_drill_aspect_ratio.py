@@ -1,11 +1,11 @@
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import List
 
-from ..results import CheckResult, Violation, MetricResult
-from ..engine.context import CheckContext
 from ..engine.check_runner import register_check
+from ..engine.context import CheckContext
 from ..ingest import GerberFileInfo
+from ..results import CheckResult, MetricResult, Violation
 
 try:
     import gerber

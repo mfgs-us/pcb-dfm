@@ -3,12 +3,16 @@
 from __future__ import annotations
 
 from pathlib import Path
-from typing import Iterable, List, Union
+from typing import List, Union
 
 from pcb_dfm.checks.definitions import (
     CheckDefinition as _CheckDefinition,
-    load_check_definition as _load_check_definition,
+)
+from pcb_dfm.checks.definitions import (
     load_all_check_definitions as _load_all,
+)
+from pcb_dfm.checks.definitions import (
+    load_check_definition as _load_check_definition,
 )
 
 CheckDefinition = _CheckDefinition

@@ -6,7 +6,7 @@ from typing import Dict, List, Optional, Tuple
 
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
-from ..results import CheckResult, Violation, ViolationLocation, MetricResult
+from ..results import CheckResult, MetricResult, Violation, ViolationLocation
 
 
 def _compute_board_bounds_mm(ctx: CheckContext) -> Optional[Tuple[float, float, float, float]]:
@@ -301,11 +301,11 @@ def run_copper_density_balance(ctx: CheckContext) -> CheckResult:
 
     # 5B) Default to Info/Warning instead of Fail to match Integr8tor
     # Only fail when user opts into plating/process risk profile
-    
+
     # Check if user has opted into strict plating risk profile
     raw_cfg = getattr(ctx.check_def, "raw", None) or {}
     strict_plating_mode = raw_cfg.get("strict_plating_mode", False)
-    
+
     # Status and score
     if max_delta_percent <= recommended_max_delta:
         status = "pass"

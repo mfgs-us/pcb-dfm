@@ -4,10 +4,10 @@ import math
 from dataclasses import dataclass
 from typing import Any, Dict, Iterable, List, Optional, Tuple
 
-from ..results import CheckResult, Violation, ViolationLocation
-from ..engine.context import CheckContext
 from ..engine.check_runner import register_check
+from ..engine.context import CheckContext
 from ..ingest import GerberFileInfo
+from ..results import CheckResult, Violation, ViolationLocation
 
 try:
     import gerber  # type: ignore

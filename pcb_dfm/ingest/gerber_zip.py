@@ -2,13 +2,12 @@
 
 from __future__ import annotations
 
+import shutil
+import tempfile
+import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import List, Optional, Dict, Literal
-import zipfile
-import tempfile
-import shutil
-
+from typing import Dict, List, Literal, Optional
 
 # Cap total uncompressed extraction size to guard against zip bombs (512 MiB).
 _MAX_TOTAL_UNCOMPRESSED_BYTES = 512 * 1024 * 1024
@@ -185,9 +184,11 @@ def ingest_gerber_zip(zip_path: Path, workspace_root: Optional[Path] = None) -> 
             original_name=p.name,
             extension=ext,
             format=gerber_format,
-            logical_layer=logical_layer,
-            side=side,
-            layer_type=layer_type,
+            # _classify_layer returns plain strs that are valid members of the
+            # GerberFileInfo Literal fields; mypy can't see that narrowing.
+            logical_layer=logical_layer,  # type: ignore[arg-type]
+            side=side,  # type: ignore[arg-type]
+            layer_type=layer_type,  # type: ignore[arg-type]
             is_plated=is_plated,
         )
         result.files.append(info)
@@ -288,7 +289,7 @@ def _classify_layer(
 
     # 4A) Use extensions first for reliable copper/mask/silk classification
     # This prevents misclassification when filename doesn't include extension in name_lower
-    
+
     # Copper layers - check extensions first
     if ext == ".gtl":
         logical_layer = "TopCopper"

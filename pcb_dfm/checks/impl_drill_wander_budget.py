@@ -38,19 +38,16 @@ def run_drill_wander_budget(ctx: CheckContext) -> CheckResult:
     recommended_max = float(limits.get("recommended_max_aspect", 8.0))
     absolute_max = float(limits.get("absolute_max_aspect", 10.0))
 
-    # Board thickness (mm) from geometry if available, else default 1.6 mm
+    # Board thickness (mm) from the configured check definition; the geometry
+    # model does not carry a board thickness, so default to 1.6 mm.
     thickness_mm = 1.6
-    board = getattr(ctx.geometry, "board", None)
-    if board is not None:
-        # support thickness_mm or thickness as mm
-        t_mm = getattr(board, "thickness_mm", None)
-        if t_mm is None:
-            t_mm = getattr(board, "thickness", None)
-        if t_mm is not None:
-            try:
-                thickness_mm = float(t_mm)
-            except Exception:
-                pass
+    raw_cfg = getattr(ctx.check_def, "raw", None) or {}
+    t_cfg = raw_cfg.get("board_thickness_mm", limits.get("board_thickness_mm"))
+    if t_cfg is not None:
+        try:
+            thickness_mm = float(t_cfg)
+        except Exception:
+            pass
 
     # Collect drill diameters from drill files
     drill_files: List[GerberFileInfo] = [
@@ -74,17 +71,13 @@ def run_drill_wander_budget(ctx: CheckContext) -> CheckResult:
             status="warning",
             severity="info",  # Default value, will be overridden by finalize()
             score=80.0,
-            metric=MetricResult(
-                kind="ratio",
-                units="%",
-                measured_value=None,
+            metric=MetricResult.dimensionless(
+                measured=None,
                 target=recommended_max,
-                limit_low=None,
                 limit_high=absolute_max,
-                margin_to_limit=None,
             ),
             violations=[viol],
-        ).finalize().finalize()
+        ).finalize()
 
     diameters_mm: List[float] = []
     for info in drill_files:
@@ -106,17 +99,13 @@ def run_drill_wander_budget(ctx: CheckContext) -> CheckResult:
             status="warning",
             severity="info",  # Default value, will be overridden by finalize()
             score=80.0,
-            metric=MetricResult(
-                kind="ratio",
-                units="%",
-                measured_value=None,
+            metric=MetricResult.dimensionless(
+                measured=None,
                 target=recommended_max,
-                limit_low=None,
                 limit_high=absolute_max,
-                margin_to_limit=None,
             ),
             violations=[viol],
-        ).finalize().finalize()
+        ).finalize()
 
     min_d_mm = min(diameters_mm)
     aspect = thickness_mm / min_d_mm if min_d_mm > 0 else float("inf")
@@ -172,14 +161,10 @@ def run_drill_wander_budget(ctx: CheckContext) -> CheckResult:
         severity=ctx.check_def.severity,
         status=status,
         score=score,
-        metric=MetricResult(
-            kind="ratio",
-            units="%",
-            measured_value=float(aspect),
+        metric=MetricResult.dimensionless(
+            measured=float(aspect),
             target=recommended_max,
-            limit_low=None,
             limit_high=absolute_max,
-            margin_to_limit=margin_to_limit,
         ),
         violations=violations,
     )

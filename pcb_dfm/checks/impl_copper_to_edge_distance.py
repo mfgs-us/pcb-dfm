@@ -37,11 +37,11 @@ def run_copper_to_edge_distance(ctx: CheckContext) -> CheckResult:
     recommended_min = float(limits.get("recommended_min", 0.25))
     absolute_min = float(limits.get("absolute_min", 0.15))
 
-    # No outline or no copper -> cannot measure, mark as warning
+    # No outline or no copper -> genuinely nothing to measure
     if board_bounds is None or not copper_layers:
-        message = "No board outline or copper layers available to compute copper to edge distance."
+        message = "No board outline or copper geometry available to compute copper to edge distance."
         viol = Violation(
-            severity="warning",
+            severity="info",
             message=message,
             location=None,
         )
@@ -49,10 +49,10 @@ def run_copper_to_edge_distance(ctx: CheckContext) -> CheckResult:
             check_id=ctx.check_def.id,
             name=ctx.check_def.name,
             category_id=ctx.check_def.category_id,
-            status="warning",
+            status="not_applicable",
             severity="info",  # Default value, will be overridden by finalize()
             metric=MetricResult.geometry_mm(
-                measured_mm=0.2960999999999956,  # The measured value from your output
+                measured_mm=None,
                 target_mm=recommended_min,
                 limit_low_mm=absolute_min,
             ),
@@ -82,11 +82,11 @@ def run_copper_to_edge_distance(ctx: CheckContext) -> CheckResult:
             if d < recommended_min:
                 offenders.append((d, layer.logical_layer, loc.x, loc.y))
 
-    # If somehow no polygons, treat as warning but with metric None
+    # If somehow no polygons, nothing to measure
     if min_dist is None:
-        message = "No copper polygons available to compute copper to edge distance."
+        message = "No copper geometry available to compute copper to edge distance."
         viol = Violation(
-            severity="warning",
+            severity="info",
             message=message,
             location=None,
         )
@@ -94,28 +94,29 @@ def run_copper_to_edge_distance(ctx: CheckContext) -> CheckResult:
             check_id=ctx.check_def.id,
             name=ctx.check_def.name,
             category_id=ctx.check_def.category_id,
-            status="warning",
+            status="not_applicable",
             severity="info",  # Default value, will be overridden by finalize()
             metric=MetricResult.geometry_mm(
-                measured_mm=0.2960999999999956,  # The measured value from your output
+                measured_mm=None,
                 target_mm=recommended_min,
                 limit_low_mm=absolute_min,
             ),
             violations=[viol],
         ).finalize()
 
-    # Determine status only (severity and score handled by finalize)
-    # Copper to edge distance should be warning, not fail
-    if min_dist < recommended_min:
+    # Determine status only (severity handled by finalize)
+    if min_dist < absolute_min:
+        status = "fail"
+    elif min_dist < recommended_min:
         status = "warning"
     else:
         status = "pass"
 
     violations: List[Violation] = []
     if status != "pass":
-        # Status is always warning now (never fail)
-        severity = "warning"
-        
+        # Hard clearance violations are errors; softer ones are warnings.
+        severity = "error" if status == "fail" else "warning"
+
         offenders_sorted = sorted(offenders, key=lambda t: t[0])
         if offenders_sorted:
             for dist_mm, layer_name, x_mm, y_mm in offenders_sorted[:MAX_REPORTED_VIOLATIONS]:
@@ -148,8 +149,13 @@ def run_copper_to_edge_distance(ctx: CheckContext) -> CheckResult:
                 )
             )
 
-    # Scoring: pass = 100, warning = 60 (never fail)
-    score = 100.0 if status == "pass" else 60.0
+    # Scoring: pass = 100, warning = 60, fail = 0
+    if status == "pass":
+        score = 100.0
+    elif status == "warning":
+        score = 60.0
+    else:
+        score = 0.0
 
     margin_to_limit = float(min_dist - absolute_min)
 

@@ -431,7 +431,7 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
                 )
                 violations.append(
                     Violation(
-                        severity=severity,
+                        severity=ctx.check_def.severity,
                         message=msg,
                         location=ViolationLocation(
                             layer=layer_name,
@@ -448,7 +448,7 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
             )
             violations.append(
                 Violation(
-                    severity=severity,
+                    severity=ctx.check_def.severity,
                     message=msg,
                     location=worst_location,
                 )

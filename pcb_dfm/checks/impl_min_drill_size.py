@@ -136,7 +136,7 @@ def run_min_drill_size(ctx: CheckContext) -> CheckResult:
         )
         violations.append(
             Violation(
-                severity=severity,
+                severity=ctx.check_def.severity,
                 message=message,
                 location=None,
             )

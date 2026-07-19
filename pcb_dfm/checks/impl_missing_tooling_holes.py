@@ -136,12 +136,48 @@ def run_missing_tooling_holes(ctx: CheckContext) -> CheckResult:
     max_tool_d_mm = float(raw_cfg.get("max_tool_d_mm", 5.0))   # ~200 mil
     edge_margin_mm = float(raw_cfg.get("edge_margin_mm", 5.0)) # distance from edge to count as "edge"
 
-    # Board geometry
-    board = getattr(ctx.geometry, "board", None)
-    if board is None:
+    # Collect drills from ingest (same approach as the working drill checks)
+    drill_files: List[GerberFileInfo] = [
+        f for f in ctx.ingest.files if f.layer_type == "drill"
+    ]
+
+    hits: List[dict] = []
+    if gerber is not None:
+        for info in drill_files:
+            hits.extend(_extract_drill_hits_mm(str(info.path)))
+
+    if not hits:
+        # Genuinely no drills to inspect -> honestly not applicable.
+        viol = Violation(
+            severity="info",
+            message="No drill files or drill hits found; tooling-hole check not applicable.",
+            location=None,
+        )
+        return CheckResult(
+            check_id=ctx.check_def.id,
+            name=ctx.check_def.name,
+            category_id=ctx.check_def.category_id,
+            status="not_applicable",
+            severity="info",
+            score=100.0,
+            metric=MetricResult(
+                kind="count",
+                units=units,
+                measured_value=None,
+                target=recommended_min,
+                limit_low=absolute_min,
+                limit_high=None,
+                margin_to_limit=None,
+            ),
+            violations=[viol],
+        ).finalize()
+
+    # Board extent from the real geometry API (Bounds or None).
+    bounds = ctx.geometry.board_bounds()
+    if bounds is None:
         viol = Violation(
             severity="warning",
-            message="Board outline/geometry not available; cannot reliably detect tooling holes.",
+            message="Board extent not available; cannot reliably detect tooling holes.",
             location=None,
         )
         return CheckResult(
@@ -163,45 +199,10 @@ def run_missing_tooling_holes(ctx: CheckContext) -> CheckResult:
             violations=[viol],
         ).finalize()
 
-    min_x = float(getattr(board, "min_x_mm", getattr(board, "x_min_mm", 0.0)))
-    max_x = min_x + float(getattr(board, "width_mm", getattr(board, "width", 0.0)))
-    min_y = float(getattr(board, "min_y_mm", getattr(board, "y_min_mm", 0.0)))
-    max_y = min_y + float(getattr(board, "height_mm", getattr(board, "height", 0.0)))
-
-    # Collect drills from ingest
-    drill_files: List[GerberFileInfo] = [
-        f for f in ctx.ingest.files if f.layer_type == "drill"
-    ]
-
-    hits: List[dict] = []
-    if gerber is not None:
-        for info in drill_files:
-            hits.extend(_extract_drill_hits_mm(str(info.path)))
-
-    if not hits:
-        viol = Violation(
-            severity="warning",
-            message="No drill files or drill hits found; cannot check for tooling holes.",
-            location=None,
-        )
-        return CheckResult(
-            check_id=ctx.check_def.id,
-            name=ctx.check_def.name,
-            category_id=ctx.check_def.category_id,
-            status="warning",
-            severity="info",  # Default value, will be overridden by finalize()
-            score=50.0,
-            metric=MetricResult(
-                kind="count",
-                units=units,
-                measured_value=0.0,
-                target=recommended_min,
-                limit_low=absolute_min,
-                limit_high=None,
-                margin_to_limit=-absolute_min,
-            ),
-            violations=[viol],
-        ).finalize()
+    min_x = float(bounds.min_x)
+    max_x = float(bounds.max_x)
+    min_y = float(bounds.min_y)
+    max_y = float(bounds.max_y)
 
     # Filter candidate tooling holes
     tooling_hits: List[dict] = []

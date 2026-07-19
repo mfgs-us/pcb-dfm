@@ -376,7 +376,7 @@ def run_via_in_pad_thermal_balance(ctx: CheckContext) -> CheckResult:
         if best_pad is None:
             continue
 
-        layer_name, _, pad_area, _, _, _, _ = best_pad
+        layer_name, _, _, pad_area, _, _, _, _ = best_pad
         if pad_area <= 0.0:
             continue
 

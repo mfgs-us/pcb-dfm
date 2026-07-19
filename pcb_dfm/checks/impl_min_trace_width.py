@@ -51,7 +51,7 @@ def run_min_trace_width(ctx: CheckContext) -> CheckResult:
 
     if gerber is None or Line is None or not copper_files:
         viol = Violation(
-            severity="warning",
+            severity="info",
             message="Cannot compute minimum trace width (missing Gerber parser or no copper files).",
             location=None,
         )
@@ -59,9 +59,9 @@ def run_min_trace_width(ctx: CheckContext) -> CheckResult:
             check_id=ctx.check_def.id,
             name=ctx.check_def.name,
             category_id=ctx.check_def.category_id,
-            status="warning",
+            status="not_applicable",
             severity="info",  # Default value, will be overridden by finalize()
-            score=50.0,
+            score=100.0,
             metric=MetricResult.geometry_mm(
                 measured_mm=None,
                 target_mm=recommended_min,
@@ -132,7 +132,7 @@ def run_min_trace_width(ctx: CheckContext) -> CheckResult:
 
     if min_width_mm is None:
         viol = Violation(
-            severity="warning",
+            severity="info",
             message="No trace segments found to compute minimum trace width.",
             location=None,
         )
@@ -140,9 +140,9 @@ def run_min_trace_width(ctx: CheckContext) -> CheckResult:
             check_id=ctx.check_def.id,
             name=ctx.check_def.name,
             category_id=ctx.check_def.category_id,
-            status="warning",
+            status="not_applicable",
             severity="info",  # Default value, will be overridden by finalize()
-            score=50.0,
+            score=100.0,
             metric=MetricResult.geometry_mm(
                 measured_mm=None,
                 target_mm=recommended_min,
@@ -182,7 +182,7 @@ def run_min_trace_width(ctx: CheckContext) -> CheckResult:
                 )
                 violations.append(
                     Violation(
-                        severity=severity,
+                        severity=ctx.check_def.severity,
                         message=msg,
                         location=ViolationLocation(
                             layer=layer_name,
@@ -200,7 +200,7 @@ def run_min_trace_width(ctx: CheckContext) -> CheckResult:
             )
             violations.append(
                 Violation(
-                    severity=severity,
+                    severity=ctx.check_def.severity,
                     message=msg,
                     location=worst_location,
                 )

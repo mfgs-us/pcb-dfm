@@ -129,10 +129,10 @@ def run_via_tenting(ctx: CheckContext) -> CheckResult:
             status="pass",
             severity="info",  # Default value, will be overridden by finalize()
             score=100.0,
-            metric=MetricResult.ratio_percent(
+            metric=MetricResult.ratio_min_percent(
                 measured_pct=None,
                 target_pct=recommended_min,
-                limit_high_pct=absolute_min,
+                limit_low_pct=absolute_min,
             ),
             violations=[viol],
         ).finalize()
@@ -175,10 +175,10 @@ def run_via_tenting(ctx: CheckContext) -> CheckResult:
             status="pass",
             severity="info",  # Default value, will be overridden by finalize()
             score=100.0,
-            metric=MetricResult.ratio_percent(
+            metric=MetricResult.ratio_min_percent(
                 measured_pct=None,
                 target_pct=recommended_min,
-                limit_high_pct=absolute_min,
+                limit_low_pct=absolute_min,
             ),
             violations=[viol],
         ).finalize()
@@ -244,10 +244,10 @@ def run_via_tenting(ctx: CheckContext) -> CheckResult:
         severity="info",  # Default value, will be overridden by finalize()
         status=status,
         score=score,
-        metric=MetricResult.ratio_percent(
+        metric=MetricResult.ratio_min_percent(
             measured_pct=tented_pct,
             target_pct=recommended_min,
-            limit_high_pct=absolute_min,
+            limit_low_pct=absolute_min,
         ),
         violations=violations,
     ).finalize()

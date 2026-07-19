@@ -53,14 +53,10 @@ def run_drill_aspect_ratio(ctx: CheckContext) -> CheckResult:
             status="warning",
             severity="info",  # Default value, will be overridden by finalize()
             score=50.0,
-            metric=MetricResult(
-                kind="ratio",
-                units="%",
-                measured_value=None,
+            metric=MetricResult.dimensionless(
+                measured=None,
                 target=recommended_max,
-                limit_low=None,
                 limit_high=absolute_max,
-                margin_to_limit=None,
             ),
             violations=[viol],
         ).finalize()
@@ -82,14 +78,10 @@ def run_drill_aspect_ratio(ctx: CheckContext) -> CheckResult:
             status="warning",
             severity="info",  # Default value, will be overridden by finalize()
             score=50.0,
-            metric=MetricResult(
-                kind="ratio",
-                units="%",
-                measured_value=None,
+            metric=MetricResult.dimensionless(
+                measured=None,
                 target=recommended_max,
-                limit_low=None,
                 limit_high=absolute_max,
-                margin_to_limit=None,
             ),
             violations=[viol],
         ).finalize()
@@ -124,7 +116,7 @@ def run_drill_aspect_ratio(ctx: CheckContext) -> CheckResult:
         )
         violations.append(
             Violation(
-                severity=severity,
+                severity=ctx.check_def.severity,
                 message=msg,
                 location=None,
             )
@@ -137,14 +129,10 @@ def run_drill_aspect_ratio(ctx: CheckContext) -> CheckResult:
         severity="info",  # Default value, will be overridden by finalize()
         status=status,
         score=score,
-        metric=MetricResult(
-            kind="ratio",
-            units="%",
-            measured_value=float(aspect),
+        metric=MetricResult.dimensionless(
+            measured=float(aspect),
             target=recommended_max,
-            limit_low=None,
             limit_high=absolute_max,
-            margin_to_limit=margin_to_limit,
         ),
         violations=violations,
     ).finalize()

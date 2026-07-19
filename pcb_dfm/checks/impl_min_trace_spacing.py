@@ -61,7 +61,7 @@ def run_min_trace_spacing(ctx: CheckContext) -> CheckResult:
 
     if gerber is None or Line is None or not copper_files:
         viol = Violation(
-            severity="warning",
+            severity="info",
             message="Cannot compute minimum trace spacing (missing Gerber parser or no copper files).",
             location=None,
         )
@@ -69,9 +69,9 @@ def run_min_trace_spacing(ctx: CheckContext) -> CheckResult:
             check_id=ctx.check_def.id,
             name=ctx.check_def.name,
             category_id=ctx.check_def.category_id,
-            status="warning",
+            status="not_applicable",
             severity="info",  # Default value, will be overridden by finalize()
-            score=50.0,
+            score=100.0,
             metric=MetricResult.geometry_mm(
                 measured_mm=None,
                 target_mm=recommended_min,
@@ -165,7 +165,7 @@ def run_min_trace_spacing(ctx: CheckContext) -> CheckResult:
 
     if min_spacing_mm is None:
         viol = Violation(
-            severity="warning",
+            severity="info",
             message="Not enough trace segments to compute minimum trace spacing.",
             location=None,
         )
@@ -173,9 +173,9 @@ def run_min_trace_spacing(ctx: CheckContext) -> CheckResult:
             check_id=ctx.check_def.id,
             name=ctx.check_def.name,
             category_id=ctx.check_def.category_id,
-            status="warning",
+            status="not_applicable",
             severity="info",  # Default value, will be overridden by finalize()
-            score=50.0,
+            score=100.0,
             metric=MetricResult.geometry_mm(
                 measured_mm=None,
                 target_mm=recommended_min,
@@ -186,8 +186,7 @@ def run_min_trace_spacing(ctx: CheckContext) -> CheckResult:
 
     # Decide status only (severity handled by finalize)
     if min_spacing_mm < absolute_min:
-        # status = "fail"
-        status = "warning"
+        status = "fail"
     elif min_spacing_mm < recommended_min:
         status = "warning"
     else:

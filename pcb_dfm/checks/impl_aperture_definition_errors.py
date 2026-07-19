@@ -411,8 +411,9 @@ def run_aperture_definition_errors(ctx: CheckContext) -> CheckResult:
                 )
                 per_file_counts[layer_label] = per_file_counts.get(layer_label, 0) + 1
 
-            # Unknown shape with otherwise sane size: low-confidence suspicious
-            if shape_norm == "unknown":
+            # Unknown shape with otherwise sane size: low-confidence suspicious.
+            # elif so an aperture that is also tiny/huge is not double-counted.
+            elif shape_norm == "unknown":
                 suspicious.append(
                     SuspiciousAperture(
                         file_label=file_label,

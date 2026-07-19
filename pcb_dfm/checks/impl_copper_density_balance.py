@@ -74,9 +74,6 @@ def run_copper_density_balance(ctx: CheckContext) -> CheckResult:
 
     This is an approximation, but good enough to highlight gross copper imbalance.
     """
-    metric_cfg = ctx.check_def.metric or {}
-    units = metric_cfg.get("units", "percent")
-
     limits = ctx.check_def.limits or {}
     recommended_max_delta = float(limits.get("recommended_max_delta", 20.0))  # percent
     absolute_max_delta = float(limits.get("absolute_max_delta", 30.0))        # percent
@@ -107,15 +104,11 @@ def run_copper_density_balance(ctx: CheckContext) -> CheckResult:
             severity=ctx.check_def.severity,
             status="pass",
             score=100.0,
-            metric={
-                "kind": "ratio",
-                "units": units,
-                "measured_value": None,
-                "target": recommended_max_delta,
-                "limit_low": None,
-                "limit_high": absolute_max_delta,
-                "margin_to_limit": None,
-            },
+            metric=MetricResult.ratio_percent(
+                measured_pct=None,
+                target_pct=recommended_max_delta,
+                limit_high_pct=absolute_max_delta,
+            ),
             violations=[viol],
         )
 
@@ -133,15 +126,11 @@ def run_copper_density_balance(ctx: CheckContext) -> CheckResult:
             severity=ctx.check_def.severity,
             status="warning",
             score=50.0,
-            metric={
-                "kind": "ratio",
-                "units": units,
-                "measured_value": None,
-                "target": recommended_max_delta,
-                "limit_low": None,
-                "limit_high": absolute_max_delta,
-                "margin_to_limit": None,
-            },
+            metric=MetricResult.ratio_percent(
+                measured_pct=None,
+                target_pct=recommended_max_delta,
+                limit_high_pct=absolute_max_delta,
+            ),
             violations=[viol],
         )
 
@@ -161,15 +150,11 @@ def run_copper_density_balance(ctx: CheckContext) -> CheckResult:
             severity=ctx.check_def.severity,
             status="warning",
             score=50.0,
-            metric={
-                "kind": "ratio",
-                "units": units,
-                "measured_value": None,
-                "target": recommended_max_delta,
-                "limit_low": None,
-                "limit_high": absolute_max_delta,
-                "margin_to_limit": None,
-            },
+            metric=MetricResult.ratio_percent(
+                measured_pct=None,
+                target_pct=recommended_max_delta,
+                limit_high_pct=absolute_max_delta,
+            ),
             violations=[viol],
         )
 

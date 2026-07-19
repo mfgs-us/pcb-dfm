@@ -2,13 +2,13 @@ from __future__ import annotations
 
 import math
 from collections import defaultdict
-from math import floor
 from typing import List, Optional, Tuple
 
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
-from ..results import CheckResult, Violation, ViolationLocation, MetricResult
-from ..geometry.primitives import Polygon
+from ..geometry.polygon_index import PolygonIndex
+from ..geometry.primitives import Bounds, Polygon
+from ..results import CheckResult, MetricResult, Violation, ViolationLocation
 
 
 def _poly_area_mm2(poly) -> float:
@@ -19,11 +19,11 @@ def _poly_area_mm2(poly) -> float:
             return float(poly.area())
         except TypeError:
             return float(poly.area)
-    
+
     # Calculate area from vertices if available
     if hasattr(poly, "vertices") and len(poly.vertices) >= 3:
         return _polygon_area_from_vertices(poly.vertices)
-    
+
     # Fallback to bounding box
     b = poly.bounds()
     return max(0.0, (b.max_x - b.min_x) * (b.max_y - b.min_y))
@@ -33,55 +33,55 @@ def _polygon_area_from_vertices(vertices) -> float:
     """Calculate polygon area using shoelace formula."""
     if len(vertices) < 3:
         return 0.0
-    
+
     area = 0.0
     n = len(vertices)
     for i in range(n):
         j = (i + 1) % n
         area += vertices[i].x * vertices[j].y
         area -= vertices[j].x * vertices[i].y
-    
+
     return abs(area) / 2.0
 
 
 def _get_board_outline_area(geom) -> float:
     """Get total board outline area for polarity detection."""
     total_area = 0.0
-    
+
     for layer in getattr(geom, "layers", []):
         layer_type = getattr(layer, "layer_type", getattr(layer, "type", None))
-        
+
         if layer_type == "outline":
             for poly in getattr(layer, "polygons", []):
                 total_area += _poly_area_mm2(poly)
-    
+
     return total_area
 
 
 def _normalize_mask_polarity(mask_polygons: List[Polygon], board_area: float) -> Tuple[List[Polygon], str]:
     """
     3A) Normalize solder mask layer into "openings geometry".
-    
+
     Returns:
         - List of normalized opening polygons
-        - String indicating polarity: "openings" or "coverage" 
+        - String indicating polarity: "openings" or "coverage"
     """
     if board_area <= 0:
         # No board outline available, assume openings (most common)
         return mask_polygons, "openings"
-    
+
     # Calculate robust polarity detection metrics
     total_mask_area = sum(_poly_area_mm2(poly) for poly in mask_polygons)
     max_poly_area = max(_poly_area_mm2(poly) for poly in mask_polygons) if mask_polygons else 0.0
     n_polys = len(mask_polygons)
-    
+
     # Robust heuristic:
     # - If there's one giant polygon roughly board-sized, it's coverage
     # - If total area is small relative to board, it's openings
     # - Default to openings (bias toward openings because we cannot invert without boolean ops)
     area_ratio = total_mask_area / board_area if board_area > 0 else 0.0
     max_poly_ratio = max_poly_area / board_area if board_area > 0 else 0.0
-    
+
     if max_poly_ratio > 0.8:
         # One giant polygon roughly board-sized -> coverage
         # But we don't have robust inversion, so default to openings
@@ -97,13 +97,13 @@ def _normalize_mask_polarity(mask_polygons: List[Polygon], board_area: float) ->
 def _invert_mask_coverage(coverage_polygons: List[Polygon], board_area: float) -> List[Polygon]:
     """
     Convert coverage polygons to opening polygons.
-    
+
     For now, this is a simplified implementation.
     In a full implementation, you'd need proper boolean operations.
     """
     # This is a placeholder - proper implementation would require
     # boolean geometry operations (outline - coverage = openings)
-    # 
+    #
     # For now, we'll return the original polygons but mark as inverted
     # The expansion calculation will need to handle this case
     return coverage_polygons
@@ -113,14 +113,14 @@ def _distance_point_to_segment(px: float, py: float, x1: float, y1: float, x2: f
     """Calculate minimum distance from point to line segment."""
     dx = x2 - x1
     dy = y2 - y1
-    
+
     if abs(dx) < 1e-10 and abs(dy) < 1e-10:
         # Segment is a point
         return math.sqrt((px - x1)**2 + (py - y1)**2)
-    
+
     # Parameter t determines closest point on infinite line
     t = ((px - x1) * dx + (py - y1) * dy) / (dx * dx + dy * dy)
-    
+
     if t < 0:
         # Closest point is segment start
         return math.sqrt((px - x1)**2 + (py - y1)**2)
@@ -138,19 +138,19 @@ def _min_distance_between_polygons(poly1, poly2) -> float:
     """Calculate minimum distance between two polygons."""
     if not hasattr(poly1, 'vertices') or not hasattr(poly2, 'vertices'):
         return float('inf')
-    
+
     min_dist = float('inf')
-    
+
     # Check distances from vertices of poly1 to edges of poly2
     for vertex in poly1.vertices:
         dist = _min_distance_to_polygon_edges(vertex.x, vertex.y, poly2.vertices)
         min_dist = min(min_dist, dist)
-    
+
     # Check distances from vertices of poly2 to edges of poly1
     for vertex in poly2.vertices:
         dist = _min_distance_to_polygon_edges(vertex.x, vertex.y, poly1.vertices)
         min_dist = min(min_dist, dist)
-    
+
     return min_dist
 
 
@@ -158,18 +158,18 @@ def _min_distance_to_polygon_edges(x: float, y: float, vertices) -> float:
     """Find minimum distance from point to any polygon edge."""
     if len(vertices) < 3:
         return float('inf')
-    
+
     min_dist = float('inf')
     n = len(vertices)
-    
+
     for i in range(n):
         j = (i + 1) % n
         x1, y1 = vertices[i].x, vertices[i].y
         x2, y2 = vertices[j].x, vertices[j].y
-        
+
         dist = _distance_point_to_segment(x, y, x1, y1, x2, y2)
         min_dist = min(min_dist, dist)
-    
+
     return min_dist
 
 
@@ -191,7 +191,7 @@ def _bbox_contains(a, b) -> bool:
     """Fallback bbox containment test."""
     ba = a.bounds()
     bb = b.bounds()
-    return (ba.min_x <= bb.min_x and ba.max_x >= bb.max_x and 
+    return (ba.min_x <= bb.min_x and ba.max_x >= bb.max_x and
             ba.min_y <= bb.min_y and ba.max_y >= bb.max_y)
 
 
@@ -313,19 +313,19 @@ def run_solder_mask_expansion(ctx: CheckContext) -> CheckResult:
     # 3A) Normalize mask polarity for each side
     board_area = _get_board_outline_area(geom)
     masks: List[_MaskOpening] = []
-    
+
     for side_key, mask_polys in raw_masks_by_side.items():
         if not mask_polys:
             continue
-            
+
         # Extract polygons for this side
         side_polygons = [poly for poly, _, _ in mask_polys]
         layer_name = mask_polys[0][1]  # Use first layer for naming
         logical_name = mask_polys[0][2]
-        
+
         # Normalize polarity
         normalized_polys, polarity = _normalize_mask_polarity(side_polygons, board_area)
-        
+
         # Create mask opening objects
         for poly in normalized_polys:
             masks.append(_MaskOpening(side_key, logical_name, poly, polarity))
@@ -351,51 +351,47 @@ def run_solder_mask_expansion(ctx: CheckContext) -> CheckResult:
             violations=[viol],
         ).finalize()
 
-    # Spatial index for mask openings to avoid pads*masks scans
+    # Spatial index for mask openings to avoid pads*masks scans.
+    #
+    # Each mask is indexed by its bbox inflated by mask_search_inflate_mm, and a
+    # pad's candidates are the masks touching the block of cells around the pad
+    # centroid (ring = ceil(inflate/cell) + 1). Indexing the inflated bbox and
+    # querying that cell block reproduces the previous hand-rolled grid exactly
+    # (same cell size, same floor math, same first-seen candidate order), so the
+    # downstream intersection / containment / area-rank logic is unchanged and
+    # results are identical; the index only prunes masks too far to ever
+    # intersect a pad.
     cell = max(0.5, mask_search_inflate_mm * 4.0)  # mm, tuned for typical mask clearances
-    mask_grid_by_side: dict[str, dict[tuple[int, int], list[int]]] = {}
+    k = int(math.ceil(mask_search_inflate_mm / cell)) + 1
+    mask_index_by_side: dict[str, PolygonIndex] = {}
     masks_by_side: dict[str, list[_MaskOpening]] = defaultdict(list)
 
     for m in masks:
         key = str(m.side).lower() if m.side is not None else "unknown"
         masks_by_side[key].append(m)
 
+    infl = mask_search_inflate_mm
     for side_key, side_masks in masks_by_side.items():
-        grid = defaultdict(list)
-        for idx, m in enumerate(side_masks):
-            # Put each mask bbox into all cells it overlaps
-            ix0 = int(floor((m.min_x - mask_search_inflate_mm) / cell))
-            ix1 = int(floor((m.max_x + mask_search_inflate_mm) / cell))
-            iy0 = int(floor((m.min_y - mask_search_inflate_mm) / cell))
-            iy1 = int(floor((m.max_y + mask_search_inflate_mm) / cell))
-            for iy in range(iy0, iy1 + 1):
-                for ix in range(ix0, ix1 + 1):
-                    grid[(ix, iy)].append(idx)
-        mask_grid_by_side[side_key] = grid
+        id_bounds = [
+            (
+                idx,
+                Bounds(m.min_x - infl, m.min_y - infl, m.max_x + infl, m.max_y + infl),
+            )
+            for idx, m in enumerate(side_masks)
+        ]
+        mask_index_by_side[side_key] = PolygonIndex.from_bounds(
+            id_bounds, cell_size=cell
+        )
 
     # helper to fetch candidate masks for a pad
     def _mask_candidates_for_pad(pad: _Pad) -> list[_MaskOpening]:
         side_key = str(pad.side).lower() if pad.side is not None else "unknown"
         side_masks = masks_by_side.get(side_key, [])
-        grid = mask_grid_by_side.get(side_key)
-        if not grid:
+        index = mask_index_by_side.get(side_key)
+        if not index:
             return []
-        ci = int(floor(pad.cx / cell))
-        cj = int(floor(pad.cy / cell))
-        out: list[_MaskOpening] = []
-        seen: set[int] = set()
-        
-        # Compute neighborhood radius from mask_search_inflate_mm and cell size
-        k = int(math.ceil(mask_search_inflate_mm / cell)) + 1
-        
-        for di in range(-k, k + 1):
-            for dj in range(-k, k + 1):
-                for midx in grid.get((ci + di, cj + dj), []):
-                    if midx in seen:
-                        continue
-                    seen.add(midx)
-                    out.append(side_masks[midx])
-        return out
+        ci, cj = index.cell_of(pad.cx, pad.cy)
+        return [side_masks[midx] for midx in index.items_in_cell_block(ci, cj, ring=k)]
 
     min_expansion = math.inf
     min_loc: Optional[ViolationLocation] = None
@@ -428,11 +424,11 @@ def run_solder_mask_expansion(ctx: CheckContext) -> CheckResult:
         has_any_match = True
 
         m = best_mask_for_pad
-        
+
         # 3B) Compute expansion using true distance measurement with proper sign logic
         try:
             min_distance = _min_distance_between_polygons(pad.poly, m.poly)
-            
+
             # Use containment-based sign logic instead of distance magnitude
             if _contains(m.poly, pad.poly):
                 # Mask fully contains pad, expansion is positive

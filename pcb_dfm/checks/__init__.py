@@ -15,8 +15,8 @@ from types import ModuleType
 
 from .definitions import (
     CheckDefinition,
-    load_check_definition,
     load_all_check_definitions,
+    load_check_definition,
 )
 
 
@@ -27,12 +27,12 @@ def load_all_checks() -> list[ModuleType]:
     """
     imported = []
     pkg_name = __name__  # "pcb_dfm.checks"
-    
+
     _SKIP_MODULE_SUFFIXES = {
         "all_checks",   # legacy
         "__init__",
     }
-    
+
     for m in pkgutil.walk_packages(__path__, prefix=pkg_name + "."):
         leaf = m.name.split(".")[-1]
         if leaf.startswith("_") or leaf in _SKIP_MODULE_SUFFIXES:
@@ -50,42 +50,46 @@ def _ensure_impls_loaded() -> None:
     engine.context is fully initialized and we do not hit circular imports.
     """
     # Copper geometry
-    from . import impl_copper_to_edge_distance  # noqa: F401
-    from . import impl_min_trace_width  # noqa: F401
-    from . import impl_min_trace_spacing  # noqa: F401
-    from . import impl_copper_sliver_width  # noqa: F401
-    from . import impl_copper_density_balance  # noqa: F401
-    from . import impl_acid_trap_angle  # noqa: F401
-    from . import impl_plane_fragmentation  # noqa: F401
-    from . import impl_copper_thermal_area  # noqa: F401
-
     # Drill and vias
-    from . import impl_min_drill_size  # noqa: F401
-    from . import impl_drill_to_drill_spacing  # noqa: F401
-    from . import impl_drill_aspect_ratio  # noqa: F401
-    from . import impl_min_annular_ring  # noqa: F401
-    from . import impl_via_to_copper_clearance  # noqa: F401
-    from . import impl_via_tenting  # noqa: F401
-    from . import impl_via_in_pad_thermal_balance  # noqa: F401
-    from . import impl_drill_wander_budget  # noqa: F401
-
     # Solder mask and silkscreen
-    from . import impl_mask_to_trace_clearance  # noqa: F401
-    from . import impl_solder_mask_expansion  # noqa: F401
-    from . import impl_solder_mask_web  # noqa: F401
-    from . import impl_silkscreen_on_copper  # noqa: F401
-    from . import impl_silkscreen_min_width  # noqa: F401
-    from . import impl_silkscreen_over_mask_defined_pads  # noqa: F401
-
     # Assembly / misc
-    from . import impl_component_to_component_spacing  # noqa: F401
-    from . import impl_missing_tooling_holes  # noqa: F401
-    from . import impl_aperture_definition_errors  # noqa: F401
-    from . import impl_unsupported_hole_types  # noqa: F401
-    from . import impl_thermal_relief_spoke_width  # noqa: F401
-    from . import impl_dielectric_thickness_uniformity  # noqa: F401
-    from . import impl_impedance_control  # noqa: F401
-    from . import impl_backdrill_stub_length  # noqa: F401
+    # Mechanical outline
+    from . import (
+        impl_acid_trap_angle,  # noqa: F401
+        impl_aperture_definition_errors,  # noqa: F401
+        impl_backdrill_stub_length,  # noqa: F401
+        impl_component_to_component_spacing,  # noqa: F401
+        impl_copper_density_balance,  # noqa: F401
+        impl_copper_sliver_width,  # noqa: F401
+        impl_copper_thermal_area,  # noqa: F401
+        impl_copper_to_edge_distance,  # noqa: F401
+        impl_dielectric_thickness_uniformity,  # noqa: F401
+        impl_drill_aspect_ratio,  # noqa: F401
+        impl_drill_to_drill_spacing,  # noqa: F401
+        impl_drill_wander_budget,  # noqa: F401
+        impl_fillet_radius_milling,  # noqa: F401
+        impl_impedance_control,  # noqa: F401
+        impl_mask_to_trace_clearance,  # noqa: F401
+        impl_min_annular_ring,  # noqa: F401
+        impl_min_drill_size,  # noqa: F401
+        impl_min_slot_width,  # noqa: F401
+        impl_min_trace_spacing,  # noqa: F401
+        impl_min_trace_width,  # noqa: F401
+        impl_missing_tooling_holes,  # noqa: F401
+        impl_plane_fragmentation,  # noqa: F401
+        impl_silkscreen_min_width,  # noqa: F401
+        impl_silkscreen_on_copper,  # noqa: F401
+        impl_silkscreen_over_mask_defined_pads,  # noqa: F401
+        impl_solder_mask_expansion,  # noqa: F401
+        impl_solder_mask_web,  # noqa: F401
+        impl_solder_paste_area_coverage,  # noqa: F401
+        impl_tab_routing_mousebites,  # noqa: F401
+        impl_thermal_relief_spoke_width,  # noqa: F401
+        impl_unsupported_hole_types,  # noqa: F401
+        impl_via_in_pad_thermal_balance,  # noqa: F401
+        impl_via_tenting,  # noqa: F401
+        impl_via_to_copper_clearance,  # noqa: F401
+    )
 
 
 __all__ = [

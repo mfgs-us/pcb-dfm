@@ -48,14 +48,24 @@ The project is designed to be used both as a Python library (importable module) 
 - `pcb-tools` (Gerber/Excellon parsing)
 - Standard library only otherwise
 
-### 1.2 Clone the Repository
+### 1.2 Install from PyPI (recommended)
 
 ```bash
-git clone https://github.com/your-org-or-user/pcb-dfm.git
+pip install pcb-dfm
+pcb-dfm gate gerbers.zip --html report.html   # run a DFM check by hand
+```
+
+That's the whole install — no Action, no service, no account. `pcb-dfm gate`
+runs the full DFM locally and writes a report you can open.
+
+### 1.3 Clone the Repository (for development)
+
+```bash
+git clone https://github.com/mfgs-us/pcb-dfm.git
 cd pcb-dfm
 ```
 
-### 1.3 Install in Development Mode
+### 1.4 Install in Development Mode
 
 On Windows:
 ```bash

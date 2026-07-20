@@ -1,0 +1,18 @@
+{
+  "schema_version": "1.0.0",
+  "metadata": {
+    "name": "JLCPCB 4-layer (standard)",
+    "version": "1.0.0",
+    "organization": "JLCPCB",
+    "process_notes": "Standard-process defaults for JLCPCB's standard 4-layer flow (process tier: standard multilayer, 0.5oz inner / 1oz outer, 1.6 mm FR-4). Numbers are published standard-process values (min trace/space 3.5 mil / 0.09 mm, min via drill 0.15 mm, min annular ring 0.13 mm, aspect ratio 8:1) and MUST be confirmed against JLCPCB's current capabilities datasheet before relied upon. high_speed_si checks remain enabled because JLCPCB offers controlled-impedance service on 4-layer builds."
+  },
+  "extends": "default",
+  "overrides": {
+    "min_trace_width":  { "limits": { "recommended_min": 0.09, "absolute_min": 0.0889 } },
+    "min_trace_spacing":{ "limits": { "recommended_min": 0.09, "absolute_min": 0.0889 } },
+    "min_drill_size":   { "limits": { "recommended_min": 0.15, "absolute_min": 0.15 } },
+    "min_annular_ring": { "limits": { "recommended_min": 0.13, "absolute_min": 0.10 } },
+    "drill_aspect_ratio": { "limits": { "recommended_max": 8.0, "absolute_max": 10.0 } },
+    "via_to_copper_clearance": { "limits": { "recommended_min": 0.15, "absolute_min": 0.10 } }
+  }
+}

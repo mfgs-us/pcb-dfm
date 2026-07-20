@@ -1,0 +1,19 @@
+{
+  "schema_version": "1.0.0",
+  "metadata": {
+    "name": "JLCPCB 2-layer (standard)",
+    "version": "1.0.0",
+    "organization": "JLCPCB",
+    "process_notes": "Standard-process defaults for JLCPCB's economy 2-layer flow (process tier: standard/economy, 1oz outer copper, 1.6 mm FR-4). Numbers are published standard-process values (min trace/space 6 mil / 0.152 mm, min via drill 0.15 mm, min mechanical/PTH drill 0.20 mm, min annular ring 0.13 mm, through-hole aspect ratio 8:1) and MUST be confirmed against JLCPCB's current capabilities datasheet before relied upon. high_speed_si checks are disabled because the economy 2-layer flow does not offer a controlled-impedance / stackup service."
+  },
+  "extends": "default",
+  "disabled_categories": ["high_speed_si"],
+  "overrides": {
+    "min_trace_width":  { "limits": { "recommended_min": 0.152, "absolute_min": 0.127 } },
+    "min_trace_spacing":{ "limits": { "recommended_min": 0.152, "absolute_min": 0.127 } },
+    "min_drill_size":   { "limits": { "recommended_min": 0.20, "absolute_min": 0.15 } },
+    "min_annular_ring": { "limits": { "recommended_min": 0.15, "absolute_min": 0.13 } },
+    "drill_aspect_ratio": { "limits": { "recommended_max": 8.0, "absolute_max": 10.0 } },
+    "via_to_copper_clearance": { "limits": { "recommended_min": 0.20, "absolute_min": 0.127 } }
+  }
+}

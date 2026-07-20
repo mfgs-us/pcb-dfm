@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import re
 import shutil
 import tempfile
 import zipfile
@@ -69,6 +70,10 @@ class GerberIngestResult:
     has_bottom_copper: bool = False
     has_outline: bool = False
     has_drills: bool = False
+
+    # Human-readable warnings surfaced to the user (e.g. a Gerber that looks
+    # like copper but could not be classified, so it was not counted).
+    warnings: List[str] = field(default_factory=list)
 
     # If ingest created a temporary directory internally, caller may decide to clean it up.
     is_temporary_root: bool = False
@@ -193,6 +198,28 @@ def ingest_gerber_zip(zip_path: Path, workspace_root: Optional[Path] = None) -> 
         )
         result.files.append(info)
 
+    # Assign distinct InnerCopperN indices to inner copper files (they are all
+    # classified with a placeholder), ordered by filename for determinism, so
+    # they do not collapse into one logical layer.
+    inner = sorted(
+        (f for f in result.files if f.side == "Inner" and f.layer_type == "copper"),
+        key=lambda f: f.original_name.lower(),
+    )
+    for i, f in enumerate(inner, start=1):
+        f.logical_layer = f"InnerCopper{i}"  # type: ignore[assignment]
+
+    # Warn about Gerber files that look like copper but could not be classified
+    # (rather than silently dropping them and mis-reporting the layer count).
+    for f in result.files:
+        if f.layer_type == "other" and _looks_like_unclassified_copper(
+            f.original_name.lower(), f.extension, f.format
+        ):
+            result.warnings.append(
+                f"'{f.original_name}' looks like a copper layer but was not "
+                f"classified; it is NOT counted in the stackup. Rename it to a "
+                f"recognized layer name (e.g. In1_Cu) if it is inner copper."
+            )
+
     # Compute summary flags
     result.has_top_copper = any(f.logical_layer == "TopCopper" for f in result.files)
     result.has_bottom_copper = any(f.logical_layer == "BottomCopper" for f in result.files)
@@ -243,14 +270,21 @@ def _guess_format(ext: str, name_lower: str) -> GerberFormat:
 
     We keep this heuristic simple on purpose; geometry layer can be stricter later.
     """
-    if ext in {".gtl", ".gbl", ".gts", ".gbs", ".gto", ".gbo", ".gtp", ".gbp", ".gko", ".gml", ".gm1", ".gm2", ".gbr"}:
+    if ext in {".gtl", ".gbl", ".gts", ".gbs", ".gto", ".gbo", ".gtp", ".gbp", ".gko", ".gml", ".gm1", ".gm2", ".gbr", ".ger", ".gp1", ".gp2"}:
+        return "gerber"
+
+    # Protel-style inner copper extensions: .g1, .g2, ... .g15
+    if re.fullmatch(r"\.g\d+", ext):
         return "gerber"
 
     if ext in {".drl", ".xln"} or _looks_like_drill(name_lower):
         return "excellon"
 
     # Some CAD tools export gerbers without typical extensions
-    if any(token in name_lower for token in ["top", "bottom", "inner", "mask", "silk", "outline", "edge"]):
+    if any(token in name_lower for token in [
+        "top", "bottom", "inner", "mask", "silk", "outline", "edge",
+        "gnd", "pwr", "power", "vcc", "ground", "plane", "copper", "cu",
+    ]):
         return "gerber"
 
     return "unknown"
@@ -258,6 +292,50 @@ def _guess_format(ext: str, name_lower: str) -> GerberFormat:
 
 def _looks_like_drill(name_lower: str) -> bool:
     return any(token in name_lower for token in ["drill", "drl", "xln", "excellon", "npth", "pth"])
+
+
+# Names that clearly indicate a NON-copper role (so we don't misread them as
+# an unclassified copper layer, and don't treat them as inner planes).
+_NON_COPPER_TOKENS = (
+    "mask", "silk", "paste", "outline", "edge", "keepout", "courtyard",
+    "drawing", "fab", "assembly", "assy", "note", "comment", "profile",
+    "drill", "npth", "pth", "adhesive", "glue", "stencil",
+)
+
+# Tokens that indicate an inner copper plane by name.
+_INNER_PLANE_TOKENS = (
+    "gnd", "ground", "pwr", "power", "vcc", "vdd", "plane", "mid",
+)
+
+
+def _is_inner_copper(name_lower: str, ext: str) -> bool:
+    """True if this file is an inner copper layer.
+
+    Covers KiCad indexed names (In1_Cu, inner2, l3_cu), protel inner-copper
+    extensions (.g2, .g3, .gp1), and named power/ground planes (GND, PWR, ...).
+    """
+    if any(tok in name_lower for tok in _NON_COPPER_TOKENS):
+        return False
+    # protel inner-copper extensions: .g1 .. .g15, .gp1, .gp2
+    if re.fullmatch(r"\.g\d+", ext) or ext in {".gp1", ".gp2"}:
+        return True
+    # explicit inner index: in1_cu / inner2 / l3_cu / in3
+    if re.search(r"(in\d+|inner\d+|l[2-9]\d?|l1[0-5])(_?cu)?", name_lower):
+        return True
+    # named plane, when it also reads as copper (or gives no other role)
+    if any(tok in name_lower for tok in _INNER_PLANE_TOKENS):
+        return True
+    return False
+
+
+def _looks_like_unclassified_copper(name_lower: str, ext: str, fmt: GerberFormat) -> bool:
+    """A Gerber file that fell through to 'other' but might actually be copper —
+    worth warning about rather than silently dropping."""
+    if fmt != "gerber":
+        return False
+    if any(tok in name_lower for tok in _NON_COPPER_TOKENS):
+        return False
+    return "cu" in name_lower or "copper" in name_lower or "sig" in name_lower
 
 
 def _classify_layer(
@@ -369,27 +447,15 @@ def _classify_layer(
         layer_type = "copper"
         return logical_layer, side, layer_type, is_plated
 
-    # Inner copper layers (KiCad often uses In1_Cu, In2_Cu, etc)
-    if ("in1_cu" in name_lower) or ("in1cu" in name_lower) or ("inner1" in name_lower) or ("in1" in name_lower and "cu" in name_lower):
+    # Inner copper. Beyond KiCad's In1_Cu/In2_Cu, real exports name inner
+    # planes GND/PWR/VCC/... and use protel .g2/.g3 extensions. Missing these
+    # silently drops inner layers, so a 4-layer board reads as 2-layer. We
+    # classify all of them as inner copper here; ingest assigns distinct
+    # InnerCopperN indices afterwards. The exact index is resolved in a second
+    # pass over the whole fileset (see ingest_gerber_zip).
+    if _is_inner_copper(name_lower, ext):
+        # Placeholder index; ingest_gerber_zip renumbers inner copper 1..N.
         logical_layer = "InnerCopper1"
-        side = "Inner"
-        layer_type = "copper"
-        return logical_layer, side, layer_type, is_plated
-
-    if ("in2_cu" in name_lower) or ("in2cu" in name_lower) or ("inner2" in name_lower) or ("in2" in name_lower and "cu" in name_lower):
-        logical_layer = "InnerCopper2"
-        side = "Inner"
-        layer_type = "copper"
-        return logical_layer, side, layer_type, is_plated
-
-    if ("in3_cu" in name_lower) or ("in3cu" in name_lower) or ("inner3" in name_lower) or ("in3" in name_lower and "cu" in name_lower):
-        logical_layer = "InnerCopper3"
-        side = "Inner"
-        layer_type = "copper"
-        return logical_layer, side, layer_type, is_plated
-
-    if ("in4_cu" in name_lower) or ("in4cu" in name_lower) or ("inner4" in name_lower) or ("in4" in name_lower and "cu" in name_lower):
-        logical_layer = "InnerCopper4"
         side = "Inner"
         layer_type = "copper"
         return logical_layer, side, layer_type, is_plated

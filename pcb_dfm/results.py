@@ -36,6 +36,9 @@ class DesignInfo(BaseModel):
     revision: Optional[str] = None
     source_files: List[str] = Field(default_factory=list)
     stackup_layers: Optional[int] = None
+    # Human-readable detected copper stackup, e.g.
+    # ["TopCopper: board-F_Cu.gbr", "InnerCopper1: board-GND.gbr", ...]
+    layers: Optional[List[str]] = None
     board_size_mm: Optional[BoardSize] = None
 
 
@@ -214,6 +217,10 @@ class CheckResult(BaseModel):
     score: Optional[float] = Field(default=None, ge=0, le=100)
     metric: Optional[MetricResult] = None
     violations: List[Violation] = Field(default_factory=list)
+    # "high" for geometric/metric checks; "heuristic" for checks that rely on
+    # shape guessing (via-pad inference, silkscreen-on-copper via bbox overlap,
+    # ...) whose findings are best treated as a checklist, not a hard gate.
+    confidence: Optional[str] = None
 
     def to_dict(self) -> Dict[str, Any]:
         return self.model_dump()
@@ -252,6 +259,7 @@ class CheckResult(BaseModel):
             score=final_score,
             metric=self.metric,
             violations=self.violations,
+            confidence=self.confidence,
         )
 
 
@@ -273,6 +281,8 @@ class DfmResult(BaseModel):
     design: DesignInfo
     summary: ResultSummary
     categories: List[CategoryResult]
+    # Non-fatal ingest/analysis warnings (e.g. an unclassified copper layer).
+    warnings: List[str] = Field(default_factory=list)
 
     def to_json(self) -> str:
         return self.model_dump_json(indent=2)

@@ -33,6 +33,18 @@ def generate_text_report(result: DfmResult) -> str:
     )
     lines.append("")
 
+    # Detected copper stackup -- so a dropped inner layer is visible, not silent.
+    if result.design.layers:
+        lines.append(f"Detected copper stackup ({result.design.stackup_layers} layers):")
+        for ly in result.design.layers:
+            lines.append(f"  - {ly}")
+        lines.append("")
+    if result.warnings:
+        lines.append("WARNINGS:")
+        for w in result.warnings:
+            lines.append(f"  ! {w}")
+        lines.append("")
+
     for cat in result.categories:
         lines.append(
             f"[{cat.category_id}] {cat.name or ''} - "
@@ -41,7 +53,8 @@ def generate_text_report(result: DfmResult) -> str:
             f"violations: {cat.violations_count}"
         )
         for check in cat.checks:
-            lines.append(f"  - {check.check_id}: {check.status} ({check.severity})")
+            tag = " [heuristic]" if check.confidence == "heuristic" else ""
+            lines.append(f"  - {check.check_id}: {check.status} ({check.severity}){tag}")
             if check.metric and check.metric.measured_value is not None:
                 mv = check.metric.measured_value
                 units = check.metric.units or ""
@@ -222,6 +235,11 @@ def generate_html_report(result: DfmResult, geometry: Optional[object] = None) -
         f"<b class='sev-warning'>{counts.warning} warning</b> &middot; "
         f"<b class='sev-info'>{counts.info} info</b> &middot; "
         f"<b>{counts.critical} critical</b></div>")
+    if result.design.layers:
+        chips = "".join(f"<span class='chip'>{_esc(ly)}</span>" for ly in result.design.layers)
+        out.append(f"<div class='stackup'><b>Copper stackup ({result.design.stackup_layers}):</b> {chips}</div>")
+    for w in result.warnings:
+        out.append(f"<div class='warn'>&#9888; {_esc(w)}</div>")
     out.append("</header>")
 
     out.append("<div class='layout'>")
@@ -249,11 +267,12 @@ def generate_html_report(result: DfmResult, geometry: Optional[object] = None) -
             measured = ""
             if chk.metric and chk.metric.measured_value is not None:
                 measured = f"<span class='measured'>{chk.metric.measured_value} {_esc(chk.metric.units or '')}</span>"
+            heur = "<span class='heur' title='heuristic check — treat as a checklist, not a hard gate'>heuristic</span>" if chk.confidence == "heuristic" else ""
             out.append(
                 f"<div class='check'><div class='check-head'>"
                 f"<span class='sev' style='background:{scolor}'></span>"
                 f"<code>{_esc(chk.check_id)}</code> "
-                f"<span class='st'>{_esc(chk.status)}</span> {measured}</div>")
+                f"<span class='st'>{_esc(chk.status)}</span> {heur} {measured}</div>")
             for v in chk.violations:
                 mi = marker_of.get(id(v))
                 pin = ""
@@ -284,6 +303,10 @@ h1 .dim{color:var(--muted);font-weight:500}
 .status{color:#fff;font-weight:700;padding:3px 12px;border-radius:6px;font-size:14px}
 .score{font-weight:600}.muted{color:var(--muted);font-size:13px}
 .counts{margin-top:8px;color:var(--muted);font-size:13px}
+.stackup{margin-top:8px;font-size:12px;color:var(--muted);display:flex;gap:6px;align-items:center;flex-wrap:wrap}
+.chip{background:var(--card);border:1px solid var(--border);border-radius:5px;padding:1px 7px;font-family:ui-monospace,Menlo,monospace}
+.warn{margin-top:8px;padding:6px 10px;border-radius:6px;background:#fdecc8;color:#7a4f01;font-size:13px}
+@media (prefers-color-scheme:dark){.warn{background:#3a2d0a;color:#f5cf6b}}
 .sev-error{color:#e5484d}.sev-warning{color:#f5a623}.sev-info{color:#4c8dff}
 .layout{display:flex;gap:0;align-items:flex-start}
 .board-panel{flex:1 1 55%;position:sticky;top:0;padding:16px;min-width:0}
@@ -300,6 +323,8 @@ h2{font-size:15px;margin:18px 0 8px;display:flex;align-items:center;gap:8px}
 .check-head{display:flex;align-items:center;gap:8px;font-size:13px}
 .sev{width:8px;height:8px;border-radius:50%;display:inline-block;flex:none}
 .st{color:var(--muted);text-transform:uppercase;font-size:11px;letter-spacing:.03em}
+.heur{font-size:10px;color:#8a6d00;background:#fdecc8;border-radius:4px;padding:0 5px;text-transform:uppercase;letter-spacing:.03em}
+@media (prefers-color-scheme:dark){.heur{background:#3a2d0a;color:#f5cf6b}}
 .measured{margin-left:auto;color:var(--muted);font-size:12px}
 code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px}
 .viol{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;color:var(--muted);padding:4px 0 2px 16px}
@@ -330,21 +355,30 @@ def generate_pr_summary(result: DfmResult, top: int = 10) -> str:
          f"({c.error} error, {c.warning} warning, {c.info} info)"),
         "",
     ]
+    if result.design.layers:
+        stack = " → ".join(_esc_md(ly.split(":")[0]) for ly in result.design.layers)
+        lines.append(f"Detected copper stackup ({result.design.stackup_layers}): {stack}")
+    for w in result.warnings:
+        lines.append(f"> ⚠️ {_esc_md(w)}")
+    if result.design.layers or result.warnings:
+        lines.append("")
 
     items = []
     for cat in result.categories:
         for chk in cat.checks:
             if chk.status in ("fail", "warning"):
                 msg = chk.violations[0].message if chk.violations else ""
-                items.append((0 if chk.status == "fail" else 1, chk.status, chk.check_id, msg))
+                heur = chk.confidence == "heuristic"
+                items.append((0 if chk.status == "fail" else 1, chk.status, chk.check_id, msg, heur))
     items.sort(key=lambda t: t[0])
 
     if items:
         lines.append("**Needs attention**")
-        for _rank, st, cid, msg in items[:top]:
+        for _rank, st, cid, msg, heur in items[:top]:
             mark = "❌" if st == "fail" else "⚠️"
             msg = msg if len(msg) <= 160 else msg[:157] + "…"
-            lines.append(f"- {mark} `{_esc_md(cid)}` — {_esc_md(msg)}")
+            tag = " _(heuristic)_" if heur else ""
+            lines.append(f"- {mark} `{_esc_md(cid)}`{tag} — {_esc_md(msg)}")
         if len(items) > top:
             lines.append(f"- …and {len(items) - top} more")
     else:

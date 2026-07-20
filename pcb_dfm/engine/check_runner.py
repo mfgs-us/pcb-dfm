@@ -17,6 +17,33 @@ from .geometry_cache import GeometryCache
 
 logger = logging.getLogger("pcb_dfm.timing")
 
+# Checks whose results rely on shape/role guessing rather than direct
+# measurement (via-pad inference, silkscreen-on-copper via bbox overlap, plane
+# splitting heuristics, ...). Their findings are labelled "heuristic" so users
+# treat them as a checklist, not a hard gate. Everything else is "high".
+HEURISTIC_CHECK_IDS = {
+    "silkscreen_on_copper",
+    "silkscreen_over_mask_defined_pads",
+    "via_in_pad_thermal_balance",
+    "via_tenting",
+    "copper_density_balance",
+    "plane_fragmentation",
+    "acid_trap_angle",
+    "copper_thermal_area",
+    "thermal_relief_spoke_width",
+    "tombstoning_risk",
+    "wave_solder_shadowing",
+    "solder_paste_area_coverage",
+    "missing_tooling_holes",
+}
+
+
+def _confidence_for(check_def) -> str:
+    explicit = (check_def.raw or {}).get("confidence")
+    if explicit:
+        return str(explicit)
+    return "heuristic" if check_def.id in HEURISTIC_CHECK_IDS else "high"
+
 
 def _log(msg: str) -> None:
     # Diagnostics go through the logging module (a NullHandler is installed on
@@ -107,6 +134,8 @@ def run_single_check(
         result = CheckResult(**result)
     if isinstance(result, CheckResult):
         result = result.finalize()
+        if result.confidence is None:
+            result.confidence = _confidence_for(check_def)
 
     return result
 
@@ -135,11 +164,14 @@ def run_checks(
     ruleset_id: str = "custom",
     design_id: str = "board",
     design_data: DesignDataLike = None,
+    prebuilt_ingest=None,
 ) -> list[CheckResult]:
     """
     Run multiple checks in one pass over the input.
 
-    Ingest + geometry are built once and shared.
+    Ingest + geometry are built once and shared. Pass ``prebuilt_ingest`` to
+    reuse an already-computed ingest (e.g. when the caller needs the stackup
+    inventory) and avoid ingesting twice.
     """
 
     _ensure_impls_loaded()
@@ -151,7 +183,7 @@ def run_checks(
     # scoped to the read calls rather than patched globally at import time.
     t0 = time.perf_counter()
     with rU_open_shim():
-        ingest_result = ingest_gerber_zip(gerber_zip)
+        ingest_result = prebuilt_ingest if prebuilt_ingest is not None else ingest_gerber_zip(gerber_zip)
         geom = build_board_geometry(ingest_result)
     setup_time = time.perf_counter() - t0
 
@@ -229,6 +261,8 @@ def run_checks(
         if isinstance(result, CheckResult):
             # Always finalize to enforce invariants
             result = result.finalize()
+            if result.confidence is None:
+                result.confidence = _confidence_for(check_def)
 
         _log(
             f"[DFM TIMING] {check_def.id:<40} "

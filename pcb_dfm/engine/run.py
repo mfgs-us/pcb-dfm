@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from datetime import datetime
 from pathlib import Path
 
@@ -36,6 +37,11 @@ def run_dfm_on_gerber_zip(
     - Runs them in one pass over the Gerber zip.
     - Aggregates into a DfmResult.
     """
+    # Ingest once up front so we can both run checks against it AND report the
+    # detected copper stackup / warnings (so a dropped inner layer is visible).
+    with rU_open_shim():
+        ingest_result = ingest_gerber_zip(gerber_zip)
+
     check_defs = load_check_definitions_for_ruleset(ruleset_id)
     check_results = run_checks(
         gerber_zip=gerber_zip,
@@ -43,9 +49,38 @@ def run_dfm_on_gerber_zip(
         ruleset_id=ruleset_id,
         design_id=design_id,
         design_data=design_data,
+        prebuilt_ingest=ingest_result,
     )
     dfm_result = aggregate_check_results(check_results, ruleset_id, design_id, gerber_zip)
+
+    copper_layers, warnings = describe_stackup(ingest_result)
+    dfm_result.design.stackup_layers = len(copper_layers)
+    dfm_result.design.layers = copper_layers
+    dfm_result.warnings = warnings
     return dfm_result
+
+
+_COPPER_ORDER = {"TopCopper": 0, "BottomCopper": 9_999}
+
+
+def describe_stackup(ingest_result):
+    """Return (copper_layers, warnings): an ordered, human-readable copper
+    stackup (top -> inner1..N -> bottom, each 'Layer: filename') and any ingest
+    warnings (e.g. an unclassified copper-looking file)."""
+    def _rank(f):
+        if f.logical_layer == "TopCopper":
+            return -1
+        if f.logical_layer == "BottomCopper":
+            return 10_000
+        m = re.search(r"InnerCopper(\d+)", f.logical_layer or "")
+        return int(m.group(1)) if m else 5_000
+
+    copper = sorted(
+        (f for f in ingest_result.files if f.layer_type == "copper"),
+        key=_rank,
+    )
+    layers = [f"{f.logical_layer}: {f.original_name}" for f in copper]
+    return layers, list(getattr(ingest_result, "warnings", []) or [])
 
 
 def build_geometry_for(gerber_zip: Path):

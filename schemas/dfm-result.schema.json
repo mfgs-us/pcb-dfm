@@ -38,6 +38,10 @@
           "items": { "type": "string" }
         },
         "stackup_layers": { "type": ["integer", "null"] },
+        "layers": {
+          "type": ["array", "null"],
+          "items": { "type": "string" }
+        },
         "board_size_mm": {
           "type": ["object", "null"],
           "properties": {
@@ -84,6 +88,10 @@
           }
         }
       }
+    },
+    "warnings": {
+      "type": "array",
+      "items": { "type": "string" }
     }
   },
 
@@ -110,6 +118,11 @@
           "type": ["number", "null"],
           "minimum": 0,
           "maximum": 100
+        },
+
+        "confidence": {
+          "type": ["string", "null"],
+          "enum": ["high", "heuristic", null]
         },
 
         "metric": {

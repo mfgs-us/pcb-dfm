@@ -63,6 +63,28 @@ def test_unclassified_copper_file_warns(tmp_path):
     assert r.design.stackup_layers == 2
 
 
+def test_innocuous_names_do_not_create_phantom_layers(tmp_path):
+    # A 2-layer board plus files whose names merely CONTAIN l2/in.. substrings
+    # (panel3, level2, pin headers) must NOT be counted as inner copper.
+    z = _zip(tmp_path, [
+        "b-F_Cu.gbr", "b-B_Cu.gbr", "b-Edge_Cuts.gbr",
+        "b-panel3.gbr", "b-level2.gbr", "b-pin_map.gbr",
+    ])
+    r = _run(z)
+    assert r.design.stackup_layers == 2
+
+
+def test_innocuous_names_do_not_false_warn(tmp_path):
+    # "document"/"design" contain the substrings cu/sig but are NOT copper;
+    # they must not trigger a spurious "unclassified copper" warning.
+    z = _zip(tmp_path, [
+        "b-F_Cu.gbr", "b-B_Cu.gbr", "b-Edge_Cuts.gbr",
+        "b-documentation.gbr", "b-design_notes.gbr",
+    ])
+    r = _run(z)
+    assert r.warnings == []
+
+
 def test_heuristic_checks_are_labelled(tmp_path):
     z = _zip(tmp_path, ["b-F_Cu.gbr", "b-B_Cu.gbr", "b-Edge_Cuts.gbr"])
     r = _run(z)

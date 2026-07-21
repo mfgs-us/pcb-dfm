@@ -60,9 +60,6 @@ def run_dfm_on_gerber_zip(
     return dfm_result
 
 
-_COPPER_ORDER = {"TopCopper": 0, "BottomCopper": 9_999}
-
-
 def describe_stackup(ingest_result):
     """Return (copper_layers, warnings): an ordered, human-readable copper
     stackup (top -> inner1..N -> bottom, each 'Layer: filename') and any ingest

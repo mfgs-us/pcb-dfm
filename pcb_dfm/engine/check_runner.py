@@ -222,6 +222,7 @@ def run_checks(
                 status="not_applicable",
                 severity="info",
                 score=None,
+                confidence=_confidence_for(check_def),
             ).finalize())
             continue
 
@@ -245,6 +246,7 @@ def run_checks(
                 status="fail",
                 severity="error",
                 score=0.0,
+                confidence=_confidence_for(check_def),
                 violations=[Violation(
                     message=f"Check crashed: {type(exc).__name__}: {exc}",
                     severity="error",

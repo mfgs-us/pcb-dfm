@@ -201,9 +201,16 @@ def ingest_gerber_zip(zip_path: Path, workspace_root: Optional[Path] = None) -> 
     # Assign distinct InnerCopperN indices to inner copper files (they are all
     # classified with a placeholder), ordered by filename for determinism, so
     # they do not collapse into one logical layer.
+    def _inner_key(f):
+        # Order by the layer index parsed from the name (natural, so In10 sorts
+        # after In2, not lexicographically), falling back to name for unindexed
+        # planes (GND/PWR).
+        m = re.search(r"(?:in|inner|l)[ _-]?(\d{1,2})", f.original_name.lower())
+        return (int(m.group(1)) if m else 9999, f.original_name.lower())
+
     inner = sorted(
         (f for f in result.files if f.side == "Inner" and f.layer_type == "copper"),
-        key=lambda f: f.original_name.lower(),
+        key=_inner_key,
     )
     for i, f in enumerate(inner, start=1):
         f.logical_layer = f"InnerCopper{i}"  # type: ignore[assignment]
@@ -283,7 +290,7 @@ def _guess_format(ext: str, name_lower: str) -> GerberFormat:
     # Some CAD tools export gerbers without typical extensions
     if any(token in name_lower for token in [
         "top", "bottom", "inner", "mask", "silk", "outline", "edge",
-        "gnd", "pwr", "power", "vcc", "ground", "plane", "copper", "cu",
+        "gnd", "pwr", "power", "vcc", "ground", "plane", "copper",
     ]):
         return "gerber"
 
@@ -302,9 +309,16 @@ _NON_COPPER_TOKENS = (
     "drill", "npth", "pth", "adhesive", "glue", "stencil",
 )
 
-# Tokens that indicate an inner copper plane by name.
-_INNER_PLANE_TOKENS = (
-    "gnd", "ground", "pwr", "power", "vcc", "vdd", "plane", "mid",
+# Indexed inner copper as a WHOLE token: KiCad In1_Cu / inner2, protel l2..l15
+# (l1 is the top layer, so it is excluded). Anchored with boundaries so it does
+# NOT fire inside ordinary words (panel3, level2, pin2, control2, ...).
+_INNER_INDEX_RE = re.compile(
+    r"(^|[^a-z])((in|inner)[ _-]?\d{1,2}|l([2-9]|1[0-5]))(_?cu)?([^a-z]|$)"
+)
+# Named power/ground planes as whole tokens (so "background"/"humidity" don't
+# match "ground"/"mid").
+_INNER_PLANE_RE = re.compile(
+    r"(^|[^a-z])(gnd|ground|pwr|power|vcc|vdd|plane)([^a-z]|$)"
 )
 
 
@@ -319,13 +333,15 @@ def _is_inner_copper(name_lower: str, ext: str) -> bool:
     # protel inner-copper extensions: .g1 .. .g15, .gp1, .gp2
     if re.fullmatch(r"\.g\d+", ext) or ext in {".gp1", ".gp2"}:
         return True
-    # explicit inner index: in1_cu / inner2 / l3_cu / in3
-    if re.search(r"(in\d+|inner\d+|l[2-9]\d?|l1[0-5])(_?cu)?", name_lower):
-        return True
-    # named plane, when it also reads as copper (or gives no other role)
-    if any(tok in name_lower for tok in _INNER_PLANE_TOKENS):
-        return True
-    return False
+    return bool(_INNER_INDEX_RE.search(name_lower) or _INNER_PLANE_RE.search(name_lower))
+
+
+# Copper-ish hints as WHOLE tokens ("cu"/"sig" must not match inside doCUment /
+# deSIGn). "inner"/"layer" catch layer-worded files (Top Layer, Inner_Signal,
+# Layer2) so they WARN instead of being silently dropped.
+_COPPER_HINT_RE = re.compile(
+    r"(^|[^a-z])(cu|sig|signal|copper|inner|layer)([^a-z]|$)"
+)
 
 
 def _looks_like_unclassified_copper(name_lower: str, ext: str, fmt: GerberFormat) -> bool:
@@ -335,7 +351,7 @@ def _looks_like_unclassified_copper(name_lower: str, ext: str, fmt: GerberFormat
         return False
     if any(tok in name_lower for tok in _NON_COPPER_TOKENS):
         return False
-    return "cu" in name_lower or "copper" in name_lower or "sig" in name_lower
+    return bool(_COPPER_HINT_RE.search(name_lower))
 
 
 def _classify_layer(

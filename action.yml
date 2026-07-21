@@ -31,7 +31,7 @@ runs:
   using: composite
   steps:
     - name: Set up Python
-      uses: actions/setup-python@v5
+      uses: actions/setup-python@v7
       with:
         python-version: ${{ inputs.python-version }}
 
@@ -59,7 +59,7 @@ runs:
         cat "${RUNNER_TEMP}/dfm-summary.md" >> "$GITHUB_STEP_SUMMARY"
 
     - name: Upload HTML report
-      uses: actions/upload-artifact@v4
+      uses: actions/upload-artifact@v7
       with:
         name: dfm-report
         path: ${{ runner.temp }}/dfm-report.html
@@ -67,7 +67,7 @@ runs:
 
     - name: Comment on PR
       if: ${{ inputs.comment == 'true' && github.event_name == 'pull_request' }}
-      uses: actions/github-script@v7
+      uses: actions/github-script@v9
       with:
         script: |
           const fs = require('fs');

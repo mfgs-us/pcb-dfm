@@ -138,13 +138,32 @@ class ControlledImpedanceSpec:
 
 
 @dataclass
+class Component:
+    """A placed component.
+
+    Provisional model: enough to carry placement (centroid) + identity from a
+    source that has it (e.g. a KiCad ``.kicad_pcb`` footprint). The assembly/DFA
+    work in #6 extends this with courtyard/body extent, BOM part/value, and
+    pin-1 for the tombstoning / wave-solder / polarity checks.
+    """
+    ref: str
+    value: Optional[str] = None
+    footprint: Optional[str] = None
+    x_mm: Optional[float] = None
+    y_mm: Optional[float] = None
+    rotation_deg: float = 0.0
+    side: Optional[str] = None  # "top" | "bottom"
+
+
+@dataclass
 class DesignData:
     """Everything derived from a design-data source, in one place."""
     stackup: Optional[Stackup] = None
     nets: Dict[str, Net] = field(default_factory=dict)
     diff_pairs: List[DiffPair] = field(default_factory=list)
     controlled_impedance: List[ControlledImpedanceSpec] = field(default_factory=list)
-    source: Optional[str] = None  # "sidecar" | "ipc2581" | "odbpp"
+    components: List[Component] = field(default_factory=list)
+    source: Optional[str] = None  # "sidecar" | "ipc2581" | "odbpp" | "kicad"
 
     def net(self, name: str) -> Optional[Net]:
         return self.nets.get(name)

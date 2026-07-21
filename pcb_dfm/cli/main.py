@@ -155,7 +155,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument("--ruleset", default="default")
     p_run.add_argument("--design-id", default="board")
     p_run.add_argument("--design-data", default=None,
-                       help="optional JSON sidecar with stackup / controlled-impedance info")
+                       help="design-data source: a KiCad project dir/.kicad_pcb, a JSON sidecar, or IPC-2581 XML (stackup / nets / placement)")
     p_run.add_argument("--format", choices=["text", "markdown", "json", "html"], default="text")
     p_run.add_argument("-o", "--output", default=None)
     p_run.set_defaults(func=_cmd_run)
@@ -180,7 +180,7 @@ def build_parser() -> argparse.ArgumentParser:
     p_check.add_argument("--ruleset", default="default")
     p_check.add_argument("--design-id", default="board")
     p_check.add_argument("--design-data", default=None,
-                         help="optional JSON sidecar with stackup / controlled-impedance info")
+                         help="design-data source: a KiCad project dir/.kicad_pcb, a JSON sidecar, or IPC-2581 XML (stackup / nets / placement)")
     p_check.set_defaults(func=_cmd_check)
 
     p_list = sub.add_parser("list-checks", help="List available check ids")

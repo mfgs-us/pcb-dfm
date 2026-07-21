@@ -434,13 +434,20 @@ which features belong to which net. Supply it with `--design-data` and those
 checks compute real results instead of reporting `not_applicable`:
 
 ```bash
-pcb-dfm run testdata/mini_board.zip --design-data board.ipc2581.xml   # IPC-2581
+pcb-dfm run testdata/mini_board.zip --design-data my_project/          # KiCad project dir
+pcb-dfm run testdata/mini_board.zip --design-data board.ipc2581.xml    # IPC-2581
 pcb-dfm check testdata/mini_board.zip diff_pair_skew --design-data design.json
 ```
 
-Two input formats are supported, both mapped onto one internal `DesignData`
+Three input formats are supported, all mapped onto one internal `DesignData`
 model (`pcb_dfm/ingest/design_model.py`) so checks are format-agnostic:
 
+- **KiCad** — point at a project directory, a `.kicad_pcb`, or a `.kicad_pro`.
+  A dependency-free S-expression reader pulls the physical stackup, nets +
+  routed segments, net classes (board `net_class` blocks and/or `.kicad_pro`
+  patterns), inferred diff pairs, and component placement. Gerbers remain the
+  geometry-of-record (the poured copper the fab receives) — the KiCad project
+  supplies *design intent* only. See `pcb_dfm/ingest/adapters/kicad.py`.
 - **IPC-2581** (`.xml`) — a documented subset: stackup layers (thickness + Er),
   logical nets, per-net routed length, controlled-impedance hints, and diff
   pairs (explicit or inferred from `_P`/`_N` naming). See

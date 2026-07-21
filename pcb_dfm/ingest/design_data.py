@@ -8,6 +8,7 @@ Supported sources (see also ``pcb_dfm.ingest.adapters``):
   * a ``dict``                    -> JSON sidecar shape (adapters.sidecar)
   * a path to ``*.json``          -> parsed then treated as the sidecar shape
   * a path to IPC-2581 XML        -> adapters.ipc2581
+  * a KiCad project dir / .kicad_pcb / .kicad_pro -> adapters.kicad
   * a path to ODB++               -> not yet implemented (planned adapter)
 
 Bare Gerbers carry no connectivity or stackup, so this is how the impedance,
@@ -20,7 +21,13 @@ import json
 from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
-from .adapters import from_ipc2581, from_sidecar, looks_like_ipc2581
+from .adapters import (
+    from_ipc2581,
+    from_kicad,
+    from_sidecar,
+    looks_like_ipc2581,
+    looks_like_kicad,
+)
 from .design_model import DesignData
 
 DesignDataLike = Union[DesignData, Dict[str, Any], str, Path, None]
@@ -38,6 +45,9 @@ def load_design_data(source: DesignDataLike) -> Optional[DesignData]:
     if not path.exists():
         raise ValueError(f"design-data file not found: {path}")
 
+    if looks_like_kicad(path):
+        return from_kicad(path)
+
     if looks_like_ipc2581(path):
         return from_ipc2581(path)
 
@@ -49,5 +59,5 @@ def load_design_data(source: DesignDataLike) -> Optional[DesignData]:
 
     raise ValueError(
         f"unrecognized design-data source: {path} "
-        f"(expected a .json sidecar or an IPC-2581 .xml file)"
+        f"(expected a KiCad project/.kicad_pcb, a .json sidecar, or an IPC-2581 .xml file)"
     )

@@ -123,9 +123,9 @@
     {
       "confidence": "high",
       "id": "etch_compensation_margin",
-      "measured": null,
+      "measured": 300.0,
       "severity": "info",
-      "status": "not_applicable",
+      "status": "pass",
       "violations": 0
     },
     {
@@ -158,7 +158,7 @@
       "measured": null,
       "severity": "info",
       "status": "not_applicable",
-      "violations": 0
+      "violations": 1
     },
     {
       "confidence": "heuristic",
@@ -246,6 +246,14 @@
       "measured": null,
       "severity": "info",
       "status": "not_applicable",
+      "violations": 0
+    },
+    {
+      "confidence": "high",
+      "id": "silkscreen_clearance",
+      "measured": 2.05,
+      "severity": "info",
+      "status": "pass",
       "violations": 0
     },
     {

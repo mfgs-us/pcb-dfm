@@ -218,6 +218,11 @@ they used to hide real defects):
 - ✅ **Solder mask web (`impl_solder_mask_web.py`)**: Web width between adjacent openings is now the true edge-to-edge polygon distance; a rotated/diagonal opening no longer reads a false-narrow web from its oversized bounding box.
 - ✅ **Milling fillet radius (`impl_fillet_radius_milling.py`)**: Analyses every closed contour (perimeter + each cutout/slot), not just a single all-edges-in-one-loop outline, and uses containment parity to tell holes from bosses so a rectangular pocket's four sharp internal corners are caught.
 
+**Newly implemented checks (previously defined-but-stubbed / net-new)**
+- ✅ **Etch compensation margin (`impl_etch_compensation_margin.py`)**: Yield-prediction margin between the narrowest copper feature and the fab's etch-capability floor (`margin% = (min_feature − floor) / floor`). Reads trace widths from Gerber `Line` primitives; overridable floor via `raw.etch_capability_mm`.
+- ✅ **Layer registration margin (`impl_layer_registration_margin.py`)**: Reuses the annular-ring drill-edge-to-pad-edge geometry but scores it against a stackup registration budget (default 50 µm target / 25 µm floor) — a thin ring can hold a nominal annulus yet still be too tight to survive layer-to-layer registration. Fires whenever annular-ring geometry is measurable.
+- ✅ **Silkscreen clearance (`impl_silkscreen_clearance.py`)**: Flags silkscreen that runs off the routed board edge or over a drilled hole (printed on the rail / drilled away / smeared). Silk features are conservative primitive bounding boxes; the edge and holes are real geometry.
+
 ### 🏗️ Layer Classification Reliability (`gerber_zip.py`)
 
 **Extension-First Classification**

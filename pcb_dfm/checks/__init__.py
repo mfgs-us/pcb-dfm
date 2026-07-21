@@ -69,8 +69,10 @@ def _ensure_impls_loaded() -> None:
         impl_drill_aspect_ratio,  # noqa: F401
         impl_drill_to_drill_spacing,  # noqa: F401
         impl_drill_wander_budget,  # noqa: F401
+        impl_etch_compensation_margin,  # noqa: F401
         impl_fillet_radius_milling,  # noqa: F401
         impl_impedance_control,  # noqa: F401
+        impl_layer_registration_margin,  # noqa: F401
         impl_mask_to_trace_clearance,  # noqa: F401
         impl_min_annular_ring,  # noqa: F401
         impl_min_drill_size,  # noqa: F401
@@ -79,6 +81,7 @@ def _ensure_impls_loaded() -> None:
         impl_min_trace_width,  # noqa: F401
         impl_missing_tooling_holes,  # noqa: F401
         impl_plane_fragmentation,  # noqa: F401
+        impl_silkscreen_clearance,  # noqa: F401
         impl_silkscreen_min_width,  # noqa: F401
         impl_silkscreen_on_copper,  # noqa: F401
         impl_silkscreen_over_mask_defined_pads,  # noqa: F401

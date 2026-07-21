@@ -1,0 +1,30 @@
+{
+ "id": "silkscreen_clearance",
+ "category_id": "solder_mask_silkscreen",
+ "name": "Silkscreen clearance to edge and holes",
+ "description": "Check that silkscreen keeps clear of the board edge and drilled holes so it prints cleanly and is not routed or drilled away.",
+ "what_it_measures": "Minimum distance from any silkscreen feature to the board outline and to the nearest drilled hole rim.",
+ "metric": {
+  "kind": "distance",
+  "units": "um",
+  "preferred_direction": "maximize",
+  "target": {
+   "min": 150.0
+  },
+  "limits": {
+   "min": 100.0
+  },
+  "scale_min": 0.0,
+  "scale_max": 400.0
+ },
+ "severity_default": "warning",
+ "applies_to": [
+  "silkscreen"
+ ],
+ "scoring": {
+  "enabled": true,
+  "strategy": "linear",
+  "pass_threshold": 100,
+  "weight": 0.3
+ }
+}

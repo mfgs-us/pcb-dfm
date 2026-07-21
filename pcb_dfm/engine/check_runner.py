@@ -22,19 +22,29 @@ logger = logging.getLogger("pcb_dfm.timing")
 # splitting heuristics, ...). Their findings are labelled "heuristic" so users
 # treat them as a checklist, not a hard gate. Everything else is "high".
 HEURISTIC_CHECK_IDS = {
+    # copper geometry proxies
+    "min_trace_spacing",
+    "copper_sliver_width",
+    "acid_trap_angle",
+    "copper_density_balance",
+    # drill / via
+    "via_to_copper_clearance",
+    "via_tenting",
+    "via_in_pad_thermal_balance",
+    # thermal / power
+    "copper_thermal_area",
+    "plane_fragmentation",
+    # fab-process / mask / silk (bbox overlaps, role guessing)
+    "aperture_definition_errors",
+    "missing_tooling_holes",
     "silkscreen_on_copper",
     "silkscreen_over_mask_defined_pads",
-    "via_in_pad_thermal_balance",
-    "via_tenting",
-    "copper_density_balance",
-    "plane_fragmentation",
-    "acid_trap_angle",
-    "copper_thermal_area",
-    "thermal_relief_spoke_width",
-    "tombstoning_risk",
-    "wave_solder_shadowing",
+    "unsupported_hole_types",
+    "mask_to_trace_clearance",
+    # mechanical / assembly proxies
+    "tab_routing_mousebites",
+    "component_to_component_spacing",
     "solder_paste_area_coverage",
-    "missing_tooling_holes",
 }
 
 

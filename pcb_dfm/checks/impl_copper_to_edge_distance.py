@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import math
 from typing import List, Optional
 
 from ..engine.check_runner import register_check
@@ -9,8 +10,17 @@ from ..engine.context import CheckContext
 from ..geometry import queries
 from ..geometry.primitives import Bounds, Point2D
 from ..results import CheckResult, MetricResult, Violation, ViolationLocation
+from .impl_solder_mask_expansion import _min_distance_between_polygons
 
 MAX_REPORTED_VIOLATIONS = 100
+
+
+def _bbox_gap(a: Bounds, b: Bounds) -> float:
+    """Straight-line gap between two bounding boxes (0 if they overlap). A valid
+    lower bound on the true polygon-to-polygon distance, used to prune."""
+    dx = max(0.0, a.min_x - b.max_x, b.min_x - a.max_x)
+    dy = max(0.0, a.min_y - b.max_y, b.min_y - a.max_y)
+    return math.hypot(dx, dy)
 
 
 @register_check("copper_to_edge_distance")
@@ -65,22 +75,48 @@ def run_copper_to_edge_distance(ctx: CheckContext) -> CheckResult:
     # (dist_mm, layer_name, x_mm, y_mm)
     offenders: List[tuple[float, str, float, float]] = []
 
+    # Prefer TRUE outline-polygon geometry so clearance to internal cutouts,
+    # slots, and non-rectangular / concave edges is measured exactly (the old
+    # bbox-vs-bbox method was blind to all of those). Fall back to the board
+    # bounding box only when no outline polygons are available. Copper farther
+    # than `cutoff` from an outline contour can't violate, so we prune it with a
+    # cheap bbox-gap lower bound and keep the exact O(verts) distance for
+    # near-edge copper only.
+    outline_polys = [
+        p for lyr in ctx.geometry.get_layers_by_type("outline")
+        for p in lyr.polygons if len(p.vertices) >= 3
+    ]
+    cutoff = max(2.0, recommended_min * 5.0)
+
     for layer in copper_layers:
         for poly in layer.polygons:
             pb = poly.bounds()
-            d, loc = _distance_and_location_to_edge(pb, board_bounds)
+            if outline_polys:
+                d = math.inf
+                for op in outline_polys:
+                    gap = _bbox_gap(pb, op.bounds())
+                    # exact distance when close; the bbox gap (a lower bound) is
+                    # a fine stand-in for far contours that can't be the minimum
+                    dd = _min_distance_between_polygons(poly, op) if gap <= cutoff else gap
+                    if dd < d:
+                        d = dd
+                loc_x, loc_y = 0.5 * (pb.min_x + pb.max_x), 0.5 * (pb.min_y + pb.max_y)
+            else:
+                d, loc = _distance_and_location_to_edge(pb, board_bounds)
+                loc_x, loc_y = loc.x, loc.y
+
             if min_dist is None or d < min_dist:
                 min_dist = d
                 worst_location = ViolationLocation(
                     layer=layer.logical_layer,
-                    x_mm=loc.x,
-                    y_mm=loc.y,
+                    x_mm=loc_x,
+                    y_mm=loc_y,
                     notes="Closest copper to board edge",
                 )
 
             # Track any copper feature that violates the recommended minimum
             if d < recommended_min:
-                offenders.append((d, layer.logical_layer, loc.x, loc.y))
+                offenders.append((d, layer.logical_layer, loc_x, loc_y))
 
     # If somehow no polygons, nothing to measure
     if min_dist is None:

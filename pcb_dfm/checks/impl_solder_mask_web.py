@@ -8,6 +8,7 @@ from ..engine.context import CheckContext
 from ..geometry.polygon_index import PolygonIndex
 from ..geometry.primitives import Bounds
 from ..results import CheckResult, Violation, ViolationLocation
+from .impl_solder_mask_expansion import _min_distance_between_polygons
 
 
 def _poly_area_mm2(poly) -> float:
@@ -66,11 +67,12 @@ def run_solder_mask_web(ctx: CheckContext) -> CheckResult:
     geom = ctx.geometry
 
     class _Opening:
-        __slots__ = ("side", "layer", "min_x", "max_x", "min_y", "max_y", "cx", "cy")
+        __slots__ = ("side", "layer", "poly", "min_x", "max_x", "min_y", "max_y", "cx", "cy")
 
         def __init__(self, side, layer, poly):
             self.side = side
             self.layer = layer
+            self.poly = poly
             b = poly.bounds()
             self.min_x = b.min_x
             self.max_x = b.max_x
@@ -134,8 +136,9 @@ def run_solder_mask_web(ctx: CheckContext) -> CheckResult:
     # degenerate (point) bbox at its centroid, with this cell size, exactly
     # reproduces the previous centroid-cell grid: a candidate for opening i is
     # any opening whose centroid falls in the 3x3 block of cells around i's
-    # centroid cell (ring=1). The exact bbox-distance / threshold math below is
-    # unchanged, so only far-apart pairs are pruned and results are identical.
+    # centroid cell (ring=1). Only the candidate *pair* set is produced here;
+    # the web width for each pair is measured below as the true edge-to-edge
+    # polygon distance (a bbox lower bound prunes pairs that can't win).
     index = PolygonIndex.from_bounds(
         [(idx, Bounds(o.cx, o.cy, o.cx, o.cy)) for idx, o in enumerate(openings)],
         cell_size=cell,
@@ -167,7 +170,13 @@ def run_solder_mask_web(ctx: CheckContext) -> CheckResult:
             bi = _B(oi.min_x, oi.max_x, oi.min_y, oi.max_y)
             bj = _B(oj.min_x, oj.max_x, oj.min_y, oj.max_y)
 
-            d = _bbox_distance_mm(bi, bj)
+            # bbox distance is a valid lower bound; skip the exact computation
+            # when it can't beat the current best.
+            if _bbox_distance_mm(bi, bj) >= min_spacing:
+                continue
+            # TRUE edge-to-edge web width between the two opening polygons
+            # (bbox gap under-measured rotated/diagonal openings).
+            d = _min_distance_between_polygons(oi.poly, oj.poly)
             if d < spacing_epsilon_mm:
                 continue
 

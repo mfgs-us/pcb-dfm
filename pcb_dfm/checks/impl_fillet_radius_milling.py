@@ -89,13 +89,20 @@ def _collect_edges(ctx: CheckContext):
     return edges
 
 
-def _build_loop(edges):
-    """Chain edges into an ordered vertex loop.
+def _build_loops(edges):
+    """Chain edges into one or more ordered, closed vertex loops.
 
-    Returns (vertices, edge_infos) where vertices[i] -> vertices[i+1] is
-    described by edge_infos[i] = (kind, radius, direction). The loop is
-    closed (last vertex connects back to first). Returns None if the edges
-    do not form a single closed contour.
+    A real board outline layer is frequently a *union* of disjoint closed
+    contours: the board perimeter plus one or more internal cutouts/slots, each
+    of which has its own concave corners a router bit must round. Returns a list
+    of (vertices, edge_infos) loops, one per contour, where vertices[i] ->
+    vertices[i+1] is described by edge_infos[i] = (kind, radius, direction,
+    forward) and each loop closes back on itself.
+
+    Returns None only when the edges do not form a clean union of closed
+    contours (any vertex whose incident edge-ends != 2), so a genuinely
+    ambiguous / open outline still degrades to not-applicable rather than a
+    fabricated measurement.
     """
     if len(edges) < 3:
         return None
@@ -106,40 +113,51 @@ def _build_loop(edges):
         adj.setdefault(_key(*p0), []).append((idx, p1, True))
         adj.setdefault(_key(*p1), []).append((idx, p0, False))
 
-    # A clean closed contour has exactly two incident edge-ends per vertex.
+    # A clean union of closed contours has exactly two incident edge-ends per
+    # vertex. Anything else (dangling ends, T-junctions) is not analysable.
     for k, lst in adj.items():
         if len(lst) != 2:
             return None
 
     used = [False] * len(edges)
-    start_pt = edges[0][0]
-    cur = start_pt
-    vertices = [tuple(cur)]
-    edge_infos = []
+    loops = []
 
-    for _ in range(len(edges)):
-        candidates = adj.get(_key(*cur), [])
-        nxt = None
-        for edge_index, other_pt, forward in candidates:
-            if not used[edge_index]:
-                nxt = (edge_index, other_pt, forward)
+    for seed in range(len(edges)):
+        if used[seed]:
+            continue
+        # Walk the contour that this unused edge belongs to.
+        start_pt = edges[seed][0]
+        cur = start_pt
+        vertices = [tuple(cur)]
+        edge_infos = []
+        closed = False
+
+        for _ in range(len(edges)):
+            candidates = adj.get(_key(*cur), [])
+            nxt = None
+            for edge_index, other_pt, forward in candidates:
+                if not used[edge_index]:
+                    nxt = (edge_index, other_pt, forward)
+                    break
+            if nxt is None:
+                return None
+            edge_index, other_pt, forward = nxt
+            used[edge_index] = True
+            _, _, kind, radius, direction = edges[edge_index]
+            edge_infos.append((kind, radius, direction, forward))
+            cur = other_pt
+            if _key(*cur) == _key(*start_pt):
+                closed = True
                 break
-        if nxt is None:
-            return None
-        edge_index, other_pt, forward = nxt
-        used[edge_index] = True
-        _, _, kind, radius, direction = edges[edge_index]
-        edge_infos.append((kind, radius, direction, forward))
-        cur = other_pt
-        if _key(*cur) == _key(*start_pt):
-            break
-        vertices.append(tuple(cur))
+            vertices.append(tuple(cur))
 
-    if not all(used):
+        if not closed or len(vertices) < 3:
+            return None
+        loops.append((vertices, edge_infos))
+
+    if not all(used) or not loops:
         return None
-    if _key(*cur) != _key(*start_pt):
-        return None
-    return vertices, edge_infos
+    return loops
 
 
 def _signed_area(vertices) -> float:
@@ -150,6 +168,116 @@ def _signed_area(vertices) -> float:
         x1, y1 = vertices[(i + 1) % n]
         a += x0 * y1 - x1 * y0
     return 0.5 * a
+
+
+def _point_in_ring(x: float, y: float, verts) -> bool:
+    """Ray-casting point-in-polygon on a ring of (x, y) tuples."""
+    inside = False
+    n = len(verts)
+    for i in range(n):
+        xi, yi = verts[i]
+        xj, yj = verts[(i + 1) % n]
+        if ((yi > y) != (yj > y)) and (
+            x < (xj - xi) * (y - yi) / (yj - yi) + xi
+        ):
+            inside = not inside
+    return inside
+
+
+def _hole_flags(loops) -> List[bool]:
+    """Classify each contour as a hole (material outside it) vs a solid boundary
+    (material inside it) by containment parity.
+
+    A board outline layer is a set of nested rings: the perimeter, cutouts
+    inside it, islands inside cutouts, and so on. A ring nested an odd number
+    of times is a hole; the concave/convex sense of its corners relative to the
+    *material* is the opposite of the sense relative to its own interior. Winding
+    direction alone can't tell a hole from a boss, so we test containment
+    explicitly rather than trusting the artwork's arc/loop orientation."""
+    flags: List[bool] = []
+    for i, (vi, _) in enumerate(loops):
+        px, py = vi[0]
+        depth = 0
+        for j, (vj, _) in enumerate(loops):
+            if i == j:
+                continue
+            if _point_in_ring(px, py, vj):
+                depth += 1
+        flags.append(depth % 2 == 1)
+    return flags
+
+
+def _concave_corner_radii(
+    vertices, edge_infos, is_hole: bool = False
+) -> List[Tuple[float, float, float]]:
+    """Return (radius, x, y) for every internal (concave) corner of one closed
+    contour. A sharp line-to-line concave corner has an effective radius of 0;
+    a concave arc contributes its own radius. External (convex) corners are
+    ignored — a router cuts those freely.
+
+    ``is_hole`` inverts the classification: for a cutout the router works the
+    *outside* of the loop, so a corner that is convex with respect to the loop's
+    own interior (e.g. every corner of a rectangular pocket) is concave with
+    respect to the surrounding copper/material and must be rounded."""
+    import math
+
+    n = len(vertices)
+    if n < 3:
+        return []
+
+    area = _signed_area(vertices)
+    ccw = area > 0.0  # counter-clockwise traversal when True
+    straight_cos = math.cos(math.radians(_STRAIGHT_TURN_DEG))
+
+    candidates: List[Tuple[float, float, float]] = []
+
+    for i in range(n):
+        # Edge arriving at vertex i is edge_infos[i-1]; edge leaving is edge_infos[i].
+        in_kind, in_radius, in_dir, _ = edge_infos[(i - 1) % n]
+        out_kind, out_radius, out_dir, _ = edge_infos[i]
+        vx, vy = vertices[i]
+
+        if in_kind == "line" and out_kind == "line":
+            px, py = vertices[(i - 1) % n]
+            nx, ny = vertices[(i + 1) % n]
+            d_in = (vx - px, vy - py)
+            d_out = (nx - vx, ny - vy)
+            li = hypot(*d_in)
+            lo = hypot(*d_out)
+            if li <= 1e-9 or lo <= 1e-9:
+                continue
+            d_in = (d_in[0] / li, d_in[1] / li)
+            d_out = (d_out[0] / lo, d_out[1] / lo)
+            dot = d_in[0] * d_out[0] + d_in[1] * d_out[1]
+            if dot >= straight_cos:
+                continue  # essentially straight, not a corner
+            cross = d_in[0] * d_out[1] - d_in[1] * d_out[0]
+            # Concave (internal) corner: turns opposite to the traversal winding.
+            concave = (cross < 0.0) if ccw else (cross > 0.0)
+            if is_hole:
+                concave = not concave  # material is outside a cutout loop
+            if concave:
+                candidates.append((0.0, vx, vy))  # sharp internal corner: radius 0
+
+    # Arcs: classify concavity from arc direction vs loop orientation.
+    for i in range(n):
+        kind, radius, direction, forward = edge_infos[i]
+        if kind != "arc" or radius is None:
+            continue
+        # pcb-tools arc.direction is defined in the primitive's own start->end
+        # sense; account for the traversal direction of this edge in the loop.
+        d = direction
+        if not forward:
+            d = "clockwise" if d == "counterclockwise" else "counterclockwise"
+        # For CCW loop, an internal (concave) corner is a clockwise arc.
+        concave = (d == "clockwise") if ccw else (d == "counterclockwise")
+        if is_hole:
+            concave = not concave  # material is outside a cutout loop
+        if concave:
+            sx, sy = vertices[i]
+            candidates.append((float(radius), sx, sy))
+
+    return candidates
 
 
 @register_check("fillet_radius_milling")
@@ -180,72 +308,21 @@ def run_fillet_radius_milling(ctx: CheckContext) -> CheckResult:
                    "No board outline / mechanical geometry found; corner radius not applicable.")
 
     try:
-        loop = _build_loop(edges)
+        loops = _build_loops(edges)
     except Exception:
-        loop = None
-    if loop is None:
+        loops = None
+    if loops is None:
         return _na(ctx, target_min, limit_min,
-                   "Board outline is not a single closed contour; internal corner radius could not be measured.")
+                   "Board outline is not a union of closed contours; internal corner radius could not be measured.")
 
-    vertices, edge_infos = loop
-    n = len(vertices)
-    if n < 3:
-        return _na(ctx, target_min, limit_min,
-                   "Board outline has too few segments to evaluate corners.")
-
-    area = _signed_area(vertices)
-    ccw = area > 0.0  # counter-clockwise traversal when True
-
-    import math
-    # d_in and d_out are travel directions; a near-straight vertex has them
-    # nearly parallel (dot ~ +1). Skip vertices whose deflection is below the
-    # threshold, i.e. dot >= cos(threshold).
-    straight_cos = math.cos(math.radians(_STRAIGHT_TURN_DEG))
-
-    # candidate internal (concave) corner radii, with a representative location
+    # Analyse every contour (board perimeter + each internal cutout/slot) and
+    # take the tightest internal corner across all of them. Containment parity
+    # tells us which contours are cutouts, so a pocket's corners are measured
+    # against the surrounding material rather than the pocket's own interior.
+    hole_flags = _hole_flags(loops)
     candidates: List[Tuple[float, float, float]] = []  # (radius, x, y)
-
-    for i in range(n):
-        # Edge arriving at vertex i is edge_infos[i-1]; edge leaving is edge_infos[i].
-        in_kind, in_radius, in_dir, _ = edge_infos[(i - 1) % n]
-        out_kind, out_radius, out_dir, _ = edge_infos[i]
-        vx, vy = vertices[i]
-
-        if in_kind == "line" and out_kind == "line":
-            px, py = vertices[(i - 1) % n]
-            nx, ny = vertices[(i + 1) % n]
-            d_in = (vx - px, vy - py)
-            d_out = (nx - vx, ny - vy)
-            li = hypot(*d_in)
-            lo = hypot(*d_out)
-            if li <= 1e-9 or lo <= 1e-9:
-                continue
-            d_in = (d_in[0] / li, d_in[1] / li)
-            d_out = (d_out[0] / lo, d_out[1] / lo)
-            dot = d_in[0] * d_out[0] + d_in[1] * d_out[1]
-            if dot >= straight_cos:
-                continue  # essentially straight, not a corner
-            cross = d_in[0] * d_out[1] - d_in[1] * d_out[0]
-            # Concave (internal) corner: turns opposite to the traversal winding.
-            concave = (cross < 0.0) if ccw else (cross > 0.0)
-            if concave:
-                candidates.append((0.0, vx, vy))  # sharp internal corner: radius 0
-
-    # Arcs: classify concavity from arc direction vs loop orientation.
-    for i in range(n):
-        kind, radius, direction, forward = edge_infos[i]
-        if kind != "arc" or radius is None:
-            continue
-        # pcb-tools arc.direction is defined in the primitive's own start->end
-        # sense; account for the traversal direction of this edge in the loop.
-        d = direction
-        if not forward:
-            d = "clockwise" if d == "counterclockwise" else "counterclockwise"
-        # For CCW loop, an internal (concave) corner is a clockwise arc.
-        concave = (d == "clockwise") if ccw else (d == "counterclockwise")
-        if concave:
-            sx, sy = vertices[i]
-            candidates.append((float(radius), sx, sy))
+    for (vertices, edge_infos), is_hole in zip(loops, hole_flags):
+        candidates.extend(_concave_corner_radii(vertices, edge_infos, is_hole))
 
     if not candidates:
         return _na(ctx, target_min, limit_min,

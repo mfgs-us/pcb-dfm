@@ -213,6 +213,11 @@ they used to hide real defects):
 - ✅ **True distance measurement**: Replaced bbox approximation with geometric distance calculation
 - ✅ **Coverage-to-openings inversion**: Framework for handling coverage-based mask polygons
 
+**True-Geometry Promotions (bbox → real polygon distance)**
+- ✅ **Copper-to-edge (`impl_copper_to_edge_distance.py`)**: Measures each copper polygon against the real outline contours (including interior cutouts and non-rectangular/concave edges), not copper-bbox vs board-bbox. A cheap bbox-gap lower bound prunes far copper so only near-edge features pay the exact cost.
+- ✅ **Solder mask web (`impl_solder_mask_web.py`)**: Web width between adjacent openings is now the true edge-to-edge polygon distance; a rotated/diagonal opening no longer reads a false-narrow web from its oversized bounding box.
+- ✅ **Milling fillet radius (`impl_fillet_radius_milling.py`)**: Analyses every closed contour (perimeter + each cutout/slot), not just a single all-edges-in-one-loop outline, and uses containment parity to tell holes from bosses so a rectangular pocket's four sharp internal corners are caught.
+
 ### 🏗️ Layer Classification Reliability (`gerber_zip.py`)
 
 **Extension-First Classification**

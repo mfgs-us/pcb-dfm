@@ -9,6 +9,29 @@ from pathlib import Path
 from typing import Any, Dict, List
 
 
+def _limits_from_metric(metric: Dict[str, Any]) -> Dict[str, float]:
+    """Derive the ``recommended_*``/``absolute_*`` bounds that check impls read
+    from a metric's ``target``/``limits`` (target -> recommended, limits ->
+    absolute; ``.min``/``.max`` preserved), converting µm to mm. Boolean or
+    non-numeric bounds (e.g. via_tenting's ``target: true``) are skipped."""
+    out: Dict[str, float] = {}
+    if not isinstance(metric, dict):
+        return out
+    factor = 0.001 if metric.get("units") in ("um", "µm") else 1.0
+
+    def _num(node, key):
+        v = node.get(key) if isinstance(node, dict) else None
+        return float(v) * factor if isinstance(v, (int, float)) and not isinstance(v, bool) else None
+
+    for node, prefix in ((metric.get("target"), "recommended"), (metric.get("limits"), "absolute")):
+        vmin, vmax = _num(node, "min"), _num(node, "max")
+        if vmin is not None:
+            out[f"{prefix}_min"] = vmin
+        if vmax is not None:
+            out[f"{prefix}_max"] = vmax
+    return out
+
+
 @dataclass
 class CheckDefinition:
     """
@@ -38,7 +61,11 @@ class CheckDefinition:
         severity = data.get("severity", "error")
         metric = data.get("metric", {})
         applies_to = data.get("applies_to", {})
-        limits = data.get("limits", {})
+        # A ruleset can inject an explicit top-level `limits` (which wins);
+        # otherwise derive the recommended/absolute bounds the check impls read
+        # from the metric's target/limits (µm converted to mm). Without this the
+        # JSON thresholds were dead and every check used its hardcoded fallback.
+        limits = data.get("limits") or _limits_from_metric(metric)
         description = data.get("description")
         return cls(
             id=cid,

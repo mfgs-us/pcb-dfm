@@ -4,6 +4,7 @@ import math
 
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
+from ..geometry.net_map import get_or_build_net_map
 from ..results import CheckResult, MetricResult, Violation, ViolationLocation
 
 
@@ -56,6 +57,12 @@ def run_diff_pair_spacing(ctx: CheckContext) -> CheckResult:
     dd = ctx.design_data
     pairs = dd.diff_pairs if dd is not None else []
 
+    # When copper is net-tagged (design data carries routed geometry that lines
+    # up with the Gerber copper), we can measure the *true edge-to-edge* gap
+    # between the two nets' copper instead of centreline-to-centreline. Falls
+    # back to the segment measure when no tagged copper is available.
+    net_map = get_or_build_net_map(ctx) if dd is not None else None
+
     worst_um = 0.0
     worst_pair = None
     evaluated = 0
@@ -71,20 +78,31 @@ def run_diff_pair_spacing(ctx: CheckContext) -> CheckResult:
         if not p_segs or not n_segs:
             continue
 
-        # Sample each positive segment (endpoints + midpoint) and record the
-        # centre-to-centre gap to the nearest coupled negative segment.
-        gaps = []
-        for (a, b), p_layer, _w in p_segs:
-            for pt in (a, ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2), b):
-                best = None
-                for (na, nb), n_layer, _nw in n_segs:
-                    if not _same_layer(p_layer, n_layer):
-                        continue
-                    d = _pt_seg_dist(pt, na, nb)
-                    if best is None or d < best:
-                        best = d
-                if best is not None and best <= coupling_max_mm:
-                    gaps.append(best)
+        gaps: list = []
+        used_copper = False
+        if net_map is not None and net_map.polygons_for_net(pair.positive) \
+                and net_map.polygons_for_net(pair.negative):
+            # True copper edge-to-edge gap along the coupled length.
+            edge_gaps = net_map.coupled_edge_gaps(pair.positive, pair.negative,
+                                                  coupling_max_mm)
+            if len(edge_gaps) >= 2:
+                gaps = [g[0] for g in edge_gaps]
+                used_copper = True
+
+        if not used_copper:
+            # Sample each positive segment (endpoints + midpoint) and record the
+            # centre-to-centre gap to the nearest coupled negative segment.
+            for (a, b), p_layer, _w in p_segs:
+                for pt in (a, ((a[0] + b[0]) / 2, (a[1] + b[1]) / 2), b):
+                    best = None
+                    for (na, nb), n_layer, _nw in n_segs:
+                        if not _same_layer(p_layer, n_layer):
+                            continue
+                        d = _pt_seg_dist(pt, na, nb)
+                        if best is None or d < best:
+                            best = d
+                    if best is not None and best <= coupling_max_mm:
+                        gaps.append(best)
 
         if len(gaps) < 2:
             continue  # not enough coupled geometry to judge consistency

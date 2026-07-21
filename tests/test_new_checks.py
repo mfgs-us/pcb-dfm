@@ -11,8 +11,9 @@ import math
 import pathlib
 import tempfile
 
+import boards  # tests/boards.py
+
 from pcb_dfm.geometry.primitives import Bounds, Point2D, Polygon
-from tests import boards
 
 
 def _run(name):

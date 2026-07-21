@@ -11,6 +11,36 @@ from ..geometry.primitives import Bounds, Polygon
 from ..results import CheckResult, MetricResult, Violation, ViolationLocation
 
 
+def _resolve_limit(check_def, key: str, default):
+    """Resolve a threshold (recommended_min/max, absolute_min/max), preferring
+    the pre-normalized ``check_def.limits`` block (target -> recommended_*,
+    limits -> absolute_*). If that plumbing is absent, fall back to deriving the
+    value directly from this check's ``metric.target``/``metric.limits`` with
+    um->mm scaling, so the JSON thresholds are honored either way."""
+    lim = getattr(check_def, "limits", None) or {}
+    v = lim.get(key)
+    if isinstance(v, (int, float)) and not isinstance(v, bool):
+        return float(v)
+
+    metric = getattr(check_def, "metric", None) or {}
+    units = str(metric.get("units", "mm")).lower()
+    scale = 0.001 if units in ("um", "µm", "micron", "microns") else 1.0
+    mapping = {
+        "recommended_min": ("target", "min"),
+        "recommended_max": ("target", "max"),
+        "absolute_min": ("limits", "min"),
+        "absolute_max": ("limits", "max"),
+    }
+    node_key, sub = mapping.get(key, (None, None))
+    if node_key is not None:
+        node = metric.get(node_key)
+        if isinstance(node, dict):
+            nv = node.get(sub)
+            if isinstance(nv, (int, float)) and not isinstance(nv, bool):
+                return float(nv) * scale
+    return default
+
+
 def _poly_area_mm2(poly) -> float:
     if hasattr(poly, "area_mm2"):
         return float(poly.area_mm2)
@@ -62,9 +92,18 @@ def _normalize_mask_polarity(mask_polygons: List[Polygon], board_area: float) ->
     """
     3A) Normalize solder mask layer into "openings geometry".
 
+    CAVEAT (known unresolved hard case): this function ALWAYS returns the input
+    polygons tagged as "openings". Correctly distinguishing openings-geometry
+    from coverage-geometry (and inverting the latter) requires boolean polygon
+    operations against the board outline, which this engine does not yet have.
+    The heuristics below are computed but deliberately do not change the outcome
+    -- we bias toward "openings" (the common export convention) to avoid
+    inverting geometry we cannot reliably invert, which would produce false
+    fails. Callers must treat mask polarity as an assumption, not a fact.
+
     Returns:
-        - List of normalized opening polygons
-        - String indicating polarity: "openings" or "coverage"
+        - List of normalized opening polygons (always the input, unchanged)
+        - String indicating polarity: always "openings" (see caveat)
     """
     if board_area <= 0:
         # No board outline available, assume openings (most common)
@@ -214,27 +253,15 @@ def run_solder_mask_expansion(ctx: CheckContext) -> CheckResult:
     All internal geometry in mm.
     Metric is reported in mm, even if JSON used um.
     """
-    metric_cfg = ctx.check_def.metric or {}
-    target_raw = metric_cfg.get("target", {}) or {}
-    limits_raw = metric_cfg.get("limits", {}) or {}
-
-    # Normalize geometry thresholds to mm
-    units_raw = (metric_cfg.get("units") or "mm").lower()
-    source_is_um = units_raw in ("um", "micron", "microns")
-
-    if isinstance(target_raw, dict):
-        raw_target_min = target_raw.get("min", 50.0 if source_is_um else 0.05)
-    else:
-        raw_target_min = 50.0 if source_is_um else 0.05
-
-    if isinstance(limits_raw, dict):
-        raw_abs_min = limits_raw.get("min", 30.0 if source_is_um else 0.03)
-    else:
-        raw_abs_min = 30.0 if source_is_um else 0.03
-
-    scale = 0.001 if source_is_um else 1.0  # um -> mm if needed
-    recommended_min = float(raw_target_min) * scale
-    absolute_min = float(raw_abs_min) * scale
+    # Thresholds come pre-normalized to mm from the shared plumbing
+    # (ctx.check_def.limits: target -> recommended_*, limits -> absolute_*).
+    # For this check the JSON declares a target_range, so we get a lower bound
+    # (min expansion; too small => mask-on-pad) AND an upper bound (max
+    # expansion; too large => exposed copper / bridging risk).
+    recommended_min = _resolve_limit(ctx.check_def, "recommended_min", 0.05)
+    absolute_min = _resolve_limit(ctx.check_def, "absolute_min", 0.0)
+    recommended_max = _resolve_limit(ctx.check_def, "recommended_max", None)
+    absolute_max = _resolve_limit(ctx.check_def, "absolute_max", None)
 
     # Raw parameters
     raw_cfg = getattr(ctx.check_def, "raw", None) or {}
@@ -395,6 +422,8 @@ def run_solder_mask_expansion(ctx: CheckContext) -> CheckResult:
 
     min_expansion = math.inf
     min_loc: Optional[ViolationLocation] = None
+    max_expansion = -math.inf
+    max_loc: Optional[ViolationLocation] = None
     has_any_match = False
 
     for pad in pads:
@@ -435,23 +464,25 @@ def run_solder_mask_expansion(ctx: CheckContext) -> CheckResult:
                 expansion = min_distance
                 notes = "True distance-based expansion measurement (pad contained in mask)"
             else:
-                # We can't reliably determine sign without proper boolean ops
-                # Use bbox approximation as a conservative estimate
+                # Mask does not fully contain the pad -> the opening is too
+                # small / offset and part of the pad is under mask (mask-on-pad).
+                # Use a SIGNED bbox approximation: a mask bbox smaller than the
+                # pad yields a NEGATIVE expansion, which is a real defect and
+                # must be allowed to trip the lower fail branch (do NOT clamp to
+                # zero, which is what previously made a fail unreachable).
                 mask_w = m.max_x - m.min_x
                 mask_h = m.max_y - m.min_y
                 dx = mask_w - pad_w
                 dy = mask_h - pad_h
                 expansion = 0.5 * min(dx, dy)
-                expansion = max(expansion, 0.0)  # Clamp to non-negative
-                notes = "Bbox approximation (containment unknown)"
+                notes = "Bbox approximation (pad not fully contained; possible mask-on-pad)"
         except Exception:
-            # Fallback to bbox approximation if distance calculation fails
+            # Fallback to (signed) bbox approximation if distance calc fails
             mask_w = m.max_x - m.min_x
             mask_h = m.max_y - m.min_y
             dx = mask_w - pad_w
             dy = mask_h - pad_h
             expansion = 0.5 * min(dx, dy)
-            expansion = max(expansion, 0.0)  # Clamp to non-negative
             notes = "Fallback bbox approximation"
 
         if expansion < min_expansion:
@@ -461,6 +492,14 @@ def run_solder_mask_expansion(ctx: CheckContext) -> CheckResult:
                 x_mm=pad.cx,
                 y_mm=pad.cy,
                 notes=notes,
+            )
+        if expansion > max_expansion:
+            max_expansion = expansion
+            max_loc = ViolationLocation(
+                layer=m.layer,
+                x_mm=pad.cx,
+                y_mm=pad.cy,
+                notes="Largest mask expansion (over-expansion / exposed-copper candidate)",
             )
 
     if not has_any_match or not math.isfinite(min_expansion):
@@ -485,37 +524,65 @@ def run_solder_mask_expansion(ctx: CheckContext) -> CheckResult:
         ).finalize()
 
     measured = float(min_expansion)
+    max_measured = float(max_expansion) if math.isfinite(max_expansion) else measured
 
-    # Determine status only (severity handled by finalize)
-    if measured >= recommended_min:
-        status = "pass"
-        score = 100.0
-    elif measured < absolute_min:
+    # Evaluate BOTH failure directions:
+    #  - under-expansion (opening too small / mask-on-pad): measured < min bounds
+    #  - over-expansion (opening far larger than pad -> exposed copper / bridging):
+    #    max_measured > the max bounds (only if the JSON declared a max).
+    under_fail = measured < absolute_min
+    under_warn = (not under_fail) and (measured < recommended_min)
+
+    over_fail = (absolute_max is not None) and (max_measured > absolute_max)
+    over_warn = (
+        (not over_fail)
+        and (recommended_max is not None)
+        and (max_measured > recommended_max)
+    )
+
+    if under_fail or over_fail:
         status = "fail"
         score = 0.0
-    else:
+    elif under_warn or over_warn:
         status = "warning"
         span = max(1e-6, recommended_min - absolute_min)
         frac = (measured - absolute_min) / span
-        score = max(0.0, min(100.0, 60.0 + 40.0 * max(0.0, frac)))
+        score = max(0.0, min(100.0, 60.0 + 40.0 * max(0.0, min(1.0, frac))))
+    else:
+        status = "pass"
+        score = 100.0
 
     margin_to_limit = float(measured - absolute_min)
 
-    msg = (
-        f"Minimum solder mask expansion is {measured:.3f} mm "
-        f"(recommended >= {recommended_min:.3f} mm, absolute >= {absolute_min:.3f} mm)."
-    )
-
     violations: List[Violation] = []
-    if status != "pass":
-        violation_severity = "warning" if status == "warning" else "error"
-        violations.append(
-            Violation(
-                severity=violation_severity,
-                message=msg,
-                location=min_loc,
+
+    # Under-expansion violation
+    if under_fail or under_warn:
+        sev = "error" if under_fail else "warning"
+        if measured < 0.0:
+            umsg = (
+                f"Solder mask opening is smaller than the pad by {-measured:.3f} mm "
+                f"(mask-on-pad): the opening must be at least {absolute_min:.3f} mm "
+                f"larger than the pad (recommended >= {recommended_min:.3f} mm)."
             )
+        else:
+            umsg = (
+                f"Minimum solder mask expansion is {measured:.3f} mm "
+                f"(recommended >= {recommended_min:.3f} mm, absolute >= {absolute_min:.3f} mm)."
+            )
+        violations.append(Violation(severity=sev, message=umsg, location=min_loc))
+
+    # Over-expansion violation
+    if over_fail or over_warn:
+        sev = "error" if over_fail else "warning"
+        rec_txt = f"{recommended_max:.3f}" if recommended_max is not None else "n/a"
+        abs_txt = f"{absolute_max:.3f}" if absolute_max is not None else "n/a"
+        omsg = (
+            f"Maximum solder mask expansion is {max_measured:.3f} mm, larger than the "
+            f"pad opening should be (recommended <= {rec_txt} mm, absolute <= {abs_txt} mm). "
+            f"Over-expanded openings expose neighboring copper and risk solder bridging."
         )
+        violations.append(Violation(severity=sev, message=omsg, location=max_loc))
 
     return CheckResult(
         check_id=ctx.check_def.id,
@@ -528,6 +595,7 @@ def run_solder_mask_expansion(ctx: CheckContext) -> CheckResult:
             measured_mm=measured,
             target_mm=recommended_min,
             limit_low_mm=absolute_min,
+            limit_high_mm=absolute_max,
         ),
         violations=violations,
     ).finalize()

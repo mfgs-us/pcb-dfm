@@ -115,6 +115,14 @@ def run_component_to_component_spacing(ctx: CheckContext) -> CheckResult:
     Notes:
       - Silkscreen is ignored in this check.
       - Via-like small round features are filtered out so vias do not create fake "components".
+
+    IMPORTANT (measurement honesty): without component placement/footprint data
+    this check has no true component bodies. It clusters pad openings into
+    inferred "components" and measures the GAP BETWEEN PAD CLUSTERS. That gap is
+    only a proxy for real body-to-body clearance and is generally an OVER-ESTIMATE
+    of it (component bodies usually extend beyond their pads, so the true body gap
+    is smaller than the pad-cluster gap). Treat a pass here as necessary but not
+    sufficient; a failure (touching/overlapping clusters) is a hard signal.
     """
     metric_cfg = ctx.check_def.metric or {}
     units = metric_cfg.get("units", "mm")
@@ -207,9 +215,9 @@ def run_component_to_component_spacing(ctx: CheckContext) -> CheckResult:
             check_id=ctx.check_def.id,
             name=ctx.check_def.name,
             category_id=ctx.check_def.category_id,
-            severity=ctx.check_def.severity or ctx.check_def.severity_default,
-            status="pass",
-            score=100.0,
+            severity="info",
+            status="not_applicable",
+            score=None,
             metric={
                 "kind": "distance",
                 "units": units,
@@ -266,9 +274,9 @@ def run_component_to_component_spacing(ctx: CheckContext) -> CheckResult:
             check_id=ctx.check_def.id,
             name=ctx.check_def.name,
             category_id=ctx.check_def.category_id,
-            severity=ctx.check_def.severity or ctx.check_def.severity_default,
-            status="pass",
-            score=100.0,
+            severity="info",
+            status="not_applicable",
+            score=None,
             metric={
                 "kind": "distance",
                 "units": units,
@@ -295,9 +303,9 @@ def run_component_to_component_spacing(ctx: CheckContext) -> CheckResult:
             check_id=ctx.check_def.id,
             name=ctx.check_def.name,
             category_id=ctx.check_def.category_id,
-            severity=ctx.check_def.severity or ctx.check_def.severity_default,
-            status="pass",
-            score=100.0,
+            severity="info",
+            status="not_applicable",
+            score=None,
             metric={
                 "kind": "distance",
                 "units": units,
@@ -356,9 +364,9 @@ def run_component_to_component_spacing(ctx: CheckContext) -> CheckResult:
             check_id=ctx.check_def.id,
             name=ctx.check_def.name,
             category_id=ctx.check_def.category_id,
-            severity=ctx.check_def.severity or ctx.check_def.severity_default,
-            status="pass",
-            score=100.0,
+            severity="info",
+            status="not_applicable",
+            score=None,
             metric={
                 "kind": "distance",
                 "units": units,
@@ -411,9 +419,9 @@ def run_component_to_component_spacing(ctx: CheckContext) -> CheckResult:
             check_id=ctx.check_def.id,
             name=ctx.check_def.name,
             category_id=ctx.check_def.category_id,
-            severity=ctx.check_def.severity or ctx.check_def.severity_default,
-            status="pass",
-            score=100.0,
+            severity="info",
+            status="not_applicable",
+            score=None,
             metric={
                 "kind": "distance",
                 "units": units,
@@ -462,9 +470,9 @@ def run_component_to_component_spacing(ctx: CheckContext) -> CheckResult:
             check_id=ctx.check_def.id,
             name=ctx.check_def.name,
             category_id=ctx.check_def.category_id,
-            severity=ctx.check_def.severity or ctx.check_def.severity_default,
-            status="pass",
-            score=100.0,
+            severity="info",
+            status="not_applicable",
+            score=None,
             metric={
                 "kind": "distance",
                 "units": units,
@@ -483,10 +491,13 @@ def run_component_to_component_spacing(ctx: CheckContext) -> CheckResult:
         severity = ctx.check_def.severity or ctx.check_def.severity_default or "warning"
         score = 100.0
     elif min_spacing < absolute_min:
-        status = "warning"
+        # Below the absolute minimum (including spacing 0 for touching/overlapping
+        # clusters) is a hard collision that must FAIL, not merely warn.
+        status = "fail"
         severity = "error"
         score = 0.0
     else:
+        # Between absolute and recommended: a real concern but not a collision.
         status = "warning"
         severity = "error"
         span = max(1e-6, recommended_min - absolute_min)

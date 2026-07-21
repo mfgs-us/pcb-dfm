@@ -150,7 +150,10 @@ def run_solder_paste_area_coverage(ctx: CheckContext) -> CheckResult:
     match_tol = float((ctx.check_def.raw or {}).get("pad_match_tolerance_mm", 0.6))
 
     coverages: List[float] = []
-    worst: Optional[Tuple[float, float, float]] = None  # (coverage, x, y)
+    # Track the extreme pads (lowest and highest coverage) so a single
+    # starved or flooded pad drives the grade, instead of being averaged away.
+    lo_pad: Optional[Tuple[float, float, float]] = None  # (coverage, x, y)
+    hi_pad: Optional[Tuple[float, float, float]] = None  # (coverage, x, y)
 
     for pf in paste_files:
         # Copper on the same side.
@@ -183,35 +186,48 @@ def run_solder_paste_area_coverage(ctx: CheckContext) -> CheckResult:
                 continue
             cov = 100.0 * parea / carea
             coverages.append(cov)
-            # Track the pad furthest from the ideal mid-range coverage.
-            mid = 0.5 * (target_min + target_max)
-            if worst is None or abs(cov - mid) > abs(worst[0] - mid):
-                worst = (cov, px, py)
+            if lo_pad is None or cov < lo_pad[0]:
+                lo_pad = (cov, px, py)
+            if hi_pad is None or cov > hi_pad[0]:
+                hi_pad = (cov, px, py)
 
     if not coverages:
         return _na(ctx, target_min, limit_min, limit_max,
                    "Paste layer present but no paste apertures could be matched to copper pads; not applicable.")
 
-    measured = sum(coverages) / len(coverages)
+    mean_cov = sum(coverages) / len(coverages)
+    lo_cov = lo_pad[0] if lo_pad is not None else mean_cov
+    hi_cov = hi_pad[0] if hi_pad is not None else mean_cov
 
-    # Two-sided range grading.
-    if measured < limit_min or measured > limit_max:
+    def _score_cov(c: float) -> float:
+        if target_min <= c <= target_max:
+            return 100.0
+        if c < target_min:
+            span = max(1e-9, target_min - limit_min)
+            return max(0.0, min(100.0, 100.0 * (c - limit_min) / span))
+        span = max(1e-9, limit_max - target_max)
+        return max(0.0, min(100.0, 100.0 * (limit_max - c) / span))
+
+    # Grade off the WORST-deviating pad on each side, not the mean: a single
+    # starved (low) or flooded (high) pad must be able to warn/fail even when
+    # the average sits comfortably in range.
+    score_lo = _score_cov(lo_cov)
+    score_hi = _score_cov(hi_cov)
+    if score_lo <= score_hi:
+        measured, worst = lo_cov, lo_pad
+    else:
+        measured, worst = hi_cov, hi_pad
+    score = min(score_lo, score_hi)
+
+    # Two-sided range grading driven by the extreme pads.
+    if lo_cov < limit_min or hi_cov > limit_max:
         status = "fail"
-    elif measured < target_min or measured > target_max:
+    elif lo_cov < target_min or hi_cov > target_max:
         status = "warning"
     else:
         status = "pass"
 
-    if target_min <= measured <= target_max:
-        score = 100.0
-    elif measured < target_min:
-        span = max(1e-9, target_min - limit_min)
-        score = max(0.0, min(100.0, 100.0 * (measured - limit_min) / span))
-    else:  # measured > target_max
-        span = max(1e-9, limit_max - target_max)
-        score = max(0.0, min(100.0, 100.0 * (limit_max - measured) / span))
-
-    # margin to the nearer limit (positive = inside limits)
+    # margin to the nearer limit for the worst pad (positive = inside limits)
     margin = min(measured - limit_min, limit_max - measured)
 
     violations: List[Violation] = []
@@ -220,14 +236,15 @@ def run_solder_paste_area_coverage(ctx: CheckContext) -> CheckResult:
         if worst is not None:
             loc = ViolationLocation(
                 layer="Paste", x_mm=worst[1], y_mm=worst[2],
-                notes="Pad with paste coverage furthest from the recommended range.",
+                notes="Pad with paste coverage furthest outside the recommended range.",
             )
         violations.append(Violation(
             severity=_severity(ctx),
             message=(
-                f"Mean solder-paste coverage {measured:.1f}% across {len(coverages)} pad(s) "
-                f"is outside the recommended {target_min:.0f}-{target_max:.0f}% "
-                f"(allowed {limit_min:.0f}-{limit_max:.0f}%)."
+                f"Worst solder-paste coverage {measured:.1f}% "
+                f"(pad range {lo_cov:.1f}-{hi_cov:.1f}%, mean {mean_cov:.1f}%, "
+                f"{len(coverages)} pad(s)) is outside the recommended "
+                f"{target_min:.0f}-{target_max:.0f}% (allowed {limit_min:.0f}-{limit_max:.0f}%)."
             ),
             location=loc,
         ))

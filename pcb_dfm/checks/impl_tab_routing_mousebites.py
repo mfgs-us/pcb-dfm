@@ -87,8 +87,9 @@ def run_tab_routing_mousebites(ctx: CheckContext) -> CheckResult:
       - If no such pattern exists, the check is not applicable (many boards
         have no mousebites) - we do not fabricate a value.
       - When present, we report the percentage deviation of the detected
-        mousebite geometry (hole diameter and pitch) from typical recommended
-        values, which the metric grades against its limit.
+        mousebite geometry - hole diameter and web thickness (pitch minus hole
+        diameter) - from typical recommended values (~0.5 mm holes, ~0.5 mm web,
+        i.e. ~1.0 mm pitch), which the metric grades against its limit.
     """
     target_max, limit_max = _thresholds(ctx)
 
@@ -103,7 +104,13 @@ def run_tab_routing_mousebites(ctx: CheckContext) -> CheckResult:
     min_run = int(raw.get("mousebite_min_holes", 3))
     collinear_tol = float(raw.get("mousebite_collinearity_mm", 0.15))
     rec_dia = float(raw.get("recommended_mousebite_diameter_mm", 0.5))
-    rec_pitch = float(raw.get("recommended_mousebite_pitch_mm", 0.5))
+    # Grade the tab WEB (pitch - hole diameter), not the pitch against the hole
+    # diameter. A correct mousebite is ~0.5 mm holes on a ~1.0 mm pitch, i.e. a
+    # web of ~0.5 mm. Anchoring "recommended pitch" at the 0.5 mm hole diameter
+    # (web ~= 0, holes touching) made every correctly-spaced row read as ~100%
+    # deviation and FAIL. The web is what actually governs break strength and
+    # edge quality, so we grade it against a ~0.4-0.5 mm target.
+    rec_web = float(raw.get("recommended_mousebite_web_mm", 0.5))
 
     drills = _collect_drills(ctx)
     small = [(x, y, d) for (x, y, d) in drills if 0.0 < d <= max_dia]
@@ -175,9 +182,10 @@ def run_tab_routing_mousebites(ctx: CheckContext) -> CheckResult:
 
             # Qualifies as a mousebite row.
             n_patterns += 1
+            web = mean_pitch - dia  # tab web left between adjacent perforations
             dia_dev = abs(dia - rec_dia) / rec_dia if rec_dia > 0 else 0.0
-            pitch_dev = abs(mean_pitch - rec_pitch) / rec_pitch if rec_pitch > 0 else 0.0
-            dev_pct = 100.0 * max(dia_dev, pitch_dev)
+            web_dev = abs(web - rec_web) / rec_web if rec_web > 0 else 0.0
+            dev_pct = 100.0 * max(dia_dev, web_dev)
             if worst_dev is None or dev_pct > worst_dev:
                 worst_dev = dev_pct
                 worst_loc = (sum(xs) / len(xs), sum(ys) / len(ys))
@@ -213,7 +221,8 @@ def run_tab_routing_mousebites(ctx: CheckContext) -> CheckResult:
             severity=_severity(ctx),
             message=(
                 f"Detected {n_patterns} mousebite row(s); worst geometry deviates "
-                f"{worst_dev:.1f}% from recommended drill/pitch (limit {limit_max:.0f}%)."
+                f"{worst_dev:.1f}% from recommended drill diameter / web thickness "
+                f"(limit {limit_max:.0f}%)."
             ),
             location=loc,
         ))

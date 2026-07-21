@@ -20,8 +20,15 @@ _INCH_TO_MM = 25.4
 @register_check("unsupported_hole_types")
 def run_unsupported_hole_types(ctx: CheckContext) -> CheckResult:
     """
-    Heuristic check for hole sizes that are likely outside a typical fab's
-    supported range.
+    Check for hole SIZES (drill diameters) that are likely outside a typical
+    fab's supported drill range.
+
+    IMPORTANT: despite the historical check id "unsupported_hole_types", this
+    check only inspects drilled hole *diameters*. It does NOT (and cannot from
+    flat Excellon/Gerber drill artwork) detect blind, buried, or other special
+    hole *types* -- that classification requires per-layer span / stackup data
+    which is not available here. The name/description were corrected to say
+    "hole sizes".
 
     We DO NOT know the specific fab capabilities; instead we:
       - read all drill files via pcb-tools

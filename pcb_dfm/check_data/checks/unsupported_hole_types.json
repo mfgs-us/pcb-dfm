@@ -1,9 +1,9 @@
 {
   "id": "unsupported_hole_types",
   "category_id": "fab_process_compatibility",
-  "name": "Unsupported hole types",
-  "description": "Flag blind, buried, or special hole types that are not supported by the selected process.",
-  "what_it_measures": "Presence of hole type definitions outside the allowed set for this fabrication process.",
+  "name": "Unsupported hole sizes",
+  "description": "Flag drilled hole DIAMETERS that fall outside the fab's supported drill-size range. This check inspects drill artwork and cannot detect blind/buried/special hole TYPES (that requires stackup/layer-span data, not present in flat drill files).",
+  "what_it_measures": "Count of drilled hole diameters smaller or larger than the supported min/max drill size for this fabrication process.",
   "metric": {
     "kind": "boolean",
     "preferred_direction": "target_range",

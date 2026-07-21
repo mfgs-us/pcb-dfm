@@ -73,6 +73,12 @@ def run_copper_density_balance(ctx: CheckContext) -> CheckResult:
     - Report the maximum delta as the metric.
 
     This is an approximation, but good enough to highlight gross copper imbalance.
+
+    Known limitation: per-window "copper area" is the sum of copper polygon
+    bounding-box overlaps with the window, which OVERESTIMATES the true copper
+    area (a thin diagonal trace fills only a fraction of its bbox, yet the whole
+    bbox overlap is counted). Densities are therefore biased high; the reported
+    value is the max delta between adjacent windows, not an absolute fill figure.
     """
     limits = ctx.check_def.limits or {}
     recommended_max_delta = float(limits.get("recommended_max_delta", 20.0))  # percent

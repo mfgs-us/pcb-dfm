@@ -3,13 +3,13 @@
     {
       "confidence": "heuristic",
       "id": "acid_trap_angle",
-      "measured": 90.0,
+      "measured": null,
       "severity": "info",
       "status": "pass",
       "violations": 1
     },
     {
-      "confidence": "high",
+      "confidence": "heuristic",
       "id": "aperture_definition_errors",
       "measured": 0.0,
       "severity": "info",
@@ -25,7 +25,7 @@
       "violations": 1
     },
     {
-      "confidence": "high",
+      "confidence": "heuristic",
       "id": "component_to_component_spacing",
       "measured": 2.475,
       "severity": "info",
@@ -41,7 +41,7 @@
       "violations": 0
     },
     {
-      "confidence": "high",
+      "confidence": "heuristic",
       "id": "copper_sliver_width",
       "measured": 0.05,
       "severity": "error",
@@ -115,10 +115,10 @@
     {
       "confidence": "high",
       "id": "drill_wander_budget",
-      "measured": 3.2,
+      "measured": null,
       "severity": "info",
-      "status": "pass",
-      "violations": 0
+      "status": "not_applicable",
+      "violations": 1
     },
     {
       "confidence": "high",
@@ -161,11 +161,11 @@
       "violations": 0
     },
     {
-      "confidence": "high",
+      "confidence": "heuristic",
       "id": "mask_to_trace_clearance",
-      "measured": 0.0,
-      "severity": "warning",
-      "status": "warning",
+      "measured": 2.475,
+      "severity": "info",
+      "status": "pass",
       "violations": 1
     },
     {
@@ -193,7 +193,7 @@
       "violations": 1
     },
     {
-      "confidence": "high",
+      "confidence": "heuristic",
       "id": "min_trace_spacing",
       "measured": null,
       "severity": "info",
@@ -212,8 +212,8 @@
       "confidence": "heuristic",
       "id": "missing_tooling_holes",
       "measured": 0.0,
-      "severity": "error",
-      "status": "fail",
+      "severity": "warning",
+      "status": "warning",
       "violations": 1
     },
     {
@@ -269,7 +269,7 @@
       "id": "silkscreen_over_mask_defined_pads",
       "measured": 1.0,
       "severity": "error",
-      "status": "warning",
+      "status": "fail",
       "violations": 1
     },
     {
@@ -297,7 +297,7 @@
       "violations": 1
     },
     {
-      "confidence": "high",
+      "confidence": "heuristic",
       "id": "tab_routing_mousebites",
       "measured": null,
       "severity": "info",
@@ -305,15 +305,15 @@
       "violations": 1
     },
     {
-      "confidence": "heuristic",
+      "confidence": "high",
       "id": "thermal_relief_spoke_width",
       "measured": null,
       "severity": "info",
-      "status": "pass",
+      "status": "not_applicable",
       "violations": 1
     },
     {
-      "confidence": "heuristic",
+      "confidence": "high",
       "id": "tombstoning_risk",
       "measured": null,
       "severity": "info",
@@ -321,7 +321,7 @@
       "violations": 0
     },
     {
-      "confidence": "high",
+      "confidence": "heuristic",
       "id": "unsupported_hole_types",
       "measured": 0.0,
       "severity": "info",
@@ -345,7 +345,7 @@
       "violations": 1
     },
     {
-      "confidence": "high",
+      "confidence": "heuristic",
       "id": "via_to_copper_clearance",
       "measured": null,
       "severity": "warning",
@@ -353,7 +353,7 @@
       "violations": 1
     },
     {
-      "confidence": "heuristic",
+      "confidence": "high",
       "id": "wave_solder_shadowing",
       "measured": null,
       "severity": "info",

@@ -5,10 +5,11 @@
   "description": "Verify presence and placement of required tooling holes for fabrication and assembly processes.",
   "what_it_measures": "Whether required tooling holes are present and correctly positioned on the panel or board.",
   "metric": {
-    "kind": "boolean",
-    "preferred_direction": "target_range",
-    "target": true,
-    "limits": true
+    "kind": "count",
+    "units": "count",
+    "preferred_direction": "maximize",
+    "target": { "min": 2 },
+    "limits": { "min": 0 }
   },
   "severity_default": "warning",
   "applies_to": ["mechanical", "board_outline", "drill"],

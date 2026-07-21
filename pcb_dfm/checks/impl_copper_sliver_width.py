@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from typing import List, Optional
+from typing import List, Optional, Tuple
 
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
@@ -8,15 +8,91 @@ from ..geometry import queries
 from ..results import CheckResult, Violation, ViolationLocation
 
 
+def _poly_vertices(poly) -> List[Tuple[float, float]]:
+    """Extract (x, y) vertices in mm from a geometry Polygon."""
+    verts = getattr(poly, "vertices", None)
+    if not verts:
+        return []
+    pts: List[Tuple[float, float]] = []
+    for p in verts:
+        if hasattr(p, "x") and hasattr(p, "y"):
+            pts.append((float(p.x), float(p.y)))
+        elif isinstance(p, (tuple, list)) and len(p) >= 2:
+            pts.append((float(p[0]), float(p[1])))
+    return pts
+
+
+def _shoelace_area(pts: List[Tuple[float, float]]) -> float:
+    """Absolute polygon area (mm^2) via the shoelace formula."""
+    n = len(pts)
+    if n < 3:
+        return 0.0
+    s = 0.0
+    for i in range(n):
+        x1, y1 = pts[i]
+        x2, y2 = pts[(i + 1) % n]
+        s += x1 * y2 - x2 * y1
+    return abs(s) * 0.5
+
+
+def _longest_extent(pts: List[Tuple[float, float]], bbox_diag: float) -> float:
+    """
+    Longest caliper extent (diameter) of the vertex set in mm.
+
+    This is the maximum pairwise vertex distance, which -- unlike a bounding-box
+    dimension -- is rotation invariant. For small polygons we compute it exactly;
+    for very dense rings we fall back to the bbox diagonal (also an upper bound on
+    any axis-aligned dimension) to keep the cost bounded.
+    """
+    n = len(pts)
+    if n < 2:
+        return 0.0
+    if n > 256:
+        return bbox_diag
+    max_d2 = 0.0
+    for i in range(n):
+        xi, yi = pts[i]
+        for j in range(i + 1, n):
+            xj, yj = pts[j]
+            dx = xi - xj
+            dy = yi - yj
+            d2 = dx * dx + dy * dy
+            if d2 > max_d2:
+                max_d2 = d2
+    return max_d2 ** 0.5
+
+
+def _estimate_width_mm(poly, short_dim: float, bbox_diag: float) -> float:
+    """
+    Estimate the true minimum width of an elongated copper polygon.
+
+    The bounding-box short dimension only measures width correctly for
+    axis-aligned rectangles; a diagonal or curved sliver has a large bbox short
+    dimension yet a genuinely narrow body. For an elongated shape the mean width
+    is well approximated by ``area / length`` (length = longest caliper extent),
+    and both area and longest extent are rotation invariant, so a diagonal sliver
+    measures the same as an axis-aligned one. We take the smaller of that estimate
+    and the bbox short dimension so the result is never a worse over-estimate than
+    the old bbox measure.
+    """
+    pts = _poly_vertices(poly)
+    area = _shoelace_area(pts)
+    length = _longest_extent(pts, bbox_diag)
+    if area <= 0.0 or length <= 0.0:
+        return short_dim
+    mean_width = area / length
+    return min(short_dim, mean_width)
+
+
 @register_check("copper_sliver_width")
 def run_copper_sliver_width(ctx: CheckContext) -> CheckResult:
     """
-    Detect narrow copper "slivers" based on polygon bounding boxes.
+    Detect narrow copper "slivers".
 
-    Approximation:
+    Candidate selection uses polygon bounding boxes (cheap pre-filter):
       - For each copper polygon:
           * compute bbox (width, height) in mm
-          * area = width * height
+          * bbox area = width * height
           * aspect_ratio = long_dim / short_dim
       - Consider as sliver candidates only if:
           * area >= min_area_mm2
@@ -24,8 +100,13 @@ def run_copper_sliver_width(ctx: CheckContext) -> CheckResult:
           * long_dim >= min_long_dim_mm
           * min_candidate_short_dim_mm <= short_dim <= max_short_dim_mm
           * area >= ignore_tiny_feature_area_mm2
-      - Sliver width = short_dim
-      - Report minimum sliver width across all candidates.
+
+    Width measurement (improved over bbox short-dimension):
+      The reported sliver width is estimated as ``area / longest_extent`` (mean
+      width of an elongated shape), clamped to be no larger than the bbox short
+      dimension. Both area and longest extent are rotation invariant, so diagonal
+      and curved slivers -- which a bbox short dimension mis-measures -- are
+      handled correctly. Report the minimum estimated width across all candidates.
     """
     metric_cfg = ctx.check_def.metric or {}
     units_raw = metric_cfg.get("units", metric_cfg.get("unit", "mm"))
@@ -108,7 +189,8 @@ def run_copper_sliver_width(ctx: CheckContext) -> CheckResult:
             if short_dim > max_short_dim_mm:
                 continue
 
-            sliver_width = short_dim
+            bbox_diag = (width * width + height * height) ** 0.5
+            sliver_width = _estimate_width_mm(poly, short_dim, bbox_diag)
             if min_sliver is None or sliver_width < min_sliver:
                 min_sliver = sliver_width
                 cx = 0.5 * (b.min_x + b.max_x)

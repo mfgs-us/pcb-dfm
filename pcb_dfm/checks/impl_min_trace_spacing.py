@@ -282,22 +282,34 @@ def _get_line_width_inch(prim) -> Optional[float]:
 
 def _might_be_closer_than(s1: Segment, s2: Segment, limit_mm: float) -> bool:
     """
-    Cheap reject using bbox-like reasoning:
-      if the centerlines are farther apart than limit_mm + half widths,
-      they cannot improve the current minimum spacing.
-    """
-    # center points
-    cx1 = 0.5 * (s1.x1_mm + s1.x2_mm)
-    cy1 = 0.5 * (s1.y1_mm + s1.y2_mm)
-    cx2 = 0.5 * (s2.x1_mm + s2.x2_mm)
-    cy2 = 0.5 * (s2.y1_mm + s2.y2_mm)
+    Cheap, SOUND reject using the gap between the two segments' axis-aligned
+    bounding boxes.
 
-    dx = cx2 - cx1
-    dy = cy2 - cy1
-    dist_center = (dx * dx + dy * dy) ** 0.5
-    # Even if they touched, spacing could not be smaller than:
-    # dist_center - half widths
-    min_possible_spacing = dist_center - 0.5 * (s1.width_mm + s2.width_mm)
+    Center-to-center distance is NOT a valid lower bound on segment-to-segment
+    distance: two long, parallel, offset traces can have far-apart midpoints yet
+    a tiny real gap, so a center-based prune would skip genuinely-close pairs and
+    miss the true minimum. The gap between the segments' bounding boxes, however,
+    IS a valid lower bound on the centerline distance (every point of a segment
+    lies inside its bbox). Subtracting the half-widths therefore gives a valid
+    lower bound on the copper-to-copper spacing.
+
+    We only reject a pair when even that optimistic lower bound cannot beat the
+    current best, so the reported minimum is independent of iteration order.
+    """
+    # Axis-aligned bbox of each segment's centerline.
+    ax_min, ax_max = (s1.x1_mm, s1.x2_mm) if s1.x1_mm <= s1.x2_mm else (s1.x2_mm, s1.x1_mm)
+    ay_min, ay_max = (s1.y1_mm, s1.y2_mm) if s1.y1_mm <= s1.y2_mm else (s1.y2_mm, s1.y1_mm)
+    bx_min, bx_max = (s2.x1_mm, s2.x2_mm) if s2.x1_mm <= s2.x2_mm else (s2.x2_mm, s2.x1_mm)
+    by_min, by_max = (s2.y1_mm, s2.y2_mm) if s2.y1_mm <= s2.y2_mm else (s2.y2_mm, s2.y1_mm)
+
+    # Separation between the bboxes on each axis (0 if they overlap on that axis).
+    dx = max(0.0, ax_min - bx_max, bx_min - ax_max)
+    dy = max(0.0, ay_min - by_max, by_min - ay_max)
+    bbox_gap = (dx * dx + dy * dy) ** 0.5
+
+    # Even if both traces were at their nearest bbox corners, spacing could not
+    # be smaller than: bbox_gap - half widths.
+    min_possible_spacing = bbox_gap - 0.5 * (s1.width_mm + s2.width_mm)
     return min_possible_spacing <= limit_mm
 
 

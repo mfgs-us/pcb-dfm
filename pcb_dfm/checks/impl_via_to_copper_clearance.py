@@ -13,6 +13,13 @@ from ..geometry.primitives import Bounds
 from ..ingest import GerberFileInfo
 from ..results import CheckResult, MetricResult, Violation, ViolationLocation
 
+# Reuse the point-in-polygon + point-to-polygon-edge helpers that the annular
+# ring check already uses for correct drill-center-to-polygon-edge geometry.
+from .impl_min_annular_ring import (
+    _min_distance_to_polygon_edges,
+    _point_in_polygon,
+)
+
 try:
     import gerber
 except Exception:
@@ -137,13 +144,25 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
     """
     Approximate via-to-copper clearance by:
 
-      - Using all drill hits as via centers
-      - For each via, computing min distance from via edge to any copper polygon bounds
+      - Using drill hits (via barrels) as via centers.
+      - For each via, computing the true distance from the via barrel to the
+        nearest copper *polygon edge* (point-to-polygon-edge distance), not to
+        the polygon's bounding box. Measuring to the bbox silently ignored
+        clearance to every ground plane / large pour (the common case), because
+        such a polygon's bbox contains the via and reported distance 0.
+      - When the via center is *inside* a copper polygon that is not its own
+        pad/annular ring, that is also a clearance concern (a via buried in a
+        plane or pour with no antipad around the barrel) -> zero clearance.
+      - The via's own pad / annular ring is excluded (edge within the pad
+        exclusion radius) so we do not flag the via's own ring.
 
-    Improvements over older version:
-      - Perimeter copper band exclusion (optional)
-      - Pad exclusion based on *distance* to copper bbox (instead of bbox containment)
-      - Violation marker placed between via edge and closest copper point (more clear)
+    Limitation (screen, not a definitive check): without a netlist this cannot
+    distinguish same-net copper from different-net copper. A via legitimately
+    connected to a plane/pour (its own net, e.g. a thermal or direct connect)
+    looks identical to a via that shorts to foreign copper. Antipads are also
+    not modeled as polygon holes, so a via inside a plane's outline is reported
+    as zero clearance even when a proper antipad exists. Treat results as a
+    screen to be reviewed, not a hard pass/fail.
 
     Metric:
       measured_value: min_via_to_copper_clearance_mm
@@ -234,9 +253,11 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
 
     board_bounds = _get_board_bounds(ctx)
 
-    # Precompute copper bbox entries once (huge speed win)
-    # entry: (layer_name, bounds, edge_dist_mm_or_None)
-    copper_entries: List[tuple[str, Bounds, Optional[float]]] = []
+    # Precompute copper entries once (huge speed win). We keep the polygon
+    # itself (not just its bbox) so we can measure true point-to-polygon-edge
+    # distance rather than distance to the bounding box.
+    # entry: (layer_name, polygon, bounds, perimeter_edge_dist_mm_or_None)
+    copper_entries: List[tuple[str, object, Bounds, Optional[float]]] = []
     for layer in copper_layers:
         lname = layer.logical_layer
         for poly in layer.polygons:
@@ -247,7 +268,7 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
                     edge_dist = _dist_bbox_to_bounds_edge_mm(b, board_bounds)
                 except Exception:
                     edge_dist = None
-            copper_entries.append((lname, b, edge_dist))
+            copper_entries.append((lname, poly, b, edge_dist))
 
     if not copper_entries:
         viol = Violation(
@@ -278,7 +299,7 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
     # This makes the runtime proportional to local copper density, not board area
     cell = max(0.25, min(1.0, recommended_min * 2.0))
     grid: Dict[Tuple[int, int], List[int]] = defaultdict(list)
-    for idx, (_, b, _) in enumerate(copper_entries):
+    for idx, (_, _poly, b, _) in enumerate(copper_entries):
         # insert bbox into all intersected cells
         ix0 = int(floor(b.min_x / cell))
         ix1 = int(floor(b.max_x / cell))
@@ -325,28 +346,49 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
                         continue
                     seen.add(idx)
 
-                    layer_name, b, edge_dist = copper_entries[idx]
+                    layer_name, poly, b, edge_dist = copper_entries[idx]
 
                     if perimeter_ignore_mm > 0.0 and edge_dist is not None and edge_dist <= perimeter_ignore_mm:
                         continue
 
-                    dist_center, closest_x, closest_y = _center_to_bbox_distance_and_closest_point(cx, cy, b)
-
-                    # Skip if within pad exclusion radius
-                    if dist_center <= pad_exclusion_r:
+                    # Cheap bounding-box lower-bound prune: the true polygon edge
+                    # is at least as far as the polygon's bbox, so if the bbox is
+                    # already beyond the search window the polygon cannot matter.
+                    # (Planes/pours whose bbox contains the via are NOT pruned
+                    # here -- dist_bbox is 0 -- so they are always measured.)
+                    dist_bbox, _bx, _by = _center_to_bbox_distance_and_closest_point(cx, cy, b)
+                    if dist_bbox - r > search_radius:
                         continue
 
-                    # Skip if beyond search radius (early exit optimization)
-                    if dist_center - r > search_radius:
+                    # True geometry: is the via barrel center inside this copper
+                    # polygon, and how far is the nearest polygon edge?
+                    inside = _point_in_polygon(cx, cy, poly.vertices)
+                    edge_to_center = _min_distance_to_polygon_edges(cx, cy, poly.vertices)
+                    if not math.isfinite(edge_to_center):
                         continue
 
-                    clearance = dist_center - r
-                    if clearance < 0.0:
+                    if inside:
+                        # Via center sits inside this polygon. If the nearest edge
+                        # is within the pad-exclusion radius this is the via's own
+                        # pad / annular ring -> not a clearance defect (the annular
+                        # ring check measures that). Otherwise the via is buried in
+                        # a plane/pour with no antipad around the barrel, which is
+                        # itself a clearance concern -> zero barrel-to-copper
+                        # clearance.
+                        if edge_to_center <= pad_exclusion_r:
+                            continue
                         clearance = 0.0
+                    else:
+                        # Via outside the polygon: clearance from barrel edge to
+                        # the nearest polygon edge.
+                        clearance = edge_to_center - r
+                        if clearance < 0.0:
+                            clearance = 0.0
 
-                    vx_edge_x, vx_edge_y = _via_edge_point_toward_target(cx, cy, r, closest_x, closest_y)
-                    marker_x = 0.5 * (vx_edge_x + closest_x)
-                    marker_y = 0.5 * (vx_edge_y + closest_y)
+                    # Marker at the via barrel center (clearance is measured to the
+                    # nearest copper polygon edge from here).
+                    marker_x = cx
+                    marker_y = cy
 
                     if min_clear is None or clearance < min_clear:
                         min_clear = clearance
@@ -354,7 +396,7 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
                             layer=layer_name,
                             x_mm=marker_x,
                             y_mm=marker_y,
-                            notes="Midpoint between via edge and nearest copper bbox point (approx).",
+                            notes="Via barrel center; clearance measured to nearest copper polygon edge.",
                         )
 
                     if clearance < recommended_min:
@@ -437,7 +479,7 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
                             layer=layer_name,
                             x_mm=mx,
                             y_mm=my,
-                            notes="Midpoint between via edge and nearest copper bbox point (approx).",
+                            notes="Via barrel center; clearance measured to nearest copper polygon edge.",
                         ),
                     )
                 )

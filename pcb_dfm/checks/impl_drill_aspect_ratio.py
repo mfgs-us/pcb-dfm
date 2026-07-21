@@ -13,6 +13,25 @@ except Exception:
     gerber = None
 
 _INCH_TO_MM = 25.4
+_DEFAULT_BOARD_THICKNESS_MM = 1.6
+
+
+def _resolve_board_thickness_mm(ctx: CheckContext) -> float:
+    """Board thickness for the aspect-ratio denominator.
+
+    Prefers the design-data stackup (sum of all layer thicknesses) when one is
+    supplied; falls back to a 1.6 mm default when no usable stackup is present.
+    """
+    design_data = getattr(ctx, "design_data", None)
+    stackup = getattr(design_data, "stackup", None) if design_data else None
+    if stackup is not None:
+        try:
+            total = stackup.total_thickness_mm()
+        except Exception:
+            total = None
+        if total is not None and total > 0:
+            return float(total)
+    return _DEFAULT_BOARD_THICKNESS_MM
 
 
 @register_check("drill_aspect_ratio")
@@ -23,6 +42,15 @@ def run_drill_aspect_ratio(ctx: CheckContext) -> CheckResult:
         aspect_ratio = board_thickness_mm / min_drill_diameter_mm
 
     Limits are typically expressed as max allowed aspect ratio.
+
+    Board thickness is taken from the design-data stackup when one is supplied
+    (the sum of every stackup layer thickness), and falls back to 1.6 mm only
+    when no stackup is available.
+
+    Limitation: the aspect ratio always uses the *full* board thickness. Blind
+    and buried vias only span part of the stack, so their true aspect ratio is
+    lower than reported here -- those holes are over-estimated (conservative),
+    which is an accepted limitation.
     """
     metric_cfg = ctx.check_def.metric or {}
     units = metric_cfg.get("units", metric_cfg.get("unit", ""))
@@ -31,10 +59,9 @@ def run_drill_aspect_ratio(ctx: CheckContext) -> CheckResult:
     recommended_max = float(limits.get("recommended_max", 8.0))
     absolute_max = float(limits.get("absolute_max", 10.0))
 
-    # Board thickness: for now, allow override via check_def.raw, else default 1.6 mm
-    board_thickness_mm = float(
-        ctx.check_def.raw.get("board_thickness_mm", 1.6)
-    )
+    # Board thickness: prefer the design-data stackup (sum of layer
+    # thicknesses); fall back to 1.6 mm only when no stackup is supplied.
+    board_thickness_mm = _resolve_board_thickness_mm(ctx)
 
     drill_files: List[GerberFileInfo] = [
         f for f in ctx.ingest.files if f.layer_type == "drill"

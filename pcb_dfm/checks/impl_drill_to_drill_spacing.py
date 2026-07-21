@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-import math
 from collections import defaultdict
 from dataclasses import dataclass
 from math import floor, hypot, sqrt
@@ -152,103 +151,56 @@ def run_drill_to_drill_spacing(ctx: CheckContext) -> CheckResult:
 
     n = len(drills)
 
-    # For correctness: for each drill i, search neighboring cells in expanding rings until we can prove
-    # no unsearched cell can contain a closer candidate than current global best.
-    global_best_center = math.inf  # best center-to-center distance found so far
-
+    # Only NEARBY drills can violate spacing: any pair whose centre-to-centre
+    # distance exceeds recommended_min + both radii is comfortably in spec, so we
+    # ignore it. With the grid cell sized to that cutoff, each drill only needs
+    # to look at its own + 8 neighbouring cells -- O(n) with a small constant,
+    # regardless of board size or how sparsely holes are placed. (A previous
+    # expanding-ring search blew up to O(rings^3) for far-apart holes.)
+    cutoff = cell  # cell == recommended_min + max_d (+ 0.5 floor); covers every violation
     for i in range(n):
         h1 = drills[i]
         r1 = 0.5 * h1.diameter_mm
         ci, cj = _cell_key(h1.x_mm, h1.y_mm, cell)
-
-        # ring expansion
-        ring = 0
-        local_best_center = math.inf
-
-        while True:
-            # Search this ring of cells
-            for di in range(-ring, ring + 1):
-                for dj in range(-ring, ring + 1):
-                    # only perimeter of square ring (avoid repeats)
-                    if ring > 0 and (abs(di) != ring and abs(dj) != ring):
+        for di in (-1, 0, 1):
+            for dj in (-1, 0, 1):
+                for j in grid.get((ci + di, cj + dj), ()):
+                    if j <= i:
                         continue
-
-                    bucket = grid.get((ci + di, cj + dj))
-                    if not bucket:
-                        continue
-
-                    for j in bucket:
-                        if j <= i:
-                            continue
-                        h2 = drills[j]
-                        r2 = 0.5 * h2.diameter_mm
-
-                        dx = h2.x_mm - h1.x_mm
-                        dy = h2.y_mm - h1.y_mm
-                        center_dist = sqrt(dx * dx + dy * dy)
-
-                        if center_dist < local_best_center:
-                            local_best_center = center_dist
-
-                        spacing = center_dist - (r1 + r2)
-                        if spacing <= 0.0:
-                            continue
-
-                        if min_spacing is None or spacing < min_spacing:
-                            min_spacing = spacing
-                            global_best_center = min(global_best_center, center_dist)
-                            mx = 0.5 * (h1.x_mm + h2.x_mm)
-                            my = 0.5 * (h1.y_mm + h2.y_mm)
-                            worst_location = ViolationLocation(
-                                layer="DrillPlated",
-                                x_mm=mx,
-                                y_mm=my,
-                                notes="Minimum spacing between two plated drill holes.",
-                            )
-
-            # Stopping condition:
-            # If we already have a global best center distance, and the minimum possible distance to any
-            # yet-unsearched ring is >= that, then no closer pair exists (for this i).
-            if global_best_center < math.inf:
-                next_ring = ring + 1
-                # Minimum possible distance from h1 cell to any cell on the next ring:
-                min_lb = math.inf
-                for di in (-next_ring, next_ring):
-                    for dj in range(-next_ring, next_ring + 1):
-                        min_lb = min(min_lb, _min_possible_center_dist_between_cells(di, dj, cell))
-                for dj in (-next_ring, next_ring):
-                    for di in range(-next_ring, next_ring + 1):
-                        min_lb = min(min_lb, _min_possible_center_dist_between_cells(di, dj, cell))
-
-                if min_lb >= global_best_center:
-                    break
-
-            # If we still haven't found any candidate for this i, we must expand at least a bit.
-            ring += 1
-
-            # Safety: avoid infinite loops on pathological bounds
-            if ring > 200:
-                break
+                    h2 = drills[j]
+                    r2 = 0.5 * h2.diameter_mm
+                    center_dist = sqrt((h2.x_mm - h1.x_mm) ** 2 + (h2.y_mm - h1.y_mm) ** 2)
+                    if center_dist > cutoff:
+                        continue  # far apart -> not a spacing concern
+                    # spacing <= 0 means tangent/overlapping holes -- the MOST
+                    # severe drill defect. It is recorded (not skipped) so the
+                    # metric reflects the true minimum, including overlaps.
+                    spacing = center_dist - (r1 + r2)
+                    if min_spacing is None or spacing < min_spacing:
+                        min_spacing = spacing
+                        worst_location = ViolationLocation(
+                            layer="DrillPlated",
+                            x_mm=0.5 * (h1.x_mm + h2.x_mm),
+                            y_mm=0.5 * (h1.y_mm + h2.y_mm),
+                            notes="Minimum spacing between two plated drill holes.",
+                        )
 
     if min_spacing is None:
-        viol = Violation(
-            severity="warning",
-            message="All drills appear touching/overlapping; cannot compute positive drill spacing.",
-            location=None,
-        )
+        # No pair fell within the cutoff -> every drill is comfortably far from
+        # its neighbours, which is a pass (nothing to flag).
         return CheckResult(
             check_id=ctx.check_def.id,
             name=ctx.check_def.name,
             category_id=ctx.check_def.category_id,
-            status="warning",
-            severity="info",  # Default value, will be overridden by finalize()
-            score=50.0,
+            status="pass",
+            severity="info",
+            score=100.0,
             metric=MetricResult.geometry_mm(
-                measured_mm=0.0,
+                measured_mm=None,
                 target_mm=recommended_min,
                 limit_low_mm=absolute_min,
             ),
-            violations=[viol],
+            violations=[],
         ).finalize()
 
     # Decide status only (severity handled by finalize)
@@ -271,10 +223,18 @@ def run_drill_to_drill_spacing(ctx: CheckContext) -> CheckResult:
 
     violations: List[Violation] = []
     if status != "pass":
-        msg = (
-            f"Minimum drill to drill spacing {min_spacing:.3f} mm is below "
-            f"recommended {recommended_min:.3f} mm (absolute minimum {absolute_min:.3f} mm)."
-        )
+        if min_spacing <= 0.0:
+            msg = (
+                f"Drill holes overlap or are tangent (edge-to-edge spacing "
+                f"{min_spacing:.3f} mm <= 0). Overlapping holes are a critical "
+                f"drilling defect; minimum spacing must be at least "
+                f"{recommended_min:.3f} mm (absolute minimum {absolute_min:.3f} mm)."
+            )
+        else:
+            msg = (
+                f"Minimum drill to drill spacing {min_spacing:.3f} mm is below "
+                f"recommended {recommended_min:.3f} mm (absolute minimum {absolute_min:.3f} mm)."
+            )
         violations.append(
             Violation(
                 severity="warning" if status == "warning" else "error",

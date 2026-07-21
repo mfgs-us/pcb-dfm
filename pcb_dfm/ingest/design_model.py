@@ -68,6 +68,20 @@ class Stackup:
                 return ly.thickness_mm
         return None
 
+    def total_thickness_mm(self) -> Optional[float]:
+        """Total finished board thickness = sum of every layer thickness.
+
+        Sums ``thickness_mm`` across all copper *and* dielectric layers in the
+        stack. Returns None when no layer carries a thickness (so callers can
+        fall back to a default).
+        """
+        thicknesses = [ly.thickness_mm for ly in self.layers
+                       if ly.thickness_mm is not None]
+        if not thicknesses:
+            return None
+        total = sum(thicknesses)
+        return total if total > 0 else None
+
 
 @dataclass
 class NetFeature:

@@ -52,6 +52,21 @@ def _iter_vertices_mm(poly) -> List[tuple[float, float]]:
     return []
 
 
+def _signed_area(pts: List[tuple[float, float]]) -> float:
+    """
+    Shoelace signed area of the vertex ring. Positive => counter-clockwise
+    winding, negative => clockwise. Used to classify each vertex as convex or
+    reflex relative to the polygon's own winding.
+    """
+    s = 0.0
+    n = len(pts)
+    for i in range(n):
+        x1, y1 = pts[i]
+        x2, y2 = pts[(i + 1) % n]
+        s += x1 * y2 - x2 * y1
+    return 0.5 * s
+
+
 def _poly_area_mm2(poly) -> float:
     """
     Best effort polygon area in mm^2, matching other geometry helpers.
@@ -82,12 +97,26 @@ def _poly_area_mm2(poly) -> float:
 @register_check("acid_trap_angle")
 def run_acid_trap_angle(ctx: CheckContext) -> CheckResult:
     """
-    Detect sharp copper corners (small interior angles) that can act as acid traps.
+    Detect acute concave copper corners that can act as acid traps.
 
-    First pass:
+    An acid trap is an acute-angled *concave* feature: two copper edges meet at
+    a reflex (concave) vertex of the copper, wrapping tightly around a narrow
+    non-copper wedge where etchant collects and over-etches. The severity of the
+    trap is the acute wedge angle between the two edges.
+
+    Correctness note (previous bug):
+      The earlier implementation reported ``acos(dot)`` -- the *unsigned* angle
+      between the two edges at every vertex. That value is identical for a
+      convex copper spike (e.g. an intentional 45 deg teardrop / chamfer) and a
+      concave acid-trap notch, so intentional convex features were false-flagged
+      as traps. We now use the cross-product sign relative to the polygon's
+      winding to distinguish convex from reflex vertices and only evaluate the
+      *concave* ones. At a reflex vertex the acute non-copper wedge angle equals
+      the unsigned angle between the two boundary edges, which is what we report.
+
     - Works on all copper polygons.
-    - Approximates interior angles at each vertex.
-    - Flags smallest angle if below thresholds.
+    - Considers only concave (reflex) vertices; convex spikes are ignored.
+    - Reports the smallest acute wedge angle found (bigger is better).
 
     Units: degrees.
     """
@@ -145,11 +174,22 @@ def run_acid_trap_angle(ctx: CheckContext) -> CheckResult:
             if n < 3:
                 continue
 
+            # Winding sign: for a CCW polygon a right turn (cross < 0) marks a
+            # reflex/concave vertex; for a CW polygon the sense is flipped.
+            ccw = _signed_area(pts) > 0.0
+
             for i in range(n):
                 x0, y0 = pts[i - 1]
                 x1, y1 = pts[i]
                 x2, y2 = pts[(i + 1) % n]
 
+                # Boundary edges: incoming (prev->cur) and outgoing (cur->next).
+                ein_x = x1 - x0
+                ein_y = y1 - y0
+                eout_x = x2 - x1
+                eout_y = y2 - y1
+
+                # Vectors from the vertex to its two neighbours (for the angle).
                 v1x = x0 - x1
                 v1y = y0 - y1
                 v2x = x2 - x1
@@ -160,6 +200,16 @@ def run_acid_trap_angle(ctx: CheckContext) -> CheckResult:
                 if len1 < min_edge_length_mm or len2 < min_edge_length_mm:
                     continue
 
+                # Signed turn at the vertex. Classify convex vs reflex relative
+                # to the polygon's winding; only reflex (concave) vertices can be
+                # acid traps.
+                cross = ein_x * eout_y - ein_y * eout_x
+                reflex = cross < 0.0 if ccw else cross > 0.0
+                if not reflex:
+                    continue
+
+                # At a reflex vertex the acute non-copper wedge angle equals the
+                # unsigned angle between the two boundary edges.
                 dot = v1x * v2x + v1y * v2y
                 denom = max(1e-12, len1 * len2)
                 cos_theta = max(-1.0, min(1.0, dot / denom))
@@ -172,7 +222,7 @@ def run_acid_trap_angle(ctx: CheckContext) -> CheckResult:
                         layer=logical,
                         x_mm=x1,
                         y_mm=y1,
-                        notes="Sharpest copper corner (approximate).",
+                        notes="Acute concave copper corner (acid trap).",
                     )
 
     # No corners found

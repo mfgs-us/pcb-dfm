@@ -247,6 +247,23 @@ def _extract_aperture_dim_mm(ap: Any) -> Tuple[Optional[float], str]:
 
 @register_check("aperture_definition_errors")
 def run_aperture_definition_errors(ctx: CheckContext) -> CheckResult:
+    """
+    Detect aperture SIZE outliers and unusable aperture dimensions in Gerber
+    artwork.
+
+    Despite the historical check id "aperture_definition_errors", this check
+    does NOT detect "missing, ambiguous, or conflicting" aperture *definitions*.
+    What it actually flags, per parsed aperture, is:
+      - parse_failed:        the Gerber layer could not be parsed at all
+      - no_usable_dimension: no numeric size could be extracted for the aperture
+      - extremely_small:     size <= min_dim_mm (default 0.01 mm)
+      - extremely_large:     size >= max_dim_mm (default 200 mm)
+      - macro_no_size / unknown_shape: low-confidence "suspicious" only
+
+    "Hard" reasons (parse/no-dimension/too-small/too-large) drive the metric and
+    status; the soft reasons are reported but do not fail the board. In short:
+    this is a size/parse sanity check, not a definition-conflict detector.
+    """
     metric_cfg = ctx.check_def.metric or {}
     units = metric_cfg.get("units", "count")
     target_cfg = metric_cfg.get("target", {}) or {}

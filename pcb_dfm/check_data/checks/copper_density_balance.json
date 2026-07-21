@@ -1,24 +1,31 @@
 {
-  "id": "copper_density_balance",
-  "category_id": "copper_geometry",
-  "name": "Copper density balance",
-  "description": "Check for large copper density variations between neighbouring regions that can cause warp, bow, or etch non uniformity.",
-  "what_it_measures": "Maximum copper-density delta between adjacent sliding windows, as a percentage. Each window's density is approximated from copper polygon bounding-box overlap and the metric reports the largest density difference found between any two neighbouring windows.",
-  "metric": {
-    "kind": "ratio",
-    "units": "%",
-    "preferred_direction": "target_range",
-    "target": { "min": 30.0, "max": 70.0 },
-    "limits": { "min": 10.0, "max": 90.0 },
-    "scale_min": 0.0,
-    "scale_max": 100.0
+ "id": "copper_density_balance",
+ "category_id": "copper_geometry",
+ "name": "Copper density balance",
+ "description": "Check for large copper density variations between neighbouring regions that can cause warp, bow, or etch non uniformity.",
+ "what_it_measures": "Maximum copper-density delta between adjacent sliding windows, as a percentage. Each window's density is approximated from copper polygon bounding-box overlap and the metric reports the largest density difference found between any two neighbouring windows.",
+ "metric": {
+  "kind": "ratio",
+  "units": "%",
+  "preferred_direction": "minimize",
+  "target": {
+   "max": 20.0
   },
-  "severity_default": "warning",
-  "applies_to": ["plane", "trace"],
-  "scoring": {
-    "enabled": true,
-    "strategy": "linear",
-    "pass_threshold": 80,
-    "weight": 1.0
-  }
+  "limits": {
+   "max": 30.0
+  },
+  "scale_min": 0.0,
+  "scale_max": 100.0
+ },
+ "severity_default": "warning",
+ "applies_to": [
+  "plane",
+  "trace"
+ ],
+ "scoring": {
+  "enabled": true,
+  "strategy": "linear",
+  "pass_threshold": 80,
+  "weight": 1.0
+ }
 }

@@ -1,24 +1,31 @@
 {
-  "id": "min_slot_width",
-  "category_id": "mechanical_outline",
-  "name": "Minimum slot width",
-  "description": "Ensure routed slots are wide enough for the available milling tools.",
-  "what_it_measures": "Narrowest slot width defined in mechanical or drill layers.",
-  "metric": {
-    "kind": "distance",
-    "units": "mm",
-    "preferred_direction": "maximize",
-    "target": { "min": 0.8 },
-    "limits": { "min": 0.6 },
-    "scale_min": 0.4,
-    "scale_max": 1.5
+ "id": "min_slot_width",
+ "category_id": "mechanical_outline",
+ "name": "Minimum slot width",
+ "description": "Ensure routed slots are wide enough for the available milling tools.",
+ "what_it_measures": "Narrowest slot width among Excellon drill/rout slot features (milled slots defined only on Gerber layers are not measured).",
+ "metric": {
+  "kind": "distance",
+  "units": "mm",
+  "preferred_direction": "maximize",
+  "target": {
+   "min": 0.8
   },
-  "severity_default": "warning",
-  "applies_to": ["mechanical", "board_outline"],
-  "scoring": {
-    "enabled": true,
-    "strategy": "binary",
-    "pass_threshold": 100,
-    "weight": 0.7
-  }
+  "limits": {
+   "min": 0.6
+  },
+  "scale_min": 0.4,
+  "scale_max": 1.5
+ },
+ "severity_default": "warning",
+ "applies_to": [
+  "mechanical",
+  "board_outline"
+ ],
+ "scoring": {
+  "enabled": true,
+  "strategy": "binary",
+  "pass_threshold": 100,
+  "weight": 0.7
+ }
 }

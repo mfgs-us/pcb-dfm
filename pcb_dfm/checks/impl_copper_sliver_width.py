@@ -169,28 +169,33 @@ def run_copper_sliver_width(ctx: CheckContext) -> CheckResult:
                 # extremely small artifact, ignore entirely
                 continue
 
-            short_dim = min(width, height)
-            long_dim = max(width, height)
-            if short_dim <= 0.0:
+            short_dim_bbox = min(width, height)
+            if short_dim_bbox <= 0.0:
                 continue
+            bbox_diag = (width * width + height * height) ** 0.5
 
-            aspect_ratio = long_dim / short_dim
+            # Use rotation-invariant width (area/length) and length for the
+            # candidate filters, so a diagonal thin sliver (which has a
+            # near-square bounding box) is not dropped before its true width is
+            # ever measured.
+            pts = _poly_vertices(poly)
+            extent = _longest_extent(pts, bbox_diag)
+            sliver_width = _estimate_width_mm(poly, short_dim_bbox, bbox_diag)
+            if extent <= 0.0 or sliver_width <= 0.0:
+                continue
+            aspect_ratio = extent / sliver_width
 
-            # sliver candidate filters
+            # sliver candidate filters (rotation invariant)
             if area < min_area_mm2:
                 continue
             if aspect_ratio < min_aspect_ratio:
                 continue
-            if long_dim < min_long_dim_mm:
+            if extent < min_long_dim_mm:
                 continue
-            # New window on short dimension: ignore ultra tiny and clearly non sliver wide features
-            if short_dim < min_candidate_short_dim_mm:
+            if sliver_width < min_candidate_short_dim_mm:
                 continue
-            if short_dim > max_short_dim_mm:
+            if sliver_width > max_short_dim_mm:
                 continue
-
-            bbox_diag = (width * width + height * height) ** 0.5
-            sliver_width = _estimate_width_mm(poly, short_dim, bbox_diag)
             if min_sliver is None or sliver_width < min_sliver:
                 min_sliver = sliver_width
                 cx = 0.5 * (b.min_x + b.max_x)

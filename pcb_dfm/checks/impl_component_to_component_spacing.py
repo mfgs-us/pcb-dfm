@@ -498,8 +498,10 @@ def run_component_to_component_spacing(ctx: CheckContext) -> CheckResult:
         score = 0.0
     else:
         # Between absolute and recommended: a real concern but not a collision.
+        # Warning-status violations must carry warning severity (an error-severity
+        # violation here would inflate the summary's error count).
         status = "warning"
-        severity = "error"
+        severity = "warning"
         span = max(1e-6, recommended_min - absolute_min)
         frac = (min_spacing - absolute_min) / span
         score = max(0.0, min(100.0, 60.0 + 40.0 * max(0.0, frac)))
@@ -549,4 +551,4 @@ def run_component_to_component_spacing(ctx: CheckContext) -> CheckResult:
             "margin_to_limit": margin_to_limit,
         },
         violations=violations,
-    )
+    ).finalize()

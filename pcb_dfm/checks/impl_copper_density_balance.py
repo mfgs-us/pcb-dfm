@@ -81,8 +81,13 @@ def run_copper_density_balance(ctx: CheckContext) -> CheckResult:
     value is the max delta between adjacent windows, not an absolute fill figure.
     """
     limits = ctx.check_def.limits or {}
-    recommended_max_delta = float(limits.get("recommended_max_delta", 20.0))  # percent
-    absolute_max_delta = float(limits.get("absolute_max_delta", 30.0))        # percent
+    # Thresholds now come from the metric (max-delta %) via the plumbing:
+    # target.max -> recommended_max, limits.max -> absolute_max. Legacy
+    # *_max_delta keys are still honored for back-compat.
+    recommended_max_delta = float(
+        limits.get("recommended_max", limits.get("recommended_max_delta", 20.0)))  # percent
+    absolute_max_delta = float(
+        limits.get("absolute_max", limits.get("absolute_max_delta", 30.0)))        # percent
 
     raw_cfg = ctx.check_def.raw or {}
     window_size_mm = float(raw_cfg.get("window_size_mm", 5.0))

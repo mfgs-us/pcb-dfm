@@ -144,7 +144,7 @@ def run_min_slot_width(ctx: CheckContext) -> CheckResult:
             metric=MetricResult.geometry_mm(None, target_mm=target_min, limit_low_mm=limit_min),
             violations=[Violation(
                 severity="info",
-                message="No routed/drilled slots found in drill or mechanical data; slot width not applicable.",
+                message="No Excellon drill/rout slots found; slot width not applicable (milled slots defined on Gerber layers are not measured).",
                 location=None,
             )],
         ).finalize()

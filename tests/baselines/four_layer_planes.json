@@ -233,12 +233,12 @@
       "violations": 0
     },
     {
-      "confidence": "high",
+      "confidence": "heuristic",
       "id": "polarity_marking_consistency",
       "measured": null,
       "severity": "info",
       "status": "not_applicable",
-      "violations": 0
+      "violations": 1
     },
     {
       "confidence": "high",
@@ -361,12 +361,12 @@
       "violations": 1
     },
     {
-      "confidence": "high",
+      "confidence": "heuristic",
       "id": "wave_solder_shadowing",
       "measured": null,
       "severity": "info",
       "status": "not_applicable",
-      "violations": 0
+      "violations": 1
     }
   ],
   "overall": {

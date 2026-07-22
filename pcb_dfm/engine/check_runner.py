@@ -50,6 +50,8 @@ HEURISTIC_CHECK_IDS = {
     "component_to_component_spacing",
     "solder_paste_area_coverage",
     "tombstoning_risk",
+    "wave_solder_shadowing",
+    "polarity_marking_consistency",
 }
 
 

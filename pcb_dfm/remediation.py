@@ -146,6 +146,13 @@ GUIDANCE: Dict[str, Remediation] = {
         "Balance copper/thermal mass between the passive's two pads "
         "(add relief to the heavier pad).",
         "Tombstoning → open joints."),
+    "wave_solder_shadowing": Remediation(
+        "Reorient/space through-hole parts so tall neighbors don't shadow them "
+        "along the wave-travel direction (or hand-solder the shadowed pins).",
+        "Cold / incomplete through-hole joints from the wave."),
+    "polarity_marking_consistency": Remediation(
+        "Add a silkscreen polarity / pin-1 marker beside each polarized part.",
+        "Reversed-polarity assembly → dead or damaged boards."),
 
     # --- high-speed SI -----------------------------------------------------
     "impedance_control": Remediation(

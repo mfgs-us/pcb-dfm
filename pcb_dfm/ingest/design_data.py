@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any, Dict, Optional, Union
 
 from .adapters import (
+    from_bom,
     from_ipc2581,
     from_kicad,
     from_sidecar,
@@ -33,7 +34,58 @@ from .design_model import DesignData
 DesignDataLike = Union[DesignData, Dict[str, Any], str, Path, None]
 
 
-def load_design_data(source: DesignDataLike) -> Optional[DesignData]:
+def merge_bom(base: DesignData, bom: DesignData) -> DesignData:
+    """Layer BOM identity onto placement, joining by reference designator.
+
+    Placement is authoritative for geometry; the BOM is authoritative for
+    identity (part number, class, DNP, ...). Designators present only in the BOM
+    are added as un-placed components; designators only in placement are kept
+    as-is. Mismatches are recorded in ``base.warnings``.
+    """
+    by_ref = {c.ref.upper(): c for c in base.components}
+    bom_refs = set()
+    for b in bom.components:
+        bom_refs.add(b.ref.upper())
+        existing = by_ref.get(b.ref.upper())
+        if existing is None:
+            base.components.append(b)  # in BOM, not laid out
+            continue
+        # Enrich identity in place; keep placement geometry.
+        existing.part_number = b.part_number or existing.part_number
+        existing.manufacturer = b.manufacturer or existing.manufacturer
+        existing.description = b.description or existing.description
+        existing.part_class = b.part_class or existing.part_class
+        if b.polarized is not None:
+            existing.polarized = b.polarized
+        existing.dnp = b.dnp or existing.dnp
+        existing.height_mm = b.height_mm if b.height_mm is not None else existing.height_mm
+        if not existing.value:
+            existing.value = b.value
+
+    placed_only = [c.ref for c in base.components if c.placed and c.ref.upper() not in bom_refs]
+    bom_only = [b.ref for b in bom.components if b.ref.upper() not in by_ref]
+    if placed_only:
+        base.warnings.append(
+            f"{len(placed_only)} placed component(s) not found in BOM: "
+            f"{', '.join(sorted(placed_only)[:10])}"
+            + (" …" if len(placed_only) > 10 else ""))
+    if bom_only:
+        base.warnings.append(
+            f"{len(bom_only)} BOM line(s) not placed on the board: "
+            f"{', '.join(sorted(bom_only)[:10])}"
+            + (" …" if len(bom_only) > 10 else ""))
+    return base
+
+
+def load_design_data(source: DesignDataLike, *, bom: DesignDataLike = None) -> Optional[DesignData]:
+    dd = _load_one(source)
+    if bom is not None:
+        bom_dd = bom if isinstance(bom, DesignData) else from_bom(str(bom))
+        dd = merge_bom(dd or DesignData(), bom_dd)
+    return dd
+
+
+def _load_one(source: DesignDataLike) -> Optional[DesignData]:
     if source is None:
         return None
     if isinstance(source, DesignData):

@@ -134,6 +134,12 @@ def run_tombstoning_risk(ctx: CheckContext) -> CheckResult:
     violations: List[Violation] = []
 
     for comp in dd.components:
+        if getattr(comp, "dnp", False):
+            continue  # not populated -> cannot tombstone
+        # If the BOM confirms a non-passive class, trust it over the footprint guess.
+        if comp.part_class is not None and comp.part_class not in (
+                "resistor", "capacitor", "inductor", "electrolytic", "ferrite"):
+            continue
         spacing = _passive_spacing(comp.footprint)
         if spacing is None or comp.x_mm is None or comp.y_mm is None:
             continue

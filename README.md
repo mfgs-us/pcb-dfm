@@ -436,8 +436,16 @@ checks compute real results instead of reporting `not_applicable`:
 ```bash
 pcb-dfm run testdata/mini_board.zip --design-data my_project/          # KiCad project dir
 pcb-dfm run testdata/mini_board.zip --design-data board.ipc2581.xml    # IPC-2581
+pcb-dfm run testdata/mini_board.zip --design-data my_project/ --bom bom.csv   # + BOM identity
 pcb-dfm check testdata/mini_board.zip diff_pair_skew --design-data design.json
 ```
+
+`--bom <file.csv>` layers a **BOM** onto placement by reference designator,
+adding part identity the layout doesn't carry — manufacturer part number, part
+class, and **do-not-populate** — for the assembly checks. It tolerates messy
+exports (preamble rows, aliased columns, multi-designator cells like `R1-R4`,
+and `DNP`/`Populate` columns). Placement stays authoritative for geometry; the
+BOM for identity. See `pcb_dfm/ingest/adapters/bom.py`.
 
 Three input formats are supported, all mapped onto one internal `DesignData`
 model (`pcb_dfm/ingest/design_model.py`) so checks are format-agnostic:

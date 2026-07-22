@@ -139,12 +139,11 @@ class ControlledImpedanceSpec:
 
 @dataclass
 class Component:
-    """A placed component.
+    """A placed component, optionally enriched with BOM identity.
 
-    Provisional model: enough to carry placement (centroid) + identity from a
-    source that has it (e.g. a KiCad ``.kicad_pcb`` footprint). The assembly/DFA
-    work in #6 extends this with courtyard/body extent, BOM part/value, and
-    pin-1 for the tombstoning / wave-solder / polarity checks.
+    Placement (footprint) fields carry geometry; the BOM-derived fields below
+    carry identity. A component may be geometry-only (placed, no BOM row),
+    identity-only (in the BOM but not laid out -> ``placed=False``), or both.
     """
     ref: str
     value: Optional[str] = None
@@ -153,6 +152,15 @@ class Component:
     y_mm: Optional[float] = None
     rotation_deg: float = 0.0
     side: Optional[str] = None  # "top" | "bottom"
+    # --- BOM-derived identity (#6) ---
+    part_number: Optional[str] = None       # manufacturer part number (MPN)
+    manufacturer: Optional[str] = None
+    description: Optional[str] = None
+    part_class: Optional[str] = None        # resistor|capacitor|...|other
+    polarized: Optional[bool] = None        # None = unknown
+    dnp: bool = False                       # do-not-populate
+    height_mm: Optional[float] = None       # body height, when the BOM carries it
+    placed: bool = True                     # False = in the BOM but not laid out
 
 
 @dataclass
@@ -163,6 +171,7 @@ class DesignData:
     diff_pairs: List[DiffPair] = field(default_factory=list)
     controlled_impedance: List[ControlledImpedanceSpec] = field(default_factory=list)
     components: List[Component] = field(default_factory=list)
+    warnings: List[str] = field(default_factory=list)  # non-fatal ingest/merge notes
     source: Optional[str] = None  # "sidecar" | "ipc2581" | "odbpp" | "kicad"
 
     def net(self, name: str) -> Optional[Net]:

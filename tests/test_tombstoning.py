@@ -107,5 +107,20 @@ def test_no_passive_footprints_is_not_applicable():
     assert _run(geom, dd).status == "not_applicable"
 
 
+def test_dnp_passive_is_excluded():
+    # Same asymmetric copper as the flagged case, but the part is DNP -> skipped.
+    geom = _geom_top([_rect(0, 0, 9.9, 10)])
+    dd = _passive_at(10.0, 5.0)
+    dd.components[0].dnp = True
+    assert _run(geom, dd).status == "not_applicable"
+
+
+def test_bom_confirmed_non_passive_is_excluded():
+    geom = _geom_top([_rect(0, 0, 9.9, 10)])
+    dd = _passive_at(10.0, 5.0)
+    dd.components[0].part_class = "ic"   # BOM says it's not a passive
+    assert _run(geom, dd).status == "not_applicable"
+
+
 def test_labeled_heuristic():
     assert "tombstoning_risk" in HEURISTIC_CHECK_IDS

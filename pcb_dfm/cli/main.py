@@ -30,6 +30,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
         ruleset_id=args.ruleset,
         design_id=args.design_id,
         design_data=args.design_data,
+        bom=args.bom,
     )
 
     if args.format == "json":
@@ -67,6 +68,7 @@ def _cmd_gate(args: argparse.Namespace) -> int:
         ruleset_id=args.ruleset,
         design_id=args.design_id,
         design_data=args.design_data,
+        bom=args.bom,
     )
 
     def _write(path, text):
@@ -95,6 +97,7 @@ def _cmd_check(args: argparse.Namespace) -> int:
         load_check_definitions_for_ruleset,
     )
     from ..engine.check_runner import run_single_check
+    from ..ingest.design_data import load_design_data
 
     # Honor ruleset threshold overrides for the single check, if any.
     check_def = None
@@ -105,12 +108,15 @@ def _cmd_check(args: argparse.Namespace) -> int:
                 break
     if check_def is None:
         check_def = load_check_definition(args.check_id)
+    # Resolve design data (+ optional BOM) up front; run_single_check passes a
+    # ready DesignData through unchanged.
+    design_data = load_design_data(args.design_data, bom=args.bom)
     result = run_single_check(
         gerber_zip=Path(args.gerber_zip),
         check_def=check_def,
         ruleset_id=args.ruleset,
         design_id=args.design_id,
-        design_data=args.design_data,
+        design_data=design_data,
     )
     print(result.to_json() if hasattr(result, "to_json") else result.model_dump_json(indent=2))
     return 0
@@ -156,6 +162,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_run.add_argument("--design-id", default="board")
     p_run.add_argument("--design-data", default=None,
                        help="design-data source: a KiCad project dir/.kicad_pcb, a JSON sidecar, or IPC-2581 XML (stackup / nets / placement)")
+    p_run.add_argument("--bom", default=None,
+                       help="BOM CSV, merged onto placement by refdes (part id / DNP for assembly checks)")
     p_run.add_argument("--format", choices=["text", "markdown", "json", "html"], default="text")
     p_run.add_argument("-o", "--output", default=None)
     p_run.set_defaults(func=_cmd_run)
@@ -165,6 +173,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_gate.add_argument("--ruleset", default="default")
     p_gate.add_argument("--design-id", default="board")
     p_gate.add_argument("--design-data", default=None)
+    p_gate.add_argument("--bom", default=None,
+                        help="BOM CSV, merged onto placement by refdes")
     p_gate.add_argument("--fail-on", choices=["never", "warning", "fail"], default="fail",
                         help="exit non-zero when overall status reaches this level")
     p_gate.add_argument("--min-score", type=float, default=None,
@@ -181,6 +191,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_check.add_argument("--design-id", default="board")
     p_check.add_argument("--design-data", default=None,
                          help="design-data source: a KiCad project dir/.kicad_pcb, a JSON sidecar, or IPC-2581 XML (stackup / nets / placement)")
+    p_check.add_argument("--bom", default=None,
+                         help="BOM CSV, merged onto placement by refdes")
     p_check.set_defaults(func=_cmd_check)
 
     p_list = sub.add_parser("list-checks", help="List available check ids")

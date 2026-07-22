@@ -28,6 +28,7 @@ def run_dfm_on_gerber_zip(
     ruleset_id: str,
     design_id: str = "board",
     design_data=None,
+    bom=None,
 ) -> DfmResult:
     """
     High level entry point:
@@ -36,7 +37,16 @@ def run_dfm_on_gerber_zip(
       (usually all built in checks for that ruleset).
     - Runs them in one pass over the Gerber zip.
     - Aggregates into a DfmResult.
+
+    ``bom`` (optional) is a BOM CSV layered onto ``design_data`` by reference
+    designator, enriching component identity for the assembly checks.
     """
+    from ..ingest.design_data import load_design_data
+
+    # Resolve design data (+ optional BOM merge) once; run_checks treats an
+    # already-built DesignData as a pass-through.
+    design_data = load_design_data(design_data, bom=bom)
+
     # Ingest once up front so we can both run checks against it AND report the
     # detected copper stackup / warnings (so a dropped inner layer is visible).
     with rU_open_shim():
@@ -96,6 +106,7 @@ def run_dfm_bundle(
     ruleset_id: str = "default",
     design_id: str = "board",
     design_data=None,
+    bom=None,
 ) -> dict:
     """
     Run a full DFM pass and return a plain-dict summary suitable for a JSON
@@ -115,7 +126,7 @@ def run_dfm_bundle(
         from ..checks import _ensure_impls_loaded
         from ..ingest.design_data import load_design_data
         _ensure_impls_loaded()
-        design_data = load_design_data(design_data)
+        design_data = load_design_data(design_data, bom=bom)
 
         check_defs = load_check_definitions_for_ruleset(ruleset_id)
 

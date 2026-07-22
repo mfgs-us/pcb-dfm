@@ -7,7 +7,7 @@ name = "pcb-dfm"
 version = "0.4.0"
 description = "Schema-driven Design-for-Manufacturing (DFM) engine for PCB Gerbers."
 readme = "README.md"
-requires-python = ">=3.9"
+requires-python = ">=3.10"
 
 license = { text = "Apache-2.0" }
 
@@ -24,7 +24,6 @@ classifiers = [
   "License :: OSI Approved :: Apache Software License",
   "Operating System :: OS Independent",
   "Programming Language :: Python :: 3",
-  "Programming Language :: Python :: 3.9",
   "Programming Language :: Python :: 3.10",
   "Programming Language :: Python :: 3.11",
   "Topic :: Scientific/Engineering :: Electronic Design Automation (EDA)",
@@ -32,7 +31,12 @@ classifiers = [
 
 dependencies = [
   "pydantic>=2.8,<3.0",
-  "pcb-tools>=0.1.5"
+  # Gerber/Excellon parsing. Migrating pcb-tools -> gerbonara (#3): gerbonara is
+  # maintained, pure-Python, and parses arcs/regions/apertures properly. Pinned
+  # to the 1.5.x line, the newest that still supports Python 3.10/3.11 (1.6+
+  # requires 3.12). Both are installed during the incremental migration.
+  "pcb-tools>=0.1.5",
+  "gerbonara>=1.5,<1.6"
 ]
 
 [project.optional-dependencies]
@@ -82,7 +86,7 @@ pcb_dfm = [
 # -------------------------------------------------------
 
 [tool.ruff]
-target-version = "py39"
+target-version = "py310"
 line-length = 100
 extend-exclude = ["scripts", "testdata"]
 
@@ -101,8 +105,8 @@ ignore = ["E501", "E741", "E402"]
 "pcb_dfm/checks/impl_*.py" = ["F841"]
 
 [tool.mypy]
-python_version = "3.9"
-ignore_missing_imports = true   # pcb-tools / gerber ship no type hints
+python_version = "3.10"
+ignore_missing_imports = true   # pcb-tools / gerbonara ship no type hints
 warn_unused_ignores = false
 check_untyped_defs = false
 # Pragmatic: catch obvious type errors without demanding full annotations on a

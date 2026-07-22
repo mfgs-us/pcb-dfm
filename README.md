@@ -39,7 +39,7 @@ The project is designed to be used both as a Python library (importable module) 
 
 ### 1.1 Requirements
 
-- Python 3.9 or newer (CI runs 3.9–3.11)
+- Python 3.10 or newer (CI runs 3.10–3.11)
 - `pip`
 - Git
 

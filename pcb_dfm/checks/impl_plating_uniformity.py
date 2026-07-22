@@ -9,13 +9,14 @@ is a first-order proxy for plating non-uniformity.
 
 Model (explicitly heuristic — not a plating-bath simulation):
 
-    t(AR) = 1 / (1 + c · AR)          # normalized centre-thickness proxy
+    t(AR) = 1 / (1 + c · max(0, AR − AR_knee))   # normalized centre-thickness
     non_uniformity% = 100 · (t_max − t_min) / t_max
 
-t falls monotonically with aspect ratio, so a single hole size gives 0%
-(uniform), while a wide AR spread gives a large percentage. ``c`` is the
-throwing-power falloff (raw-overridable). Metric: non-uniformity % (minimize),
-target 10 / limit 20.
+Throwing power holds up to a knee (modern plating keeps >80% up to AR ~6-8) and
+only degrades above it, so a routine mix of via and component holes — all below
+the knee — reads as uniform (0%), while a genuinely high-aspect-ratio hole
+alongside shallow ones diverges. ``AR_knee`` and ``c`` are raw-overridable.
+Metric: non-uniformity % (minimize), target 10 / limit 20.
 """
 
 from __future__ import annotations
@@ -38,12 +39,16 @@ def _thresholds(ctx: CheckContext) -> tuple[float, float]:
 
 
 def _plating_non_uniformity_pct(diameters_mm: List[float], thickness_mm: float,
-                                c: float) -> Optional[float]:
-    """Normalized plating non-uniformity across a hole population (0..100)."""
+                                c: float, ar_knee: float = 6.0) -> Optional[float]:
+    """Normalized plating non-uniformity across a hole population (0..100).
+
+    Aspect ratios below ``ar_knee`` are treated as fully plated (throwing power
+    is effectively flat there); only holes above the knee reduce centre
+    thickness and create spread."""
     ds = [d for d in diameters_mm if d > 0.0]
     if not ds or thickness_mm <= 0.0:
         return None
-    ts = [1.0 / (1.0 + c * (thickness_mm / d)) for d in ds]
+    ts = [1.0 / (1.0 + c * max(0.0, (thickness_mm / d) - ar_knee)) for d in ds]
     t_max, t_min = max(ts), min(ts)
     if t_max <= 0.0:
         return None
@@ -68,6 +73,7 @@ def run_plating_uniformity(ctx: CheckContext) -> CheckResult:
     target, limit = _thresholds(ctx)
     raw = ctx.check_def.raw or {}
     c = float(raw.get("throwing_power_falloff", 0.15))
+    ar_knee = float(raw.get("aspect_ratio_knee", 6.0))
 
     drill_files = [f for f in ctx.ingest.files if f.layer_type == "drill"]
     if not drill_files:
@@ -81,7 +87,7 @@ def run_plating_uniformity(ctx: CheckContext) -> CheckResult:
         return _na(ctx, target, limit, "No drilled holes found to estimate plating uniformity.")
 
     thickness = _resolve_board_thickness_mm(ctx)
-    measured = _plating_non_uniformity_pct(diameters, thickness, c)
+    measured = _plating_non_uniformity_pct(diameters, thickness, c, ar_knee)
     if measured is None:
         return _na(ctx, target, limit, "Insufficient hole geometry to estimate plating uniformity.")
 

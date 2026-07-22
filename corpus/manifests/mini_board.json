@@ -1,0 +1,23 @@
+{
+  "name": "mini_board",
+  "board": "testdata/mini_board.zip",
+  "ruleset": "default",
+  "description": "Small real 2-layer board (repo testdata). Seed corpus entry.",
+  "source": "repo testdata/mini_board.zip",
+  "notes": "Expectations are confident invariants only. The overall verdict is intentionally NOT pinned: some failing checks on this board (e.g. copper_thermal_area) have not been ground-truthed, so asserting pass/fail would encode an unverified claim.",
+  "expect": {
+    "min_checks_run": 40,
+    "no_crashes": true,
+    "status": {
+      "impedance_control": "not_applicable",
+      "diff_pair_spacing": "not_applicable",
+      "diff_pair_skew": "not_applicable",
+      "return_path_interruptions": "not_applicable",
+      "crosstalk_estimate": "not_applicable"
+    },
+    "must_not_fail": [
+      "plating_uniformity",
+      "silkscreen_clearance"
+    ]
+  }
+}

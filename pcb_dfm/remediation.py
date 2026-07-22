@@ -170,6 +170,10 @@ GUIDANCE: Dict[str, Remediation] = {
     "crosstalk_estimate": Remediation(
         "Increase spacing between sensitive nets or add a guard/ground trace.",
         "Crosstalk-induced noise / bit errors."),
+    "highspeed_stub_length": Remediation(
+        "Remove the dangling branch / route the high-speed net point-to-point "
+        "(or back-drill the offending via).",
+        "Stub reflections degrade the signal / close the eye."),
 }
 
 

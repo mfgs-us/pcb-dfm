@@ -99,10 +99,20 @@ class NetFeature:
 
 
 @dataclass
+class Via:
+    """A layer-transition via on a net (routing topology)."""
+    x_mm: float
+    y_mm: float
+    from_layer: Optional[str] = None
+    to_layer: Optional[str] = None
+
+
+@dataclass
 class Net:
     name: str
     features: List[NetFeature] = field(default_factory=list)
     net_class: Optional[str] = None
+    vias: List[Via] = field(default_factory=list)
 
     def routed_length_mm(self) -> float:
         return sum(f.length_mm for f in self.features)

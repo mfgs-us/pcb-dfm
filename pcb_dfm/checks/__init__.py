@@ -72,6 +72,7 @@ def _ensure_impls_loaded() -> None:
         impl_drill_wander_budget,  # noqa: F401
         impl_etch_compensation_margin,  # noqa: F401
         impl_fillet_radius_milling,  # noqa: F401
+        impl_highspeed_stub_length,  # noqa: F401
         impl_impedance_control,  # noqa: F401
         impl_layer_registration_margin,  # noqa: F401
         impl_mask_to_trace_clearance,  # noqa: F401

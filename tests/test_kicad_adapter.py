@@ -79,6 +79,21 @@ def test_nets_routes_and_netclass(tmp_path):
     assert layer == "F.Cu" and math.isclose(width, 0.2, abs_tol=1e-9)
 
 
+def test_vias_parsed_onto_net(tmp_path):
+    d = tmp_path / "v"
+    d.mkdir()
+    (d / "v.kicad_pcb").write_text(
+        '(kicad_pcb (net 0 "") (net 1 "CLK")\n'
+        '  (segment (start 0 0) (end 5 0) (width 0.2) (layer "F.Cu") (net 1))\n'
+        '  (via (at 5 0) (size 0.6) (drill 0.3) (layers "F.Cu" "B.Cu") (net 1)))',
+        encoding="utf-8",
+    )
+    dd = load_design_data(d)
+    clk = dd.net("CLK")
+    assert clk is not None and len(clk.vias) == 1
+    assert clk.vias[0].x_mm == 5.0 and clk.vias[0].to_layer == "B.Cu"
+
+
 def test_diff_pair_inferred(tmp_path):
     dd = load_design_data(_write_project(tmp_path))
     pairs = {(p.positive, p.negative) for p in dd.diff_pairs}

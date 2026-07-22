@@ -26,6 +26,7 @@ HEURISTIC_CHECK_IDS = {
     "min_trace_spacing",
     # high-speed SI estimates (geometry-driven, not a field solver)
     "crosstalk_estimate",
+    "highspeed_stub_length",
     "copper_sliver_width",
     "acid_trap_angle",
     "copper_density_balance",

@@ -43,6 +43,7 @@ from ..design_model import (
     NetFeature,
     Stackup,
     StackupLayer,
+    Via,
 )
 from .ipc2581 import _infer_diff_pairs
 
@@ -242,10 +243,29 @@ def _parse_nets_and_routes(root: SNode) -> Dict[str, Net]:
             segments=[seg],
         ))
 
+    def _add_via(el: SNode) -> None:
+        net_el = _first(el, "net")
+        name = num_to_name.get((_atoms(net_el)[0] if net_el and _atoms(net_el) else "") or "")
+        if not name:
+            return
+        at = _first(el, "at")
+        x, y = _fatom(at, 0), _fatom(at, 1)
+        if x is None or y is None:
+            return
+        layers_node = _first(el, "layers")
+        layers = _atoms(layers_node) if layers_node else []
+        _ensure(name).vias.append(Via(
+            x_mm=x, y_mm=y,
+            from_layer=layers[0] if layers else None,
+            to_layer=layers[1] if len(layers) > 1 else None,
+        ))
+
     for seg_el in _tagged(root, "segment"):
         _add_route(seg_el)
     for arc_el in _tagged(root, "arc"):
         _add_route(arc_el)  # chord approximation via start/end
+    for via_el in _tagged(root, "via"):
+        _add_via(via_el)
 
     return nets
 

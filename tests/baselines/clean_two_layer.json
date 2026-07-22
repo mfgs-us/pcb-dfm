@@ -65,12 +65,12 @@
       "violations": 0
     },
     {
-      "confidence": "high",
+      "confidence": "heuristic",
       "id": "crosstalk_estimate",
       "measured": null,
       "severity": "info",
       "status": "not_applicable",
-      "violations": 0
+      "violations": 1
     },
     {
       "confidence": "high",

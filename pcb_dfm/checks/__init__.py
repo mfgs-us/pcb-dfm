@@ -63,6 +63,7 @@ def _ensure_impls_loaded() -> None:
         impl_copper_sliver_width,  # noqa: F401
         impl_copper_thermal_area,  # noqa: F401
         impl_copper_to_edge_distance,  # noqa: F401
+        impl_crosstalk_estimate,  # noqa: F401
         impl_dielectric_thickness_uniformity,  # noqa: F401
         impl_diff_pair_skew,  # noqa: F401
         impl_diff_pair_spacing,  # noqa: F401

@@ -24,6 +24,8 @@ logger = logging.getLogger("pcb_dfm.timing")
 HEURISTIC_CHECK_IDS = {
     # copper geometry proxies
     "min_trace_spacing",
+    # high-speed SI estimates (geometry-driven, not a field solver)
+    "crosstalk_estimate",
     "copper_sliver_width",
     "acid_trap_angle",
     "copper_density_balance",

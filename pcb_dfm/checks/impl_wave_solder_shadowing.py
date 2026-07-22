@@ -89,14 +89,20 @@ def run_wave_solder_shadowing(ctx: CheckContext) -> CheckResult:
     if not placed:
         return _na(ctx, target, limit, "No populated placed components to evaluate.")
 
-    drills = _collect_drills(ctx)
-    if not drills:
-        return _na(ctx, target, limit, "No drill map; through-hole parts cannot be identified.")
+    # Through-hole = a part with through-hole pads (preferred, from footprint
+    # pads) or, absent pad geometry, a part with a drilled hole under its body.
+    any_pads = any(c.pads for c in placed)
+    drills = [] if any_pads else _collect_drills(ctx)
+    if not any_pads and not drills:
+        return _na(ctx, target, limit,
+                   "No pad geometry or drill map; through-hole parts cannot be identified.")
 
-    # Through-hole = a placed part with a drilled hole under its body.
     tht = []
     for c in placed:
-        if any(hypot(d.x_mm - c.x_mm, d.y_mm - c.y_mm) <= body_r for d in drills):
+        if c.pads:
+            if any(p.through_hole for p in c.pads):
+                tht.append(c)
+        elif any(hypot(d.x_mm - c.x_mm, d.y_mm - c.y_mm) <= body_r for d in drills):
             tht.append(c)
     if len(tht) < 2:
         return _na(ctx, target, limit,

@@ -148,6 +148,20 @@ class ControlledImpedanceSpec:
 
 
 @dataclass
+class Pad:
+    """A component pad in absolute board mm-space.
+
+    ``name`` is the pad / pin identifier from the footprint ("1", "2", "A1",
+    "K", ...). ``through_hole`` distinguishes wave-soldered THT pads from SMD.
+    """
+    name: str
+    x_mm: float
+    y_mm: float
+    pad_type: Optional[str] = None  # "smd" | "thru_hole" | "np_thru_hole" | ...
+    through_hole: bool = False
+
+
+@dataclass
 class Component:
     """A placed component, optionally enriched with BOM identity.
 
@@ -171,6 +185,14 @@ class Component:
     dnp: bool = False                       # do-not-populate
     height_mm: Optional[float] = None       # body height, when the BOM carries it
     placed: bool = True                     # False = in the BOM but not laid out
+    pads: List["Pad"] = field(default_factory=list)  # absolute pad geometry (#6)
+
+    def pin1(self) -> Optional["Pad"]:
+        """The pin-1 pad, if identifiable."""
+        for p in self.pads:
+            if p.name == "1":
+                return p
+        return None
 
 
 @dataclass

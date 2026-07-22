@@ -12,7 +12,7 @@ from pcb_dfm.engine.check_runner import HEURISTIC_CHECK_IDS, get_check_runner
 from pcb_dfm.engine.context import CheckContext
 from pcb_dfm.engine.geometry_cache import GeometryCache
 from pcb_dfm.geometry.layer_model import BoardGeometry
-from pcb_dfm.ingest.design_model import Component, DesignData
+from pcb_dfm.ingest.design_model import Component, DesignData, Pad
 
 
 def _ctx(check_id, ingest, dd):
@@ -86,6 +86,17 @@ def test_wave_no_components_is_not_applicable(monkeypatch):
     assert r.status == "not_applicable"
 
 
+def test_wave_uses_thru_hole_pads_without_drills(monkeypatch):
+    # THT identified from pads (no drill map needed).
+    a = _tht("J1", 0.0, 0.0, "connector", height=2.0)
+    a.pads = [Pad("1", 0.0, 0.0, "thru_hole", True)]
+    b = _tht("J2", 5.0, 0.0, "connector", height=10.0)
+    b.pads = [Pad("1", 5.0, 0.0, "thru_hole", True)]
+    r = _run_wave(DesignData(components=[a, b]), [], monkeypatch)  # no drills
+    assert r.status in ("warning", "fail")
+    assert any(v.location.component == "J1" for v in r.violations)
+
+
 # ---------------------------------------------------------------------------
 # polarity_marking_consistency
 # ---------------------------------------------------------------------------
@@ -134,6 +145,26 @@ def test_polarity_no_polarized_parts_is_not_applicable(monkeypatch, tmp_path):
                   polarized=False, placed=True)])
     r = _run_polarity(dd, [(0, 1, 0, 1)], monkeypatch, tmp_path)
     assert r.status == "not_applicable"
+
+
+def test_polarity_anchors_to_pin1(monkeypatch, tmp_path):
+    # Diode centered at (10,10); pin 1 at (8,10), pin 2 at (12,10). A marker sits
+    # by pin 1 -> pass; the same marker by pin 2 (far from pin 1) -> warning.
+    def diode_with_pads():
+        return Component(
+            ref="D1", x_mm=10.0, y_mm=10.0, side="top", part_class="diode",
+            polarized=True, placed=True,
+            pads=[Pad("1", 8.0, 10.0), Pad("2", 12.0, 10.0)],
+        )
+
+    near_pin1 = [(7.8, 8.2, 9.8, 10.2)]        # ~0.2 mm from pin 1
+    r = _run_polarity(DesignData(components=[diode_with_pads()]), near_pin1, monkeypatch, tmp_path)
+    assert r.status == "pass"
+
+    near_pin2 = [(11.8, 12.2, 9.8, 10.2)]      # by pin 2, ~4 mm from pin 1
+    r2 = _run_polarity(DesignData(components=[diode_with_pads()]), near_pin2, monkeypatch, tmp_path)
+    assert r2.status == "warning"
+    assert "pin 1" in r2.violations[0].message
 
 
 def test_polarity_dnp_excluded(monkeypatch, tmp_path):

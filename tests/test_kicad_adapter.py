@@ -79,6 +79,45 @@ def test_nets_routes_and_netclass(tmp_path):
     assert layer == "F.Cu" and math.isclose(width, 0.2, abs_tol=1e-9)
 
 
+def test_pads_parsed_with_absolute_positions(tmp_path):
+    d = tmp_path / "p"
+    d.mkdir()
+    (d / "p.kicad_pcb").write_text(
+        '(kicad_pcb (net 0 "")\n'
+        '  (footprint "Diode_SMD:D_0603" (layer "F.Cu") (at 100 50 0)\n'
+        '    (property "Reference" "D1")\n'
+        '    (pad "1" smd rect (at -0.75 0) (size 0.9 0.8) (layers "F.Cu"))\n'
+        '    (pad "2" smd rect (at 0.75 0) (size 0.9 0.8) (layers "F.Cu")))\n'
+        '  (footprint "Connector:PinHeader" (layer "F.Cu") (at 10 10 0)\n'
+        '    (property "Reference" "J1")\n'
+        '    (pad "1" thru_hole circle (at 0 0) (size 1.5 1.5) (drill 0.8) (layers "*.Cu"))))',
+        encoding="utf-8",
+    )
+    dd = load_design_data(d)
+    comps = {c.ref: c for c in dd.components}
+    d1 = comps["D1"]
+    assert len(d1.pads) == 2
+    p1 = d1.pin1()
+    assert p1 is not None and p1.x_mm == 99.25 and p1.y_mm == 50.0   # 100 + (-0.75)
+    assert not p1.through_hole
+    assert comps["J1"].pads[0].through_hole is True
+
+
+def test_pad_positions_rotate_with_footprint(tmp_path):
+    d = tmp_path / "pr"
+    d.mkdir()
+    (d / "pr.kicad_pcb").write_text(
+        '(kicad_pcb (net 0 "")\n'
+        '  (footprint "Diode_SMD:D_0603" (layer "F.Cu") (at 100 50 90)\n'
+        '    (property "Reference" "D1")\n'
+        '    (pad "1" smd rect (at -0.75 0) (size 0.9 0.8) (layers "F.Cu"))))',
+        encoding="utf-8",
+    )
+    p1 = {c.ref: c for c in load_design_data(d).components}["D1"].pin1()
+    # (-0.75, 0) rotated 90° -> (0, -0.75); abs = (100, 49.25)
+    assert abs(p1.x_mm - 100.0) < 1e-9 and abs(p1.y_mm - 49.25) < 1e-9
+
+
 def test_vias_parsed_onto_net(tmp_path):
     d = tmp_path / "v"
     d.mkdir()

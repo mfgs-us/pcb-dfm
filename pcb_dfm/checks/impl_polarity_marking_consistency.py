@@ -9,10 +9,12 @@ there is at least one silkscreen feature next to it on the same side.
 Requires component identity + placement (BOM merged onto a KiCad project, #6)
 and silkscreen artwork. ``not_applicable`` when either is missing.
 
-Scope / honesty: this verifies the **presence** of a nearby marker, not that it
-is on the correct pin or points the right way — that needs pin-1 footprint
-geometry (a separate ingest). So it catches the common, high-value case of a
-polarized part with *no* orientation marking at all, and is labeled heuristic.
+When footprint pad geometry is available (#6), the search is anchored to the
+**pin-1 pad** — a marker must be next to pin 1, not merely somewhere near the
+part — which is the orientation cue that matters. Without pads it falls back to
+the component centroid (presence only). Either way it is labeled heuristic: it
+confirms a marker is *present by the right pin*, not that it points the exact
+right way (that would need the marker's own shape/semantics).
 """
 
 from __future__ import annotations
@@ -92,10 +94,19 @@ def run_polarity_marking_consistency(ctx: CheckContext) -> CheckResult:
         return _na(ctx, "No silkscreen artwork present to check for polarity markers.")
 
     unmarked: List = []
+    anchored = 0
     for c in polarized:
         side = _norm_side(c.side)
         boxes = silk.get(side, [])
-        if not any(_pt_bbox_dist(c.x_mm, c.y_mm, bb) <= radius for bb in boxes):
+        # Anchor to pin 1 when we have it (the marker must be by pin 1); else the
+        # component centroid.
+        pin1 = c.pin1()
+        if pin1 is not None:
+            anchored += 1
+            px, py = pin1.x_mm, pin1.y_mm
+        else:
+            px, py = c.x_mm, c.y_mm
+        if not any(_pt_bbox_dist(px, py, bb) <= radius for bb in boxes):
             unmarked.append(c)
 
     total = len(polarized)
@@ -107,16 +118,19 @@ def run_polarity_marking_consistency(ctx: CheckContext) -> CheckResult:
     violations: List[Violation] = []
     if unmarked:
         for c in unmarked[:100]:
+            p1 = c.pin1()
+            where = "pin 1" if p1 is not None else "the part"
+            lx, ly = (p1.x_mm, p1.y_mm) if p1 is not None else (c.x_mm, c.y_mm)
             violations.append(Violation(
                 severity=ctx.check_def.severity or "warning",
                 message=(
                     f"{c.ref} ({c.part_class or 'polarized part'}) has no silkscreen marker "
-                    f"within {radius:.1f} mm — add a polarity/pin-1 indicator. "
-                    f"Heuristic (marker presence only)."
+                    f"within {radius:.1f} mm of {where} — add a polarity/pin-1 indicator. "
+                    f"Heuristic (marker presence)."
                 ),
                 location=ViolationLocation(
-                    layer=_norm_side(c.side), x_mm=c.x_mm, y_mm=c.y_mm,
-                    component=c.ref, notes="Polarized part missing a silkscreen marker.",
+                    layer=_norm_side(c.side), x_mm=lx, y_mm=ly,
+                    component=c.ref, notes="Polarized part missing a silkscreen marker by pin 1.",
                 ),
             ))
 

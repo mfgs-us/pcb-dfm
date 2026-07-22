@@ -41,6 +41,7 @@ from ..design_model import (
     DesignData,
     Net,
     NetFeature,
+    Pad,
     Stackup,
     StackupLayer,
     Via,
@@ -329,11 +330,38 @@ def _parse_components(root: SNode) -> List[Component]:
 
         if ref is None:
             continue
+        pads = _parse_pads(fp, x, y, rot) if (x is not None and y is not None) else []
         comps.append(Component(
             ref=ref, value=value, footprint=footprint,
             x_mm=x, y_mm=y, rotation_deg=rot, side=_side_of_layer(layer),
+            pads=pads,
         ))
     return comps
+
+
+def _parse_pads(fp: SNode, ox: float, oy: float, rot_deg: float) -> List[Pad]:
+    """Footprint pads in absolute mm (pad ``at`` is relative to the footprint
+    origin and is rotated by the footprint rotation)."""
+    a = math.radians(rot_deg or 0.0)
+    ca, sa = math.cos(a), math.sin(a)
+    pads: List[Pad] = []
+    for pad in _tagged(fp, "pad"):
+        name = pad[1] if len(pad) > 1 and isinstance(pad[1], str) else None
+        if name is None:
+            continue
+        pad_type = pad[2] if len(pad) > 2 and isinstance(pad[2], str) else None
+        at = _first(pad, "at")
+        dx, dy = _fatom(at, 0), _fatom(at, 1)
+        if dx is None or dy is None:
+            continue
+        pads.append(Pad(
+            name=name,
+            x_mm=ox + dx * ca - dy * sa,
+            y_mm=oy + dx * sa + dy * ca,
+            pad_type=pad_type,
+            through_hole=(pad_type in ("thru_hole", "np_thru_hole")),
+        ))
+    return pads
 
 
 # --------------------------------------------------------------------------- #

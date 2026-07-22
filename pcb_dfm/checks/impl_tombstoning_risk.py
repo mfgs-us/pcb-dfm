@@ -133,24 +133,37 @@ def run_tombstoning_risk(ctx: CheckContext) -> CheckResult:
     worst_loc: Optional[Point] = None
     violations: List[Violation] = []
 
+    _PASSIVE_CLASSES = ("resistor", "capacitor", "inductor", "electrolytic", "ferrite")
     for comp in dd.components:
         if getattr(comp, "dnp", False):
             continue  # not populated -> cannot tombstone
         # If the BOM confirms a non-passive class, trust it over the footprint guess.
-        if comp.part_class is not None and comp.part_class not in (
-                "resistor", "capacitor", "inductor", "electrolytic", "ferrite"):
+        if comp.part_class is not None and comp.part_class not in _PASSIVE_CLASSES:
             continue
+        if comp.x_mm is None or comp.y_mm is None:
+            continue
+
+        # Only treat it as a two-pad passive when the footprint size code or the
+        # BOM class says so -- an arbitrary 2-pad part (e.g. a connector) is not.
         spacing = _passive_spacing(comp.footprint)
-        if spacing is None or comp.x_mm is None or comp.y_mm is None:
+        if spacing is None and comp.part_class not in _PASSIVE_CLASSES:
             continue
+
+        # Prefer real pad geometry (exactly two pads); else the size-code guess.
+        pad_pts = [(p.x_mm, p.y_mm) for p in comp.pads]
+        if len(pad_pts) == 2:
+            p1, p2 = pad_pts[0], pad_pts[1]
+        elif spacing is not None:
+            p1, p2 = _pad_centers(comp.x_mm, comp.y_mm, comp.rotation_deg, spacing)
+        else:
+            continue  # passive by class but no pad/size geometry to place pads
         passives += 1
+
         side = comp.side if comp.side in ("top", "bottom") else "top"
         polys = copper_by_side.get(side) or []
         index = index_by_side.get(side)
         if not polys or index is None:
             continue
-
-        p1, p2 = _pad_centers(comp.x_mm, comp.y_mm, comp.rotation_deg, spacing)
         fracs = []
         for px, py in (p1, p2):
             disk = Bounds(px - radius, py - radius, px + radius, py + radius)

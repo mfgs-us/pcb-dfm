@@ -122,5 +122,19 @@ def test_bom_confirmed_non_passive_is_excluded():
     assert _run(geom, dd).status == "not_applicable"
 
 
+def test_uses_real_pad_positions_when_present():
+    from pcb_dfm.ingest.design_model import Pad
+    # Pour only on the left half; pad 1 over it, pad 2 off it -> imbalance.
+    geom = _geom_top([_rect(0, 0, 5, 10)])
+    dd = DesignData(source="test")
+    dd.components = [Component(
+        ref="R1", x_mm=5.0, y_mm=5.0, side="top", footprint="Resistor_SMD:R_0402_1005Metric",
+        placed=True, pads=[Pad("1", 2.0, 5.0), Pad("2", 8.0, 5.0)],
+    )]
+    r = _run(geom, dd)
+    assert r.status in ("warning", "fail")
+    assert _measured(r) > 25.0
+
+
 def test_labeled_heuristic():
     assert "tombstoning_risk" in HEURISTIC_CHECK_IDS

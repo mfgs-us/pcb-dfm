@@ -15,6 +15,11 @@ except Exception:
     gerber = None
     Line = None  # type: ignore
 
+# Line primitives thinner than this are region/pour boundary draws or artifacts,
+# not fabricable traces (no fab makes sub-0.8-mil copper). Counting them makes a
+# board with a copper pour report a spurious 0.000 mm minimum trace width.
+_MIN_MEANINGFUL_TRACE_MM = 0.02
+
 _INCH_TO_MM = 25.4
 MAX_REPORTED_VIOLATIONS = 100
 
@@ -99,6 +104,8 @@ def run_min_trace_width(ctx: CheckContext) -> CheckResult:
                 continue
 
             width_mm = width_in * _INCH_TO_MM
+            if width_mm < _MIN_MEANINGFUL_TRACE_MM:
+                continue  # region/pour boundary draw, not a real trace
 
             # Compute a representative location: midpoint of the segment
             try:

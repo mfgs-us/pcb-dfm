@@ -8,7 +8,7 @@ from typing import List, Optional
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
 from ..geometry import queries
-from ..geometry.primitives import Bounds, Point2D
+from ..geometry.primitives import Bounds
 from ..results import CheckResult, MetricResult, Violation, ViolationLocation
 from .impl_solder_mask_expansion import _min_distance_between_polygons
 
@@ -47,8 +47,16 @@ def run_copper_to_edge_distance(ctx: CheckContext) -> CheckResult:
     recommended_min = float(limits.get("recommended_min", 0.25))
     absolute_min = float(limits.get("absolute_min", 0.15))
 
-    # No outline or no copper -> genuinely nothing to measure
-    if board_bounds is None or not copper_layers:
+    # True outline geometry drives the measurement. Without a real outline the
+    # "board edge" is unknown -- measuring against the copper bounding box just
+    # reports 0 (copper touches its own bbox), a false failure -- so the honest
+    # result is not_applicable.
+    outline_polys = [
+        p for lyr in ctx.geometry.get_layers_by_type("outline")
+        for p in lyr.polygons if len(p.vertices) >= 3
+    ]
+
+    if board_bounds is None or not copper_layers or not outline_polys:
         message = "No board outline or copper geometry available to compute copper to edge distance."
         viol = Violation(
             severity="info",
@@ -75,35 +83,25 @@ def run_copper_to_edge_distance(ctx: CheckContext) -> CheckResult:
     # (dist_mm, layer_name, x_mm, y_mm)
     offenders: List[tuple[float, str, float, float]] = []
 
-    # Prefer TRUE outline-polygon geometry so clearance to internal cutouts,
-    # slots, and non-rectangular / concave edges is measured exactly (the old
-    # bbox-vs-bbox method was blind to all of those). Fall back to the board
-    # bounding box only when no outline polygons are available. Copper farther
-    # than `cutoff` from an outline contour can't violate, so we prune it with a
-    # cheap bbox-gap lower bound and keep the exact O(verts) distance for
-    # near-edge copper only.
-    outline_polys = [
-        p for lyr in ctx.geometry.get_layers_by_type("outline")
-        for p in lyr.polygons if len(p.vertices) >= 3
-    ]
+    # TRUE outline-polygon geometry: clearance to internal cutouts, slots, and
+    # non-rectangular / concave edges is measured exactly. Copper farther than
+    # `cutoff` from an outline contour can't violate, so we prune it with a cheap
+    # bbox-gap lower bound and keep the exact O(verts) distance for near-edge
+    # copper only.
     cutoff = max(2.0, recommended_min * 5.0)
 
     for layer in copper_layers:
         for poly in layer.polygons:
             pb = poly.bounds()
-            if outline_polys:
-                d = math.inf
-                for op in outline_polys:
-                    gap = _bbox_gap(pb, op.bounds())
-                    # exact distance when close; the bbox gap (a lower bound) is
-                    # a fine stand-in for far contours that can't be the minimum
-                    dd = _min_distance_between_polygons(poly, op) if gap <= cutoff else gap
-                    if dd < d:
-                        d = dd
-                loc_x, loc_y = 0.5 * (pb.min_x + pb.max_x), 0.5 * (pb.min_y + pb.max_y)
-            else:
-                d, loc = _distance_and_location_to_edge(pb, board_bounds)
-                loc_x, loc_y = loc.x, loc.y
+            d = math.inf
+            for op in outline_polys:
+                gap = _bbox_gap(pb, op.bounds())
+                # exact distance when close; the bbox gap (a lower bound) is
+                # a fine stand-in for far contours that can't be the minimum
+                dd = _min_distance_between_polygons(poly, op) if gap <= cutoff else gap
+                if dd < d:
+                    d = dd
+            loc_x, loc_y = 0.5 * (pb.min_x + pb.max_x), 0.5 * (pb.min_y + pb.max_y)
 
             if min_dist is None or d < min_dist:
                 min_dist = d
@@ -209,41 +207,3 @@ def run_copper_to_edge_distance(ctx: CheckContext) -> CheckResult:
         ),
         violations=violations,
     ).finalize()
-
-
-def _distance_and_location_to_edge(poly_bounds: Bounds, board_bounds: Bounds) -> tuple[float, Point2D]:
-    """
-    Compute the minimum distance from a polygon bounds to the board bounds,
-    and return both the distance and an approximate location point.
-
-    We consider distance to each of the four edges of the board and
-    choose the smallest one.
-    """
-    d_left = poly_bounds.min_x - board_bounds.min_x
-    d_right = board_bounds.max_x - poly_bounds.max_x
-    d_bottom = poly_bounds.min_y - board_bounds.min_y
-    d_top = board_bounds.max_y - poly_bounds.max_y
-
-    distances = [
-        ("left", d_left),
-        ("right", d_right),
-        ("bottom", d_bottom),
-        ("top", d_top),
-    ]
-    edge, d_min = min(distances, key=lambda t: t[1])
-
-    # Location: approximate by midpoint of the touching segment
-    if edge == "left":
-        x = poly_bounds.min_x
-        y = (poly_bounds.min_y + poly_bounds.max_y) / 2.0
-    elif edge == "right":
-        x = poly_bounds.max_x
-        y = (poly_bounds.min_y + poly_bounds.max_y) / 2.0
-    elif edge == "bottom":
-        x = (poly_bounds.min_x + poly_bounds.max_x) / 2.0
-        y = poly_bounds.min_y
-    else:  # top
-        x = (poly_bounds.min_x + poly_bounds.max_x) / 2.0
-        y = poly_bounds.max_y
-
-    return d_min, Point2D(x=x, y=y)

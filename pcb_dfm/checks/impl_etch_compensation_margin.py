@@ -6,7 +6,11 @@ from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
 from ..ingest import GerberFileInfo
 from ..results import CheckResult, MetricResult, Violation, ViolationLocation
-from .impl_min_trace_width import _INCH_TO_MM, _get_line_width_inch
+from .impl_min_trace_width import (
+    _INCH_TO_MM,
+    _MIN_MEANINGFUL_TRACE_MM,
+    _get_line_width_inch,
+)
 
 try:
     import gerber
@@ -99,8 +103,8 @@ def run_etch_compensation_margin(ctx: CheckContext) -> CheckResult:
             if width_in is None:
                 continue
             width_mm = width_in * _INCH_TO_MM
-            if width_mm <= 0.0:
-                continue
+            if width_mm < _MIN_MEANINGFUL_TRACE_MM:
+                continue  # region/pour boundary draw, not a real trace
             if min_width_mm is None or width_mm < min_width_mm:
                 min_width_mm = width_mm
                 try:

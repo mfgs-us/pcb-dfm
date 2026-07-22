@@ -3,6 +3,7 @@ from __future__ import annotations
 import html as _html
 from typing import Optional
 
+from .remediation import remediation_for
 from .results import DfmResult
 
 
@@ -62,6 +63,11 @@ def generate_text_report(result: DfmResult) -> str:
             if check.violations:
                 first = check.violations[0]
                 lines.append(f"      first violation: {first.message}")
+            if check.status in ("fail", "warning"):
+                rem = remediation_for(check.check_id)
+                if rem is not None:
+                    lines.append(f"      fix: {rem.fix}")
+                    lines.append(f"      impact: {rem.impact}")
         lines.append("")
 
     return "\n".join(lines)
@@ -103,6 +109,25 @@ def generate_markdown_report(result: DfmResult) -> str:
                 f"| `{check.check_id}` | {check.status} | {check.severity} | "
                 f"{score} | {len(check.violations)} |"
             )
+        lines.append("")
+
+    # Recommended fixes: one actionable line per failing/warning check.
+    fixes = []
+    seen = set()
+    for cat in result.categories:
+        for check in cat.checks:
+            if check.status in ("fail", "warning") and check.check_id not in seen:
+                rem = remediation_for(check.check_id)
+                if rem is not None:
+                    seen.add(check.check_id)
+                    fixes.append((check.status, check.check_id, rem))
+    if fixes:
+        fixes.sort(key=lambda t: 0 if t[0] == "fail" else 1)
+        lines.append("## Recommended fixes")
+        lines.append("")
+        for st, cid, rem in fixes:
+            mark = "❌" if st == "fail" else "⚠️"
+            lines.append(f"- {mark} **`{cid}`** — {rem.fix} _(impact: {rem.impact})_")
         lines.append("")
 
     return "\n".join(lines)
@@ -282,6 +307,12 @@ def generate_html_report(result: DfmResult, geometry: Optional[object] = None) -
                 out.append(
                     f"<div class='viol sev-{_esc(v.severity)}'>{pin}"
                     f"<span>{_esc(v.message)}</span></div>")
+            if chk.status in ("fail", "warning"):
+                rem = remediation_for(chk.check_id)
+                if rem is not None:
+                    out.append(
+                        f"<div class='fix'><strong>Fix:</strong> {_esc(rem.fix)} "
+                        f"<span class='muted'>(impact: {_esc(rem.impact)})</span></div>")
             out.append("</div>")
     out.append("</div>")  # findings
 
@@ -329,6 +360,7 @@ h2{font-size:15px;margin:18px 0 8px;display:flex;align-items:center;gap:8px}
 code{font-family:ui-monospace,Menlo,Consolas,monospace;font-size:12px}
 .viol{display:flex;gap:8px;align-items:flex-start;font-size:12.5px;color:var(--muted);padding:4px 0 2px 16px}
 .viol.sev-error{color:#e5484d}.viol.sev-warning{color:#c8861a}
+.fix{font-size:12.5px;padding:3px 0 2px 16px;line-height:1.4}
 .pin{border:none;background:none;cursor:pointer;font-size:13px;padding:0;line-height:1.2}
 @media(max-width:820px){.layout{flex-direction:column}.board-panel{position:static;width:100%}.findings{max-height:none}}
 """
@@ -379,6 +411,9 @@ def generate_pr_summary(result: DfmResult, top: int = 10) -> str:
             msg = msg if len(msg) <= 160 else msg[:157] + "…"
             tag = " _(heuristic)_" if heur else ""
             lines.append(f"- {mark} `{_esc_md(cid)}`{tag} — {_esc_md(msg)}")
+            rem = remediation_for(cid)
+            if rem is not None:
+                lines.append(f"  - **Fix:** {_esc_md(rem.fix)} _(impact: {_esc_md(rem.impact)})_")
         if len(items) > top:
             lines.append(f"- …and {len(items) - top} more")
     else:

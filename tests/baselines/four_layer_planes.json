@@ -225,11 +225,11 @@
       "violations": 1
     },
     {
-      "confidence": "high",
+      "confidence": "heuristic",
       "id": "plating_uniformity",
-      "measured": null,
+      "measured": 0.0,
       "severity": "info",
-      "status": "not_applicable",
+      "status": "pass",
       "violations": 0
     },
     {
@@ -321,12 +321,12 @@
       "violations": 1
     },
     {
-      "confidence": "high",
+      "confidence": "heuristic",
       "id": "tombstoning_risk",
       "measured": null,
       "severity": "info",
       "status": "not_applicable",
-      "violations": 0
+      "violations": 1
     },
     {
       "confidence": "heuristic",

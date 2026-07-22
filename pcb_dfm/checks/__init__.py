@@ -82,6 +82,7 @@ def _ensure_impls_loaded() -> None:
         impl_min_trace_width,  # noqa: F401
         impl_missing_tooling_holes,  # noqa: F401
         impl_plane_fragmentation,  # noqa: F401
+        impl_plating_uniformity,  # noqa: F401
         impl_return_path_interruptions,  # noqa: F401
         impl_silkscreen_clearance,  # noqa: F401
         impl_silkscreen_min_width,  # noqa: F401
@@ -92,6 +93,7 @@ def _ensure_impls_loaded() -> None:
         impl_solder_paste_area_coverage,  # noqa: F401
         impl_tab_routing_mousebites,  # noqa: F401
         impl_thermal_relief_spoke_width,  # noqa: F401
+        impl_tombstoning_risk,  # noqa: F401
         impl_unsupported_hole_types,  # noqa: F401
         impl_via_in_pad_thermal_balance,  # noqa: F401
         impl_via_tenting,  # noqa: F401

@@ -33,6 +33,8 @@ HEURISTIC_CHECK_IDS = {
     "via_to_copper_clearance",
     "via_tenting",
     "via_in_pad_thermal_balance",
+    # yield estimates (geometry-driven proxies)
+    "plating_uniformity",
     # thermal / power
     "copper_thermal_area",
     "plane_fragmentation",
@@ -47,6 +49,7 @@ HEURISTIC_CHECK_IDS = {
     "tab_routing_mousebites",
     "component_to_component_spacing",
     "solder_paste_area_coverage",
+    "tombstoning_risk",
 }
 
 

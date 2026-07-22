@@ -131,6 +131,15 @@ def _populate_layer_polygons_with_gerber(layer: BoardLayer) -> None:
             continue
 
         polys = _extract_polygons_from_gerber_file(f.path)
+        # Copper pours are often drawn as many zero-/near-zero-width boundary
+        # lines that render to degenerate (≈ zero-area) polygons. They carry no
+        # copper and pollute spacing/annular/clearance checks (spurious ~0). Drop
+        # them here — the floor is far below any real feature (a 10 µm square is
+        # 1e-4 mm²), and well below copper_sliver's own 0.02 mm² floor, so real
+        # thin slivers survive. Outline strokes are intentionally thin (their
+        # *path* is the edge), so they are never filtered.
+        if layer.layer_type == "copper":
+            polys = [p for p in polys if _poly_area_mm2(p) >= _MIN_COPPER_POLY_AREA_MM2]
         layer.polygons.extend(polys)
 
 
@@ -211,6 +220,23 @@ def _extract_polygons_from_gerber_file(path: Path) -> List[Polygon]:
         # Other primitive types (arcs, text, etc) can be skipped for now.
 
     return polys
+
+
+# Copper polygons smaller than this are pour-boundary / region-fill artifacts,
+# not real conductor features.
+_MIN_COPPER_POLY_AREA_MM2 = 1e-4
+
+
+def _poly_area_mm2(poly: Polygon) -> float:
+    v = poly.vertices
+    n = len(v)
+    if n < 3:
+        return 0.0
+    s = 0.0
+    for i in range(n):
+        j = (i + 1) % n
+        s += v[i].x * v[j].y - v[j].x * v[i].y
+    return abs(s) * 0.5
 
 
 def _inch_to_mm(v: float) -> float:

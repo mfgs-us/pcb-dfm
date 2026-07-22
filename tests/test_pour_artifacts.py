@@ -51,6 +51,27 @@ def test_min_trace_width_ignores_zero_width_pour_boundaries():
     assert M._MIN_MEANINGFUL_TRACE_MM == 0.02
 
 
+def test_degenerate_copper_polygons_are_dropped_at_build():
+    # Zero-area (zero-width pour-boundary) copper polygons carry no copper and
+    # must be filtered when building geometry, below copper_sliver's floor so
+    # real thin slivers survive.
+    from pcb_dfm.geometry.gerber_parser import _MIN_COPPER_POLY_AREA_MM2, _poly_area_mm2
+
+    degenerate = Polygon(vertices=[Point2D(0, 0), Point2D(10, 0), Point2D(10, 0)])  # ~0 area
+    sliver = _rect(0, 0, 5.0, 0.15)  # 0.75 mm^2 real thin sliver
+    assert _poly_area_mm2(degenerate) < _MIN_COPPER_POLY_AREA_MM2
+    assert _poly_area_mm2(sliver) >= _MIN_COPPER_POLY_AREA_MM2
+    assert _MIN_COPPER_POLY_AREA_MM2 < 0.02  # below copper_sliver's min_area
+
+
+def test_merged_copper_below_fab_resolution_is_not_a_spacing_violation():
+    # The min_trace_spacing merge floor sits below the finest fab spacing, so
+    # touching/merged copper is never reported as a spacing gap.
+    from pcb_dfm.checks.impl_min_trace_spacing import _MERGED_COPPER_MM
+
+    assert 0.0 < _MERGED_COPPER_MM <= 0.025
+
+
 def test_copper_to_edge_not_applicable_without_outline():
     # Copper present, but NO outline layer -> we can't know the edge -> N/A
     # (measuring against the copper bbox would falsely report 0).

@@ -7,6 +7,7 @@ from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
 from ..ingest import GerberFileInfo
 from ..results import CheckResult, MetricResult, Violation, ViolationLocation
+from .impl_min_trace_width import _MIN_MEANINGFUL_TRACE_MM
 
 # pcb-tools (same as min_trace_width impl)
 try:
@@ -18,6 +19,11 @@ except Exception:
 
 _INCH_TO_MM = 25.4
 MAX_REPORTED_VIOLATIONS = 100
+# Copper closer than this is merged (one conductor), not a spacing violation.
+# 20 µm is below the finest fab spacing capability (~2 mil), so any "gap" this
+# small is a junction / trace-into-pad / polygonization noise, not a real gap
+# between different nets. Real spacing violations (≈ 0.05-0.1 mm) are ~5x larger.
+_MERGED_COPPER_MM = 0.02
 
 
 @dataclass
@@ -102,6 +108,8 @@ def run_min_trace_spacing(ctx: CheckContext) -> CheckResult:
             width_in = _get_line_width_inch(prim)
             if width_in is None:
                 continue
+            if width_in * _INCH_TO_MM < _MIN_MEANINGFUL_TRACE_MM:
+                continue  # region/pour boundary draw, not a real trace
 
             try:
                 (x1_in, y1_in) = prim.start
@@ -146,8 +154,12 @@ def run_min_trace_spacing(ctx: CheckContext) -> CheckResult:
 
                 # Copper-to-copper spacing = center distance - half widths
                 spacing_mm = dist_mm - 0.5 * (s1.width_mm + s2.width_mm)
-                if spacing_mm <= 0.0:
-                    # overlapping or touching traces
+                if spacing_mm <= _MERGED_COPPER_MM:
+                    # Touching/overlapping below fab resolution = the same
+                    # conductor (a junction, or trace-into-pad), not a spacing
+                    # violation. Without net data we can't prove two touching
+                    # segments are different nets, and connected copper is far
+                    # more common than an actual short, so treat it as merged.
                     continue
 
                 if min_spacing_mm is None or spacing_mm < min_spacing_mm:

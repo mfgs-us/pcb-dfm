@@ -11,16 +11,14 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from ..ingest import GerberIngestResult
+from .gerber_backend import GERBONARA_AVAILABLE, gerber_polygons_mm
 from .layer_model import BoardGeometry, BoardLayer
 from .primitives import Point2D, Polygon
 
-# The legacy pcb-tools "rU" open-mode shim is applied by the engine around the
-# execution window (see pcb_dfm.geometry.gerber_compat.rU_open_shim), not
-# globally at import time. gerber.read() below therefore runs inside that shim.
-
-# ---------------------------------
-# Try to use pcb-tools (gerber)
-# ---------------------------------
+# Gerber layer polygons are extracted via gerbonara (see gerber_backend, #3):
+# proper arcs/regions/apertures, mm-native, no "rU" open-mode shim. pcb-tools is
+# still imported here only so build_board_geometry keeps working while the
+# remaining re-parsing checks are migrated; it no longer extracts polygons.
 try:
     import gerber
     from gerber.primitives import Circle, Line, Rectangle  # type: ignore
@@ -71,20 +69,20 @@ def build_board_geometry(ingest: GerberIngestResult) -> BoardGeometry:
         layer.file_ids.append(f.id)
         layer.files.append(f)
 
-    # Populate polygons with pcb-tools if available
-    if gerber is not None:
+    # Populate polygons via gerbonara (see gerber_backend).
+    if GERBONARA_AVAILABLE:
         for layer in geom.layers:
             _populate_layer_polygons_with_gerber(layer)
     else:
-        # pcb-tools is a declared hard dependency. If its import failed we
-        # cannot extract copper/mask/silk geometry at all, so every geometry
-        # based check would pass vacuously. Make this degradation loud rather
-        # than silently producing an empty (but "clean") board. The outline
-        # fallback below still runs so basic outline checks can proceed.
+        # gerbonara is a declared hard dependency. If its import failed we cannot
+        # extract copper/mask/silk geometry at all, so every geometry-based check
+        # would pass vacuously. Make this degradation loud rather than silently
+        # producing an empty (but "clean") board. The outline fallback below still
+        # runs so basic outline checks can proceed.
         msg = (
-            "pcb-tools ('gerber') failed to import: copper/mask/silkscreen "
-            "polygons will NOT be extracted and geometry-based DFM checks will "
-            "pass vacuously. Only the naive outline fallback is available."
+            "gerbonara failed to import: copper/mask/silkscreen polygons will "
+            "NOT be extracted and geometry-based DFM checks will pass vacuously. "
+            "Only the naive outline fallback is available."
         )
         warnings.warn(msg, RuntimeWarning, stacklevel=2)
         logging.getLogger("pcb_dfm.geometry").warning("%s", msg)
@@ -120,7 +118,7 @@ def _populate_layer_polygons_with_gerber(layer: BoardLayer) -> None:
     - mechanical
     and ignore drill layers here.
     """
-    if gerber is None:
+    if not GERBONARA_AVAILABLE:
         return
 
     if layer.layer_type == "drill":
@@ -130,7 +128,7 @@ def _populate_layer_polygons_with_gerber(layer: BoardLayer) -> None:
         if f.format != "gerber":
             continue
 
-        polys = _extract_polygons_from_gerber_file(f.path)
+        polys = gerber_polygons_mm(f.path)
         # Copper pours are often drawn as many zero-/near-zero-width boundary
         # lines that render to degenerate (≈ zero-area) polygons. They carry no
         # copper and pollute spacing/annular/clearance checks (spurious ~0). Drop

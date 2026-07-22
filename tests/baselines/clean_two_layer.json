@@ -3,7 +3,7 @@
     {
       "confidence": "heuristic",
       "id": "acid_trap_angle",
-      "measured": null,
+      "measured": 165.0,
       "severity": "info",
       "status": "pass",
       "violations": 1
@@ -43,7 +43,7 @@
     {
       "confidence": "heuristic",
       "id": "copper_sliver_width",
-      "measured": 0.2999,
+      "measured": 0.2949,
       "severity": "info",
       "status": "pass",
       "violations": 0

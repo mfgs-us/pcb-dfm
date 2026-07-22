@@ -81,6 +81,7 @@ def _ensure_impls_loaded() -> None:
         impl_min_trace_width,  # noqa: F401
         impl_missing_tooling_holes,  # noqa: F401
         impl_plane_fragmentation,  # noqa: F401
+        impl_return_path_interruptions,  # noqa: F401
         impl_silkscreen_clearance,  # noqa: F401
         impl_silkscreen_min_width,  # noqa: F401
         impl_silkscreen_on_copper,  # noqa: F401

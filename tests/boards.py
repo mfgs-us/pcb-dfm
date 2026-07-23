@@ -13,7 +13,7 @@ from __future__ import annotations
 import zipfile
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Callable, List, Tuple
+from typing import Callable, List, Optional, Tuple
 
 _MM = 1_000_000  # format 4.6 -> integer token is mm * 1e6
 
@@ -55,6 +55,10 @@ class Board:
     pads: List[Pad] = field(default_factory=list)
     holes: List[Hole] = field(default_factory=list)
     inner_planes: int = 0                    # number of inner copper planes
+    # Silkscreen strokes. None = a single reference marking auto-placed clear of
+    # everything (the "clean" default); pass explicit strokes to build a board
+    # with deliberate silk defects.
+    silk: Optional[List[Trace]] = None
 
 
 def _coord(v: float) -> str:
@@ -126,6 +130,79 @@ def _emit_drill(board: Board, tf: Transform, wscale: float) -> str:
     return "\n".join(lines) + "\n"
 
 
+def _emit_mask(board: Board, tf: Transform, wscale: float,
+               expansion_mm: float = 0.05) -> str:
+    """Solder-mask openings: pads only, expanded by ``expansion_mm`` per side.
+
+    Emitting the copper artwork verbatim as the mask (as this file used to) made
+    every mask opening exactly equal its pad, so solder_mask_expansion correctly
+    measured 0.000 mm and warned -- on the board whose docstring calls it
+    "clean". A real mask opens over pads and is a little larger than them.
+    """
+    lines = ["%FSLAX46Y46*%", "%MOMM*%"]
+    body: List[str] = []
+    aps: dict = {}
+    for p in board.pads:
+        w = (p.w + 2 * expansion_mm) * wscale
+        h = (p.h + 2 * expansion_mm) * wscale
+        key = (round(w, 6), round(h, 6))
+        if key not in aps:
+            code = 10 + len(aps)
+            lines.append(f"%ADD{code}R,{w:.6f}X{h:.6f}*%")
+            aps[key] = f"D{code}*"
+        cx, cy = tf(p.cx, p.cy)
+        body.append(aps[key])
+        body.append(f"X{_coord(cx)}Y{_coord(cy)}D03*")
+    lines.extend(body)
+    lines.append("M02*")
+    return "\n".join(lines) + "\n"
+
+
+def _emit_silk(board: Board, tf: Transform, wscale: float) -> str:
+    """A single reference marking, placed clear of pads, holes and the edge.
+
+    Also previously a verbatim copy of the copper, which put silk on every pad
+    and straight over the drilled holes -- so silkscreen_clearance,
+    silkscreen_on_copper and silkscreen_over_mask_defined_pads all fired on a
+    board that was supposed to be clean.
+    """
+    if board.silk is not None:
+        lines = ["%FSLAX46Y46*%", "%MOMM*%"]
+        body: List[str] = []
+        aps: dict = {}
+        for t in board.silk:
+            w = t.width_mm * wscale
+            key = round(w, 6)
+            if key not in aps:
+                code = 10 + len(aps)
+                lines.append(f"%ADD{code}C,{w:.6f}*%")
+                aps[key] = f"D{code}*"
+            (sx, sy), (ex, ey) = tf(t.x0, t.y0), tf(t.x1, t.y1)
+            body.append(aps[key])
+            body.append(f"X{_coord(sx)}Y{_coord(sy)}D02*")
+            body.append(f"X{_coord(ex)}Y{_coord(ey)}D01*")
+        lines.extend(body)
+        lines.append("M02*")
+        return "\n".join(lines) + "\n"
+
+    xs = [x for (x, _y) in board.outline]
+    ys = [_y for (_x, _y) in board.outline]
+    if not xs or not ys:
+        # Outline-less board (used to exercise the "no board extents" paths):
+        # emit an empty silk layer rather than guessing a placement.
+        return "%FSLAX46Y46*%\n%MOMM*%\nM02*\n"
+    y = min(ys) + 1.5
+    x0, x1 = min(xs) + 2.0, min(xs) + 6.0
+    width = 0.2 * wscale
+    (sx, sy), (ex, ey) = tf(x0, y), tf(x1, y)
+    return "\n".join([
+        "%FSLAX46Y46*%", "%MOMM*%", f"%ADD10C,{width:.6f}*%", "D10*",
+        f"X{_coord(sx)}Y{_coord(sy)}D02*",
+        f"X{_coord(ex)}Y{_coord(ey)}D01*",
+        "M02*",
+    ]) + "\n"
+
+
 def emit_zip(
     board: Board,
     tmp_path: Path,
@@ -138,10 +215,11 @@ def emit_zip(
     files = {
         "board-F_Cu.gbr": copper,
         "board-B_Cu.gbr": copper,
-        "board-F_Mask.gbr": copper,
-        "board-F_Silkscreen.gbr": copper,
-        "board-Edge_Cuts.gbr": _emit_outline(board, transform),
+        "board-F_Mask.gbr": _emit_mask(board, transform, wscale),
+        "board-F_Silkscreen.gbr": _emit_silk(board, transform, wscale),
     }
+    if board.outline:
+        files["board-Edge_Cuts.gbr"] = _emit_outline(board, transform)
     for i in range(1, board.inner_planes + 1):
         files[f"board-In{i}_Cu.gbr"] = copper
     if board.holes:

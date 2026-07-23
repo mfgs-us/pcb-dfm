@@ -111,17 +111,20 @@ def run_copper_thermal_area(ctx: CheckContext) -> CheckResult:
     bbox = _get_board_bbox_mm(geom)
     if bbox is None:
         viol = Violation(
-            severity="warning",
-            message="Could not determine board outline to estimate copper thermal area.",
+            severity="info",
+            message=(
+                "No board outline available, so copper coverage cannot be expressed "
+                "as a fraction of board area; copper coverage not assessed."
+            ),
             location=None,
         )
         return CheckResult(
             check_id=ctx.check_def.id,
             name=ctx.check_def.name,
             category_id=ctx.check_def.category_id,
-            status="warning",
+            status="not_applicable",
             severity="info",  # Default value, will be overridden by finalize()
-            score=50.0,
+            score=None,
             metric=MetricResult(
                 kind="ratio",
                 units="%",  # Hardcode to "%" to avoid validation error
@@ -189,13 +192,22 @@ def run_copper_thermal_area(ctx: CheckContext) -> CheckResult:
 
     measured = float(best_pct)
 
-    # Simple scoring
+    # ADVISORY ONLY -- never a hard fail, matching this check's declared
+    # severity_default of "info".
+    #
+    # Absolute copper coverage is not a pass/fail fabrication criterion. A
+    # 2-layer signal board routinely runs 5-25% copper, and where low coverage
+    # does threaten plating/etch uniformity the remedy (thieving patterns) is
+    # applied by the fab at panel level, exactly like tooling holes. Failing a
+    # board for it made every non-plane design score zero. The actionable part
+    # of this concern -- copper *distribution* rather than total -- is covered by
+    # copper_density_balance and plating_uniformity.
     if measured >= recommended_min_pct:
         status = "pass"
         score = 100.0
     elif measured < absolute_min_pct:
-        status = "fail"
-        score = 0.0
+        status = "warning"
+        score = 40.0
     else:
         status = "warning"
         span = max(1e-6, recommended_min_pct - absolute_min_pct)

@@ -178,6 +178,15 @@ def run_missing_tooling_holes(ctx: CheckContext) -> CheckResult:
         status = "pass"
         sev = "info"
         score = 100.0
+    elif count == 0:
+        # No tooling holes at all is the NORMAL case for a bare board -- tooling
+        # is added when the board is panelized, so there is nothing here to
+        # assess. Warning on it flagged every unpanelized design, which is most
+        # of them. Some-but-too-few is different: that placement looks
+        # incomplete, and is still worth an advisory.
+        status = "not_applicable"
+        sev = "info"
+        score = None
     else:
         status = "warning"
         sev = "warning"

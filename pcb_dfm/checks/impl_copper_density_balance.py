@@ -173,15 +173,21 @@ def run_copper_density_balance(ctx: CheckContext) -> CheckResult:
     nx = max(1, math.ceil(board_w / window_size_mm))
     ny = max(1, math.ceil(board_h / window_size_mm))
 
-    window_density = [[0.0 for _ in range(nx)] for _ in range(ny)]
-
-    # Precompute bboxes once and bin them into windows they touch
-    copper_bboxes = []
+    # Copper density is a PER-LAYER property. Flattening every copper layer into
+    # one density map (as this did) counts a 4-layer board's copper four times
+    # over in each window: density saturates, and simply duplicating a layer
+    # doubles the reported imbalance -- four_layer_planes, which is
+    # clean_two_layer plus two identical inner planes, reported exactly twice
+    # its delta (28.8% vs 14.4%) for identical artwork. Each layer now gets its
+    # own map and we report the worst layer.
+    bboxes_by_layer = []
     for layer in copper_layers:
-        for poly in getattr(layer, "polygons", []):
-            copper_bboxes.append(poly.bounds())
+        polys = [poly.bounds() for poly in getattr(layer, "polygons", [])]
+        if polys:
+            bboxes_by_layer.append((
+                getattr(layer, "logical_layer", getattr(layer, "name", "copper")), polys))
 
-    if not copper_bboxes:
+    if not bboxes_by_layer:
         viol = Violation(
             severity="info",
             message="No copper polygons found; copper density is effectively 0 everywhere.",
@@ -202,47 +208,8 @@ def run_copper_density_balance(ctx: CheckContext) -> CheckResult:
             violations=[viol],
         )
 
-    # Bin copper bboxes into the windows they overlap so each window only checks local candidates.
-    # bins[(iy, ix)] -> list of indices into copper_bboxes
-    bins: Dict[Tuple[int, int], List[int]] = defaultdict(list)
-
-    for pi, b in enumerate(copper_bboxes):
-        # Convert bbox span to window index span, clamped to [0..nx-1], [0..ny-1]
-        ix0 = int(max(0, math.floor((b.min_x - bx_min) / window_size_mm)))
-        ix1 = int(min(nx - 1, math.floor((b.max_x - bx_min) / window_size_mm)))
-        iy0 = int(max(0, math.floor((b.min_y - by_min) / window_size_mm)))
-        iy1 = int(min(ny - 1, math.floor((b.max_y - by_min) / window_size_mm)))
-
-        for iy in range(iy0, iy1 + 1):
-            for ix in range(ix0, ix1 + 1):
-                bins[(iy, ix)].append(pi)
-
-    # Compute density per window
-    for iy in range(ny):
-        for ix in range(nx):
-            wx_min = bx_min + ix * window_size_mm
-            wx_max = min(bx_min + (ix + 1) * window_size_mm, bx_max)
-            wy_min = by_min + iy * window_size_mm
-            wy_max = min(by_min + (iy + 1) * window_size_mm, by_max)
-
-            w_area = max(0.0, (wx_max - wx_min) * (wy_max - wy_min))
-            if w_area <= 0.0:
-                window_density[iy][ix] = 0.0
-                continue
-
-            copper_area = 0.0
-            for pi in bins.get((iy, ix), []):
-                b = copper_bboxes[pi]
-                copper_area += _bbox_overlap_with_window(b, wx_min, wx_max, wy_min, wy_max)
-
-            if copper_area < min_window_copper_area_mm2:
-                density = 0.0
-            else:
-                density = max(0.0, min(1.0, copper_area / w_area))
-
-            window_density[iy][ix] = density
-
-    # Compute max density delta between neighbors
+    # Bin copper bboxes into the windows they overlap so each window only checks
+    # local candidates. bins[(iy, ix)] -> list of indices into copper_bboxes.
     max_delta = 0.0
     worst_center_x = None
     worst_center_y = None
@@ -254,36 +221,63 @@ def run_copper_density_balance(ctx: CheckContext) -> CheckResult:
             worst_center_x = x_center
             worst_center_y = y_center
 
-    for iy in range(ny):
-        for ix in range(nx):
-            d_here = window_density[iy][ix]
+    for _layer_name, copper_bboxes in bboxes_by_layer:
+        window_density = [[0.0 for _ in range(nx)] for _ in range(ny)]
+        bins: Dict[Tuple[int, int], List[int]] = defaultdict(list)
 
-            # Compute actual window bounds for (ix, iy) - matches density calc
-            wx0 = bx_min + ix * window_size_mm
-            wx1 = min(bx_min + (ix + 1) * window_size_mm, bx_max)
-            wy0 = by_min + iy * window_size_mm
-            wy1 = min(by_min + (iy + 1) * window_size_mm, by_max)
+        for pi, b in enumerate(copper_bboxes):
+            # bbox span -> window index span, clamped to [0..nx-1], [0..ny-1]
+            ix0 = int(max(0, math.floor((b.min_x - bx_min) / window_size_mm)))
+            ix1 = int(min(nx - 1, math.floor((b.max_x - bx_min) / window_size_mm)))
+            iy0 = int(max(0, math.floor((b.min_y - by_min) / window_size_mm)))
+            iy1 = int(min(ny - 1, math.floor((b.max_y - by_min) / window_size_mm)))
+            for iy in range(iy0, iy1 + 1):
+                for ix in range(ix0, ix1 + 1):
+                    bins[(iy, ix)].append(pi)
 
-            # right neighbor
-            if ix + 1 < nx:
-                d_r = window_density[iy][ix + 1]
-                delta = abs(d_here - d_r)
+        # Density per window, for this layer.
+        for iy in range(ny):
+            for ix in range(nx):
+                wx_min = bx_min + ix * window_size_mm
+                wx_max = min(bx_min + (ix + 1) * window_size_mm, bx_max)
+                wy_min = by_min + iy * window_size_mm
+                wy_max = min(by_min + (iy + 1) * window_size_mm, by_max)
 
-                # shared vertical boundary x = wx1, y midpoint of this window
-                cx = wx1
-                cy = 0.5 * (wy0 + wy1)
-                _record_delta(delta, cx, cy)
+                w_area = max(0.0, (wx_max - wx_min) * (wy_max - wy_min))
+                if w_area <= 0.0:
+                    window_density[iy][ix] = 0.0
+                    continue
 
-            # down neighbor
-            if iy + 1 < ny:
-                d_d = window_density[iy + 1][ix]
-                delta = abs(d_here - d_d)
+                copper_area = 0.0
+                for pi in bins.get((iy, ix), []):
+                    b = copper_bboxes[pi]
+                    copper_area += _bbox_overlap_with_window(b, wx_min, wx_max, wy_min, wy_max)
 
-                # shared horizontal boundary y = wy1, x midpoint of this window
-                cx = 0.5 * (wx0 + wx1)
-                cy = wy1
-                _record_delta(delta, cx, cy)
+                if copper_area < min_window_copper_area_mm2:
+                    density = 0.0
+                else:
+                    density = max(0.0, min(1.0, copper_area / w_area))
 
+                window_density[iy][ix] = density
+
+        # Max density delta between neighbouring windows, for this layer. The
+        # board's figure is the worst layer's.
+        for iy in range(ny):
+            for ix in range(nx):
+                d_here = window_density[iy][ix]
+
+                wx0 = bx_min + ix * window_size_mm
+                wx1 = min(bx_min + (ix + 1) * window_size_mm, bx_max)
+                wy0 = by_min + iy * window_size_mm
+                wy1 = min(by_min + (iy + 1) * window_size_mm, by_max)
+
+                if ix + 1 < nx:  # right neighbour: shared boundary x = wx1
+                    _record_delta(abs(d_here - window_density[iy][ix + 1]),
+                                  wx1, 0.5 * (wy0 + wy1))
+
+                if iy + 1 < ny:  # down neighbour: shared boundary y = wy1
+                    _record_delta(abs(d_here - window_density[iy + 1][ix]),
+                                  0.5 * (wx0 + wx1), wy1)
 
     # Convert to percent
     max_delta_percent = max_delta * 100.0

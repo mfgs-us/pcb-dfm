@@ -17,10 +17,14 @@ from pcb_dfm.geometry.primitives import Bounds, Point2D, Polygon
 
 
 def _run(name):
+    return _run_board(boards.ARCHETYPES[name](), name)
+
+
+def _run_board(board, name="board"):
     from pcb_dfm.engine.run import run_dfm_on_gerber_zip
 
     with tempfile.TemporaryDirectory() as td:
-        z = boards.emit_zip(boards.ARCHETYPES[name](), pathlib.Path(td), name=f"{name}.zip")
+        z = boards.emit_zip(board, pathlib.Path(td), name=f"{name}.zip")
         res = run_dfm_on_gerber_zip(z, ruleset_id="default")
     return {c.check_id: c for cat in res.categories for c in cat.checks}
 
@@ -70,16 +74,30 @@ def test_silk_hole_clearance_sign():
 
 
 def test_silk_clearance_detects_silk_over_a_hole():
-    """The synthetic emitter writes the copper artwork as the silkscreen layer,
-    so silk sits directly on the drilled pads -- a real silk-over-hole overlap.
+    """Silk drawn straight across a drilled hole is negative clearance.
 
-    This only became visible once drills were parsed with correct coordinates
-    (the old pcb-tools path double-converted mm-native Excellon, putting holes
-    25.4x off the board). Negative clearance == silk overlapping the hole.
+    This used to lean on the synthetic emitter writing the copper artwork as the
+    silkscreen layer, which put silk over every pad and hole. That made the
+    "clean" archetype fail four silk/mask checks, so the fixture now emits a
+    proper silkscreen and the defect is built deliberately here instead.
+
+    The overlap is only visible with correctly parsed drill coordinates -- the
+    old pcb-tools path double-converted mm-native Excellon and put the holes
+    25.4x off the board.
     """
-    c = _run("clean_two_layer")["silkscreen_clearance"]
+    board = boards.clean_two_layer()
+    # Draw silk straight through the hole at (4, 10).
+    board.silk = [boards.Trace(2.0, 10.0, 6.0, 10.0, 0.2)]
+    c = _run_board(board)["silkscreen_clearance"]
     assert c.status == "fail"
     assert _measured(c) is not None and _measured(c) < 0.0
+
+
+def test_silk_clearance_passes_when_silk_is_placed_clear():
+    """The other half of the contract: the default fixture keeps silk clear."""
+    c = _run("clean_two_layer")["silkscreen_clearance"]
+    assert c.status == "pass"
+    assert _measured(c) is not None and _measured(c) > 0.0
 
 
 # --- layer_registration_margin ----------------------------------------------

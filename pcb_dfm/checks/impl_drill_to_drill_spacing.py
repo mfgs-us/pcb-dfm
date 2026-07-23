@@ -69,19 +69,24 @@ def run_drill_to_drill_spacing(ctx: CheckContext) -> CheckResult:
     drills = _collect_drills(ctx)
     if len(drills) < 2:
         viol = Violation(
-            severity="warning",
-            message="Not enough drills to compute drill to drill spacing.",
+            severity="info",
+            message=(
+                "Fewer than two drilled holes, so there is no hole pair to measure; "
+                "drill-to-drill spacing not applicable."
+            ),
             location=None,
         )
         return CheckResult(
             check_id=ctx.check_def.id,
             name=ctx.check_def.name,
             category_id=ctx.check_def.category_id,
-            status="warning",
+            status="not_applicable",
             severity="info",  # Default value, will be overridden by finalize()
-            score=50.0,
+            score=None,
+            # Reporting 0.0 mm here was actively misleading: the worst possible
+            # spacing, standing in for "there was nothing to measure".
             metric=MetricResult.geometry_mm(
-                measured_mm=0.0,
+                measured_mm=None,
                 target_mm=recommended_min,
                 limit_low_mm=absolute_min,
             ),

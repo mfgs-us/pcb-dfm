@@ -2,17 +2,17 @@
  "id": "copper_thermal_area",
  "category_id": "thermal_power",
  "name": "Copper coverage balance",
- "description": "Flag layers with very low overall copper coverage (poor plating/thermal balance).",
+ "description": "Advisory: report overall copper coverage per layer. Very low coverage can affect plating/etch uniformity, but is normally addressed by the fab with thieving at panel level, so this never fails a board.",
  "what_it_measures": "Maximum copper coverage as a percentage of board area, per layer.",
  "metric": {
   "kind": "ratio",
   "units": "%",
   "preferred_direction": "maximize",
   "target": {
-   "min": 50.0
+   "min": 20.0
   },
   "limits": {
-   "min": 20.0
+   "min": 5.0
   },
   "scale_min": 0.0,
   "scale_max": 100.0

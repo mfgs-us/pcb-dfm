@@ -428,8 +428,11 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
 
     if min_clear is None:
         viol = Violation(
-            severity="warning",
-            message="Could not determine via-to-copper clearance (all copper filtered or no measurable candidates).",
+            severity="info",
+            message=(
+                "No via-like plated holes with measurable neighbouring copper were "
+                "found; via-to-copper clearance not applicable."
+            ),
             location=None,
         )
         return CheckResult(
@@ -437,8 +440,8 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
             name=ctx.check_def.name,
             category_id=ctx.check_def.category_id,
             severity=ctx.check_def.severity,
-            status="warning",
-            score=50.0,
+            status="not_applicable",
+            score=None,
             metric=MetricResult(
                 kind="geometry",
                 units="mm",  # Pydantic requires geometry metrics to use mm

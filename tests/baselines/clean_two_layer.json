@@ -27,7 +27,7 @@
     {
       "confidence": "heuristic",
       "id": "component_to_component_spacing",
-      "measured": 8.8,
+      "measured": 8.7,
       "severity": "info",
       "status": "pass",
       "violations": 0
@@ -35,7 +35,7 @@
     {
       "confidence": "heuristic",
       "id": "copper_density_balance",
-      "measured": 14.4,
+      "measured": 7.2,
       "severity": "info",
       "status": "pass",
       "violations": 0
@@ -52,8 +52,8 @@
       "confidence": "heuristic",
       "id": "copper_thermal_area",
       "measured": 4.0436,
-      "severity": "error",
-      "status": "fail",
+      "severity": "warning",
+      "status": "warning",
       "violations": 1
     },
     {
@@ -163,7 +163,7 @@
     {
       "confidence": "heuristic",
       "id": "mask_to_trace_clearance",
-      "measured": 2.25,
+      "measured": 2.2,
       "severity": "info",
       "status": "pass",
       "violations": 1
@@ -212,8 +212,8 @@
       "confidence": "heuristic",
       "id": "missing_tooling_holes",
       "measured": 0.0,
-      "severity": "warning",
-      "status": "warning",
+      "severity": "info",
+      "status": "not_applicable",
       "violations": 1
     },
     {
@@ -251,15 +251,15 @@
     {
       "confidence": "high",
       "id": "silkscreen_clearance",
-      "measured": -0.3,
-      "severity": "error",
-      "status": "fail",
-      "violations": 2
+      "measured": 1.45,
+      "severity": "info",
+      "status": "pass",
+      "violations": 0
     },
     {
       "confidence": "high",
       "id": "silkscreen_min_width",
-      "measured": 1.2,
+      "measured": 0.2,
       "severity": "info",
       "status": "pass",
       "violations": 0
@@ -267,26 +267,26 @@
     {
       "confidence": "heuristic",
       "id": "silkscreen_on_copper",
-      "measured": 4.0,
-      "severity": "error",
-      "status": "warning",
-      "violations": 4
+      "measured": 0.0,
+      "severity": "info",
+      "status": "pass",
+      "violations": 0
     },
     {
       "confidence": "heuristic",
       "id": "silkscreen_over_mask_defined_pads",
-      "measured": 2.88,
-      "severity": "error",
-      "status": "fail",
+      "measured": 0.0,
+      "severity": "info",
+      "status": "pass",
       "violations": 1
     },
     {
       "confidence": "high",
       "id": "solder_mask_expansion",
-      "measured": 0.0,
-      "severity": "warning",
-      "status": "warning",
-      "violations": 1
+      "measured": 0.05,
+      "severity": "info",
+      "status": "pass",
+      "violations": 0
     },
     {
       "confidence": "high",
@@ -356,8 +356,8 @@
       "confidence": "heuristic",
       "id": "via_to_copper_clearance",
       "measured": null,
-      "severity": "warning",
-      "status": "warning",
+      "severity": "info",
+      "status": "not_applicable",
       "violations": 1
     },
     {
@@ -370,8 +370,8 @@
     }
   ],
   "overall": {
-    "score": 0.0,
-    "status": "fail"
+    "score": 75.0,
+    "status": "warning"
   },
   "stackup_layers": 2,
   "warnings": []

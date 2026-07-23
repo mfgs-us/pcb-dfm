@@ -36,7 +36,8 @@
       "solder_mask_expansion",
       "solder_mask_web",
       "unsupported_hole_types",
-      "via_tenting"
+      "via_tenting",
+      "via_to_copper_clearance"
     ]
   }
 }

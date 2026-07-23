@@ -4,7 +4,7 @@
   "ruleset": "default",
   "description": "Real 2-layer board exported from DipTrace (the 'mainboard' of the FD1 project): both copper layers, both masks, top silk, a board outline and a plated drill file.",
   "source": "codepainters/FD1 (BSD 3-clause, (c) 2014 Przemyslaw Wegrzyn), via gerbonara's test corpus (tests/resources/diptrace)",
-  "notes": "Third CAD dialect in the corpus (DipTrace). Files renamed to conventional extensions; contents are byte-identical to upstream.\n\nNot asserted: silkscreen_clearance, silkscreen_over_mask_defined_pads (fail on every real board -- #19); copper_to_edge_distance, which reads 0.000 mm because a solid 0.635 mm copper rail runs the full perimeter with its outer edge on the board boundary (a real edge-clearance finding, verified fill ratio 1.0, distinct from the #18 stray-mark bug); via_to_copper_clearance at 0.000; component_to_component_spacing, which needs placement data (#14); and via_in_pad_thermal_balance.",
+  "notes": "Third CAD dialect in the corpus (DipTrace). Files renamed to conventional extensions; contents are byte-identical to upstream.\n\nNot asserted: silkscreen_clearance, silkscreen_over_mask_defined_pads (fail on every real board -- #19); copper_to_edge_distance, which reads 0.000 mm because a solid 0.635 mm copper rail runs the full perimeter with its outer edge on the board boundary (a real edge-clearance finding, verified fill ratio 1.0, distinct from the #18 stray-mark bug); component_to_component_spacing, which needs placement data (#14); and via_in_pad_thermal_balance.",
   "expect": {
     "min_checks_run": 40,
     "no_crashes": true,
@@ -37,7 +37,8 @@
       "silkscreen_over_mask_defined_pads",
       "solder_mask_expansion",
       "solder_mask_web",
-      "unsupported_hole_types"
+      "unsupported_hole_types",
+      "via_to_copper_clearance"
     ]
   }
 }

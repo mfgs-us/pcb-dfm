@@ -390,7 +390,24 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
                         # Via outside the polygon: clearance from barrel edge to
                         # the nearest polygon edge.
                         clearance = edge_to_center - r
-                        if clearance < 0.0:
+                        if clearance <= 0.0:
+                            # The barrel overlaps this polygon. If it is a small
+                            # feature (pad/trace-sized), this is the via landing
+                            # on the copper it CONNECTS to -- a via-in-pad or a
+                            # via at a trace end -- not a short to a foreign net.
+                            # The inside-branch already excludes the via's own
+                            # pad this way; a via whose centre sits just outside a
+                            # pad it lands on is the same thing and must be
+                            # excluded too, or every landed via reads as 0.000 mm
+                            # clearance. Without a netlist, connected copper is
+                            # far more common than an actual short (#19-era
+                            # reasoning), so a small overlapped feature is treated
+                            # as the via's own net. A large pour is not: that is
+                            # the genuine (antipad / same-net) ambiguity, left to
+                            # report 0.0.
+                            poly_extent = max(b.max_x - b.min_x, b.max_y - b.min_y)
+                            if poly_extent <= own_pad_max_extent_mm:
+                                continue
                             clearance = 0.0
 
                     # Marker at the via barrel center (clearance is measured to the
@@ -454,10 +471,18 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
             violations=[viol],
         )
 
-    # Decide status only (severity handled by finalize)
-    if min_clear < absolute_min:
-        status = "fail"
-    elif min_clear < recommended_min:
+    # ADVISORY ONLY -- warns, never hard-fails, which is what this check's own
+    # docstring already promises ("a screen to be reviewed, not a hard
+    # pass/fail"). Without a netlist it cannot tell copper the via CONNECTS to
+    # (its pads, the traces and fills on its net, a plane it ties to via a
+    # thermal) from a foreign net it must clear, and it models no antipads. On
+    # three real boards those unresolvable cases -- a via landing on a medium
+    # trace/fill, a via inside a plane -- were the failures, so a hard fail here
+    # is a false positive generator. The own-pad/own-connection exclusions above
+    # remove the clear-cut cases; what remains is genuine ambiguity, surfaced for
+    # review. A net-aware version (once the design-data adapters feed a netlist)
+    # could promote real different-net violations back to fail.
+    if min_clear < recommended_min:
         status = "warning"
     else:
         status = "pass"

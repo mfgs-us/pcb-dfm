@@ -39,7 +39,8 @@
       "solder_mask_web",
       "unsupported_hole_types",
       "via_in_pad_thermal_balance",
-      "via_tenting"
+      "via_tenting",
+      "via_to_copper_clearance"
     ]
   }
 }

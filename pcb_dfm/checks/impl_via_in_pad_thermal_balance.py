@@ -8,15 +8,11 @@ from typing import Dict, List, Optional, Tuple
 
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
-from ..geometry.gerber_backend import excellon_hits_mm
+from ..geometry.gerber_backend import GERBONARA_AVAILABLE, excellon_hits_mm
 from ..ingest import GerberFileInfo
 from ..results import CheckResult, Violation, ViolationLocation
 
 # Use the same gerber backend as min_drill_size
-try:
-    import gerber
-except Exception:
-    gerber = None
 
 _INCH_TO_MM = 25.4
 
@@ -137,7 +133,7 @@ def run_via_in_pad_thermal_balance(ctx: CheckContext) -> CheckResult:
     drill_files: List[GerberFileInfo] = [f for f in ctx.ingest.files if f.layer_type == "drill"]
 
     drill_hits: List[dict] = []
-    if gerber is not None:
+    if GERBONARA_AVAILABLE:
         for info in drill_files:
             drill_hits.extend(_extract_drill_hits_mm(str(info.path)))
 

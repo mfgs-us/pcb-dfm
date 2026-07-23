@@ -10,7 +10,7 @@ from typing import Dict, List, Optional, Tuple
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
 from ..geometry import queries
-from ..geometry.gerber_backend import excellon_hits_mm
+from ..geometry.gerber_backend import GERBONARA_AVAILABLE, excellon_hits_mm
 from ..geometry.primitives import Bounds
 from ..ingest import GerberFileInfo
 from ..results import CheckResult, MetricResult, Violation, ViolationLocation
@@ -21,11 +21,6 @@ from .impl_min_annular_ring import (
     _min_distance_to_polygon_edges,
     _point_in_polygon,
 )
-
-try:
-    import gerber
-except Exception:
-    gerber = None
 
 _INCH_TO_MM = 25.4
 MAX_REPORTED_VIOLATIONS = 100
@@ -201,7 +196,7 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
         if f.layer_type == "drill" and getattr(f, "is_plated", None) is True
     ]
 
-    if gerber is None or not drill_files or not copper_layers:
+    if not GERBONARA_AVAILABLE or not drill_files or not copper_layers:
         viol = Violation(
             severity="warning",
             message="Cannot compute via-to-copper clearance (missing drill parser, drills, or copper).",

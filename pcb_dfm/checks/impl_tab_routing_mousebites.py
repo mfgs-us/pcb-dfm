@@ -5,12 +5,8 @@ from typing import List, Optional, Tuple
 
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
+from ..geometry.gerber_backend import GERBONARA_AVAILABLE, excellon_hits_mm
 from ..results import CheckResult, MetricResult, Violation, ViolationLocation
-
-try:
-    import gerber
-except Exception:  # pragma: no cover - defensive
-    gerber = None
 
 
 def _thresholds(ctx: CheckContext) -> Tuple[float, float]:
@@ -31,38 +27,12 @@ def _severity(ctx: CheckContext) -> str:
 
 
 def _collect_drills(ctx: CheckContext) -> List[Tuple[float, float, float]]:
-    """Return drill hits as (x_mm, y_mm, diameter_mm)."""
-    if gerber is None:
-        return []
-    out: List[Tuple[float, float, float]] = []
-    for f in ctx.ingest.files:
-        if f.layer_type != "drill":
-            continue
-        try:
-            layer = gerber.read(str(f.path))
-        except Exception:
-            continue
-        try:
-            layer.to_metric()
-        except Exception:
-            pass
-        for hit in getattr(layer, "hits", []) or []:
-            try:
-                tool = getattr(hit, "tool", None)
-                d = float(getattr(tool, "diameter"))
-            except Exception:
-                continue
-            pos = getattr(hit, "position", None)
-            if pos is None:
-                continue
-            try:
-                x, y = float(pos[0]), float(pos[1])
-            except Exception:
-                continue
-            out.append((x, y, d))
-    return out
-
-
+    """Return drill hits as (x_mm, y_mm, diameter_mm), via the gerbonara backend (#3)."""
+    return [
+        (h.x_mm, h.y_mm, h.diameter_mm)
+        for f in ctx.ingest.files if f.layer_type == "drill"
+        for h in excellon_hits_mm(f.path)
+    ]
 def _na(ctx, target_max, limit_max, msg) -> CheckResult:
     return CheckResult(
         check_id=ctx.check_def.id,
@@ -93,7 +63,7 @@ def run_tab_routing_mousebites(ctx: CheckContext) -> CheckResult:
     """
     target_max, limit_max = _thresholds(ctx)
 
-    if gerber is None:
+    if not GERBONARA_AVAILABLE:
         return _na(ctx, target_max, limit_max,
                    "Gerber/Excellon parser unavailable; cannot detect mousebites.")
 

@@ -45,7 +45,7 @@ The project is designed to be used both as a Python library (importable module) 
 
 ### Dependencies
 - `pydantic` v2 for data models
-- `pcb-tools` (Gerber/Excellon parsing)
+- `gerbonara` (Gerber/Excellon parsing)
 - Standard library only otherwise
 
 ### 1.2 Install from PyPI (recommended)
@@ -181,7 +181,7 @@ they used to hide real defects):
 - ✅ **Outline fallback parser** splits contours on pen-up (`D02`) moves and
   carries modal coordinates, instead of merging disjoint loops into one polygon.
 - ✅ **Zip-slip / zip-bomb guards** on archive extraction.
-- ✅ **Loud degradation**: a missing `pcb-tools` now warns instead of silently
+- ✅ **Loud degradation**: a missing `gerbonara` now warns instead of silently
   producing empty geometry (which made every check pass vacuously).
 
 **Honest, not fabricated, results**

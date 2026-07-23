@@ -31,11 +31,11 @@ classifiers = [
 
 dependencies = [
   "pydantic>=2.8,<3.0",
-  # Gerber/Excellon parsing. Migrating pcb-tools -> gerbonara (#3): gerbonara is
-  # maintained, pure-Python, and parses arcs/regions/apertures properly. Pinned
-  # to the 1.5.x line, the newest that still supports Python 3.10/3.11 (1.6+
-  # requires 3.12). Both are installed during the incremental migration.
-  "pcb-tools>=0.1.5",
+  # Gerber/Excellon parsing (#3). gerbonara is maintained, pure-Python, and
+  # parses arcs/regions/apertures properly. Pinned to the 1.5.x line, the
+  # newest that still supports Python 3.10/3.11 (1.6+ requires 3.12).
+  # Excellon files it rejects (G85 routed slots) are handled by our own
+  # reader in pcb_dfm/geometry/excellon_fallback.py -- see #17.
   "gerbonara>=1.5,<1.6"
 ]
 
@@ -106,7 +106,7 @@ ignore = ["E501", "E741", "E402"]
 
 [tool.mypy]
 python_version = "3.10"
-ignore_missing_imports = true   # pcb-tools / gerbonara ship no type hints
+ignore_missing_imports = true   # gerbonara ships no type hints
 warn_unused_ignores = false
 check_untyped_defs = false
 # Pragmatic: catch obvious type errors without demanding full annotations on a

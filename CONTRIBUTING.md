@@ -6,7 +6,7 @@ the pieces fit together, and how to add a new check.
 ## Development setup
 
 ```bash
-python -m pip install -e ".[dev]"   # pydantic, pcb-tools, pytest, mypy, jsonschema
+python -m pip install -e ".[dev]"   # pydantic, gerbonara, pytest, mypy, jsonschema
 pytest -q                           # run the test suite
 ```
 
@@ -75,7 +75,7 @@ and inherit via `extends`. Run it with `pcb-dfm run --ruleset <id>`.
   `.get_layers_by_type(...)`, `.board_bounds()`. There is no `.board` or
   `.backdrilled_vias`; `ctx` has no `.rules` — configuration comes from
   `ctx.check_def` (`.raw`, `.limits`, `.metric`).
-- **Wrap pcb-tools use in `try/except`** and degrade gracefully; crashes are
+- **Wrap parser use in `try/except`** and degrade gracefully; crashes are
   surfaced by the runner as a visible `fail`, never a silent pass.
 
 ## Before opening a PR

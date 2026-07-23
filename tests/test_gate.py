@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-pytest.importorskip("gerber", reason="pcb-tools (gerber) not installed")
+pytest.importorskip("gerbonara", reason="gerbonara not installed")
 
 _REPO = Path(__file__).resolve().parent.parent
 GERBER = _REPO / "testdata" / "mini_board.zip"

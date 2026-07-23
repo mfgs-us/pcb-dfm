@@ -59,7 +59,7 @@ def test_policy_injected_into_every_check():
 # End-to-end: the SAME board flips verdict across profiles
 # --------------------------------------------------------------------------
 
-pytest.importorskip("gerber", reason="pcb-tools (gerber) not installed")
+pytest.importorskip("gerbonara", reason="gerbonara not installed")
 
 
 def _board_with_trace(tmp_path: Path, width_mm: float) -> Path:

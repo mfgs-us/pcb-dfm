@@ -15,7 +15,7 @@ from pathlib import Path
 import boards  # tests/boards.py
 import pytest
 
-pytest.importorskip("gerber", reason="pcb-tools (gerber) not installed")
+pytest.importorskip("gerbonara", reason="gerbonara not installed")
 
 _BASELINES = Path(__file__).parent / "baselines"
 

@@ -21,6 +21,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import List, Optional, Tuple
 
+from .excellon_fallback import parse_excellon_mm
 from .primitives import Point2D, Polygon
 
 try:
@@ -420,93 +421,19 @@ def _open_excellon(path: Path):
         return None
 
 
-def _pcbtools_excellon(path: Path):
-    """Compatibility fallback for Excellon gerbonara 1.5 cannot parse.
-
-    gerbonara 1.5 rejects some real-world constructs outright -- notably ``G85``
-    routed slots ("Unknown excellon statement"), which fails the *whole file* and
-    would otherwise lose its drills too. pcb-tools still reads those, so it is
-    retained purely as a fallback so the migration loses no capability. Tracked
-    on #3: drop it once gerbonara handles G85 (or we move to 1.6 / Python 3.12).
-
-    Values are normalized to mm via ``to_metric()`` -- deliberately NOT the old
-    to_inch()+25.4 path, which double-converted mm-native files.
-    """
-    try:
-        from gerber import excellon  # type: ignore
-    except Exception:
-        return None
-    try:
-        ex = excellon.read(str(path))
-    except Exception:
-        return None
-    try:
-        ex.to_metric()  # everything in mm from here
-    except Exception:
-        return None
-    return ex
-
-
-def _pcbtools_hits_mm(path: Path) -> List[DrillHit]:
-    ex = _pcbtools_excellon(path)
-    if ex is None:
-        return []
-    out: List[DrillHit] = []
-    for hit in getattr(ex, "hits", []) or []:
-        try:
-            from gerber.excellon import DrillSlot as _PTSlot  # type: ignore
-        except Exception:
-            _PTSlot = None  # type: ignore
-        if _PTSlot is not None and isinstance(hit, _PTSlot):
-            continue  # slots are reported by _pcbtools_slots_mm
-        try:
-            tool = getattr(hit, "tool", None)
-            dia = float(getattr(tool, "diameter", 0.0) or 0.0)
-            if dia <= 0.0:
-                continue
-            if hasattr(hit, "position"):
-                x, y = hit.position
-            else:
-                x, y = hit.x, hit.y
-            out.append(DrillHit(x_mm=float(x), y_mm=float(y), diameter_mm=dia))
-        except Exception:
-            continue
-    return out
-
-
-def _pcbtools_slots_mm(path: Path) -> List[DrillSlot]:
-    ex = _pcbtools_excellon(path)
-    if ex is None:
-        return []
-    try:
-        from gerber.excellon import DrillSlot as _PTSlot  # type: ignore
-    except Exception:
-        return []
-    out: List[DrillSlot] = []
-    for hit in getattr(ex, "hits", []) or []:
-        if not isinstance(hit, _PTSlot):
-            continue
-        try:
-            tool = getattr(hit, "tool", None)
-            width = float(getattr(tool, "diameter", 0.0) or 0.0)
-            (x1, y1) = hit.start
-            (x2, y2) = hit.end
-            out.append(DrillSlot(
-                x1_mm=float(x1), y1_mm=float(y1),
-                x2_mm=float(x2), y2_mm=float(y2), width_mm=width,
-            ))
-        except Exception:
-            continue
-    return out
-
-
 def excellon_hits_mm(path: Path) -> List[DrillHit]:
     """Drilled holes in mm. Slots are reported by :func:`excellon_slots_mm`."""
     ex = _open_excellon(path)
     if ex is None:
         # gerbonara could not parse this file (e.g. G85 slots) -- fall back so we
-        # do not lose its drills entirely.
-        return _pcbtools_hits_mm(path)
+        # do not lose its drills entirely (#17).
+        parsed = parse_excellon_mm(path)
+        if parsed is None:
+            return []
+        return [
+            DrillHit(x_mm=h.x_mm, y_mm=h.y_mm, diameter_mm=h.diameter_mm)
+            for h in parsed.hits
+        ]
     hits: List[DrillHit] = []
     try:
         objs = list(ex.drills())
@@ -530,18 +457,29 @@ def excellon_hits_mm(path: Path) -> List[DrillHit]:
     return hits
 
 
+def _fallback_slots_mm(path: Path) -> List[DrillSlot]:
+    parsed = parse_excellon_mm(path)
+    if parsed is None:
+        return []
+    return [
+        DrillSlot(x1_mm=s.x1_mm, y1_mm=s.y1_mm, x2_mm=s.x2_mm, y2_mm=s.y2_mm,
+                  width_mm=s.width_mm)
+        for s in parsed.slots
+    ]
+
+
 def excellon_slots_mm(path: Path) -> List[DrillSlot]:
     """Routed slots in mm."""
     ex = _open_excellon(path)
     if ex is None:
-        return _pcbtools_slots_mm(path)  # e.g. G85 slots gerbonara rejects
+        return _fallback_slots_mm(path)  # e.g. G85 slots gerbonara rejects
     out: List[DrillSlot] = []
     try:
         slots = list(ex.slots())
     except Exception:
         # gerbonara parsed the file but exposes no slot iterator here; a
         # G85-bearing file would have failed open() and taken the path above.
-        return _pcbtools_slots_mm(path)
+        return _fallback_slots_mm(path)
     for s in slots:
         try:
             m = s.converted("mm")

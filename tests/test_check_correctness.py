@@ -22,7 +22,7 @@ from pathlib import Path
 
 import pytest
 
-pytest.importorskip("gerber", reason="pcb-tools (gerber) not installed")
+pytest.importorskip("gerbonara", reason="gerbonara not installed")
 
 from pcb_dfm.checks.definitions import load_check_definition
 from pcb_dfm.engine.check_runner import run_single_check

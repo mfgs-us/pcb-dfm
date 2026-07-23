@@ -1,6 +1,6 @@
 """
 End-to-end tests that exercise the real pipeline against a committed minimal
-Gerber fixture (testdata/mini_board.zip). Skipped if pcb-tools is unavailable.
+Gerber fixture (testdata/mini_board.zip). Skipped if gerbonara is unavailable.
 """
 
 import json
@@ -8,7 +8,7 @@ from pathlib import Path
 
 import pytest
 
-pytest.importorskip("gerber", reason="pcb-tools (gerber) not installed")
+pytest.importorskip("gerbonara", reason="gerbonara not installed")
 
 _REPO = Path(__file__).resolve().parent.parent
 FIXTURE = _REPO / "testdata" / "mini_board.zip"

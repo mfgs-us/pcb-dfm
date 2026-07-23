@@ -14,7 +14,7 @@ from pathlib import Path
 import boards  # tests/boards.py
 import pytest
 
-pytest.importorskip("gerber", reason="pcb-tools (gerber) not installed")
+pytest.importorskip("gerbonara", reason="gerbonara not installed")
 
 
 def _min_trace_width(zpath: Path):

@@ -61,7 +61,7 @@ def test_ipc2581_adapter_parses_stackup_nets_and_diffpairs():
 # Checks consuming DesignData (driven from the IPC-2581 fixture)
 # --------------------------------------------------------------------------
 
-pytest.importorskip("gerber", reason="pcb-tools (gerber) not installed")
+pytest.importorskip("gerbonara", reason="gerbonara not installed")
 pytestmark = pytest.mark.skipif(not GERBER.exists(), reason="gerber fixture missing")
 
 

@@ -197,6 +197,30 @@ def gerber_traces_mm(path: Path) -> List[Trace]:
     return out
 
 
+def gerber_flash_polygons_mm(path: Path) -> List[Polygon]:
+    """Filled outlines of *flashed* features only (pads), in mm.
+
+    Flashes are aperture placements — pads — as opposed to drawn Line/Arc
+    conductors. Keeping them separate matters on a copper layer, where counting
+    traces as pads would skew pad-matching checks.
+    """
+    if not GERBONARA_AVAILABLE:
+        return []
+    polys: List[Polygon] = []
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", SyntaxWarning)
+        try:
+            gf = GerberFile.open(str(path))
+        except Exception:
+            return []
+        for obj in gf.objects:
+            # A Flash has a position but no second endpoint.
+            if hasattr(obj, "x1") or not hasattr(obj, "x"):
+                continue
+            polys.extend(_object_polygons_mm(obj))
+    return polys
+
+
 def gerber_edges_mm(path: Path):
     """Outline edges in mm as ``(p_start, p_end, kind, radius, direction)``.
 

@@ -1,18 +1,13 @@
 from __future__ import annotations
 
-from math import hypot, pi, sin
+from math import hypot
+from pathlib import Path
 from typing import List, Optional, Tuple
 
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
+from ..geometry.gerber_backend import GERBONARA_AVAILABLE, gerber_flash_polygons_mm
 from ..results import CheckResult, MetricResult, Violation, ViolationLocation
-
-try:
-    import gerber
-    from gerber.primitives import Circle, Ellipse, Obround, Polygon, Rectangle
-except Exception:  # pragma: no cover - defensive
-    gerber = None
-    Circle = Rectangle = Obround = Polygon = Ellipse = None  # type: ignore
 
 
 def _range(ctx: CheckContext):
@@ -34,72 +29,28 @@ def _severity(ctx: CheckContext) -> str:
     )
 
 
-def _pad_area_and_pos(prim) -> Optional[Tuple[float, float, float]]:
-    """Return (area_mm2, x_mm, y_mm) for a flashed pad primitive, else None.
-
-    Only flashed apertures are pads; stroked Line primitives (traces) are
-    ignored. Areas use the true shape where known, falling back to the
-    bounding box. Assumes the layer has been normalised to mm.
-    """
-    if not getattr(prim, "flashed", False):
-        return None
-    try:
-        (min_x, max_x), (min_y, max_y) = prim.bounding_box
-    except Exception:
-        return None
-    cx = 0.5 * (float(min_x) + float(max_x))
-    cy = 0.5 * (float(min_y) + float(max_y))
-    pos = getattr(prim, "position", None)
-    if pos is not None:
-        try:
-            cx, cy = float(pos[0]), float(pos[1])
-        except Exception:
-            pass
-
-    area: Optional[float] = None
-    try:
-        if Circle is not None and isinstance(prim, Circle):
-            area = pi * float(prim.radius) ** 2
-        elif Rectangle is not None and isinstance(prim, Rectangle):
-            area = float(prim.axis_aligned_width) * float(prim.axis_aligned_height)
-        elif Obround is not None and isinstance(prim, Obround):
-            w = float(prim.axis_aligned_width)
-            h = float(prim.axis_aligned_height)
-            # stadium = bounding rectangle minus the four corner cutouts of the
-            # semicircular end caps: w*h - (4 - pi) * r^2, r = half short side.
-            r = 0.5 * min(w, h)
-            area = w * h - (4 - pi) * r * r
-        elif Ellipse is not None and isinstance(prim, Ellipse):
-            area = pi * 0.5 * float(prim.width) * 0.5 * float(prim.height)
-        elif Polygon is not None and isinstance(prim, Polygon):
-            r = float(prim.radius)
-            sides = int(getattr(prim, "sides", 6) or 6)
-            area = 0.5 * sides * r * r * sin(2 * pi / max(3, sides))
-    except Exception:
-        area = None
-
-    if area is None or area <= 0.0:
-        area = max(0.0, (float(max_x) - float(min_x)) * (float(max_y) - float(min_y)))
-    if area <= 0.0:
-        return None
-    return (area, cx, cy)
-
-
 def _collect_pads(path) -> List[Tuple[float, float, float]]:
-    """Parse a Gerber file and return flashed pads as (area_mm2, x_mm, y_mm)."""
-    try:
-        layer = gerber.read(str(path))
-    except Exception:
-        return []
-    try:
-        layer.to_metric()
-    except Exception:
-        pass
+    """Flashed pads as (area_mm2, x_mm, y_mm), via the gerbonara backend (#3).
+
+    Uses the flash outlines' true filled geometry, so obround/polygon/macro
+    apertures get a real area instead of the per-shape approximations the
+    pcb-tools primitive path needed.
+    """
     pads: List[Tuple[float, float, float]] = []
-    for prim in getattr(layer, "primitives", []) or []:
-        info = _pad_area_and_pos(prim)
-        if info is not None:
-            pads.append(info)
+    for poly in gerber_flash_polygons_mm(Path(path)):
+        pts = [(v.x, v.y) for v in poly.vertices]
+        if len(pts) < 3:
+            continue
+        area = 0.0
+        for k in range(len(pts)):
+            x1, y1 = pts[k]
+            x2, y2 = pts[(k + 1) % len(pts)]
+            area += x1 * y2 - x2 * y1
+        area = abs(area) * 0.5
+        if area <= 0.0:
+            continue
+        b = poly.bounds()
+        pads.append((area, 0.5 * (b.min_x + b.max_x), 0.5 * (b.min_y + b.max_y)))
     return pads
 
 
@@ -133,7 +84,7 @@ def run_solder_paste_area_coverage(ctx: CheckContext) -> CheckResult:
     """
     target_min, target_max, limit_min, limit_max = _range(ctx)
 
-    if gerber is None:
+    if not GERBONARA_AVAILABLE:
         return _na(ctx, target_min, limit_min, limit_max,
                    "Gerber parser unavailable; cannot measure paste coverage.")
 

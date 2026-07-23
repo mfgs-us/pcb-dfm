@@ -3,7 +3,7 @@
     {
       "confidence": "heuristic",
       "id": "acid_trap_angle",
-      "measured": 165.0,
+      "measured": null,
       "severity": "info",
       "status": "pass",
       "violations": 1
@@ -35,7 +35,7 @@
     {
       "confidence": "heuristic",
       "id": "copper_density_balance",
-      "measured": 14.76,
+      "measured": 14.4,
       "severity": "info",
       "status": "pass",
       "violations": 0
@@ -43,7 +43,7 @@
     {
       "confidence": "heuristic",
       "id": "copper_sliver_width",
-      "measured": 0.2949,
+      "measured": 0.2986,
       "severity": "info",
       "status": "pass",
       "violations": 0
@@ -51,7 +51,7 @@
     {
       "confidence": "heuristic",
       "id": "copper_thermal_area",
-      "measured": 3.9801,
+      "measured": 4.0436,
       "severity": "error",
       "status": "fail",
       "violations": 1
@@ -59,7 +59,7 @@
     {
       "confidence": "high",
       "id": "copper_to_edge_distance",
-      "measured": 1.95,
+      "measured": 1.8,
       "severity": "info",
       "status": "pass",
       "violations": 0

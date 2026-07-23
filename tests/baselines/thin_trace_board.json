@@ -51,7 +51,7 @@
     {
       "confidence": "heuristic",
       "id": "copper_thermal_area",
-      "measured": 0.9299,
+      "measured": 0.9313,
       "severity": "error",
       "status": "fail",
       "violations": 1

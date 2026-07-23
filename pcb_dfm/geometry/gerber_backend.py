@@ -81,13 +81,37 @@ def _tessellate_arc(p1: Tuple[float, float], p2: Tuple[float, float],
     return pts
 
 
-def _arcpoly_points(arc_poly) -> List[Tuple[float, float]]:
+def _arcpoly_points(arc_poly, flip_handedness: bool = False) -> List[Tuple[float, float]]:
     """Flatten a gerbonara ArcPoly outline into (x, y) points, tessellating arcs.
 
     gerbonara 1.5's ``ArcPoly.approximate_arcs()`` is broken (calls a generator
     property as a method), so we walk ``.segments`` ourselves. Each segment is
     ``(p1, p2, (clockwise, center))``; a straight edge has ``clockwise is None``
     (and ``center == (None, None)``).
+
+    ``flip_handedness`` inverts the sense of ``clockwise``. gerbonara reports
+    the two kinds of outline arc in *different* frames, verified against
+    hand-written Gerber of known area (tests/test_arc_tessellation.py):
+
+      - arcs from an **aperture** outline (a Flash's shape, and the round end
+        caps of a stroked Line) arrive in gerbonara's inverted frame -> flip
+      - arcs from the **file's own path** (a Region boundary drawn with
+        G02/G03) are already in the Gerber y-up frame -> do not flip
+
+    Getting this backwards is silent and severe: a 180 degree round end cap
+    swept the wrong way folds *into* the stroke instead of bulging out of it,
+    turning every stroked trace into a bowtie whose boundary runs through the
+    segment's own axis. That read as ~0 mm clearance all over pour-heavy boards
+    (#14) -- an annular ring of exactly 0.0 on generous 60 mil pads, and
+    spurious near-zero spacing and mask clearance. A region arc swept the wrong
+    way is equally wrong in the other direction: a 90 degree corner becomes a
+    270 degree sweep, tripling the polygon's area.
+
+    Known limitation: a stroked **Arc** mixes both (aperture caps, path body),
+    and we treat it as path-derived -- the body dominates and the caps are a
+    sub-aperture-width detail. gerbonara 1.5's ArcPoly for a stroked arc is in
+    any case malformed (a segment's two endpoints sit at different radii from
+    its own stated centre), so its caps cannot be reproduced faithfully.
     """
     pts: List[Tuple[float, float]] = []
     for seg in arc_poly.segments:
@@ -97,11 +121,17 @@ def _arcpoly_points(arc_poly) -> List[Tuple[float, float]]:
         if clockwise is None:
             pts.append((float(p2[0]), float(p2[1])))
         else:
+            cw = bool(clockwise) != flip_handedness
             pts.extend(_tessellate_arc((float(p1[0]), float(p1[1])),
                                        (float(p2[0]), float(p2[1])),
                                        (float(center[0]), float(center[1])),
-                                       bool(clockwise)))
+                                       cw))
     return pts
+
+
+# Object types whose outline arcs come from an *aperture* definition, and so
+# arrive in gerbonara's inverted frame. See _arcpoly_points.
+_APERTURE_DERIVED = ("Flash", "Line")
 
 
 def _object_polygons_mm(obj) -> List[Polygon]:
@@ -110,12 +140,13 @@ def _object_polygons_mm(obj) -> List[Polygon]:
         prims = obj.to_primitives("mm")
     except Exception:
         return polys
+    flip = type(obj).__name__ in _APERTURE_DERIVED
     for prim in prims:
         try:
             arc_poly = prim.to_arc_poly()
         except Exception:
             continue
-        pts = _arcpoly_points(arc_poly)
+        pts = _arcpoly_points(arc_poly, flip_handedness=flip)
         if len(pts) >= 3:
             polys.append(Polygon(vertices=[Point2D(x=x, y=y) for x, y in pts]))
     return polys

@@ -6,6 +6,7 @@ from typing import List, Optional, Tuple
 
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
+from ..geometry.pad_map import get_or_build_pad_map
 from ..geometry.polygon_index import PolygonIndex
 from ..geometry.primitives import Bounds, Polygon
 from ..results import CheckResult, MetricResult, Violation, ViolationLocation
@@ -338,6 +339,11 @@ def run_solder_mask_expansion(ctx: CheckContext) -> CheckResult:
     pads: List[_Pad] = []
     raw_masks_by_side: dict[str, List[Tuple[Polygon, str, str]]] = defaultdict(list)  # side -> (poly, layer, logical)
 
+    # Placement data tells us which copper is genuinely a component pad. Without
+    # it, "pad" is an area/aspect guess that also admits trace stubs and pour
+    # fingers, which is why this check could only ever be advisory.
+    pad_map = get_or_build_pad_map(ctx)
+
     # First pass: collect copper pads and raw mask polygons by side
     for layer in getattr(geom, "layers", []):
         layer_type = getattr(layer, "layer_type", getattr(layer, "type", None))
@@ -346,6 +352,8 @@ def run_solder_mask_expansion(ctx: CheckContext) -> CheckResult:
 
         if layer_type == "copper":
             for poly in getattr(layer, "polygons", []):
+                if pad_map is not None and not pad_map.is_component_pad(poly):
+                    continue
                 area = _poly_area_mm2(poly)
                 if area < pad_min_area_mm2 or area > pad_max_area_mm2:
                     continue
@@ -588,14 +596,22 @@ def run_solder_mask_expansion(ctx: CheckContext) -> CheckResult:
     # aligned to pad", not a shortfall.
     registration_tol = float(raw_cfg.get("registration_tolerance_mm", 0.05))
 
-    # Never hard-fails (see note above); under_fail/over_fail retained as False
-    # so the violation-message code below reads uniformly.
-    under_fail = False
-    over_fail = False
+    # Hard fail only when placement data confirms these really are component
+    # pads (see the advisory note above); otherwise warn, as before.
+    footprint_aware = pad_map is not None
+    under_fail = bool(
+        footprint_aware and measured < absolute_min and measured < -registration_tol
+    )
+    over_fail = bool(
+        footprint_aware and absolute_max is not None and max_measured > absolute_max
+    )
     under_warn = measured < recommended_min and measured < -registration_tol
     over_warn = (recommended_max is not None) and (max_measured > recommended_max)
 
-    if under_warn or over_warn:
+    if under_fail or over_fail:
+        status = "fail"
+        score = 0.0
+    elif under_warn or over_warn:
         status = "warning"
         span = max(1e-6, recommended_min - absolute_min)
         frac = (measured - absolute_min) / span

@@ -9,6 +9,7 @@ from typing import Dict, List, Optional, Tuple
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
 from ..geometry.gerber_backend import GERBONARA_AVAILABLE, excellon_hits_mm
+from ..geometry.pad_map import get_or_build_pad_map
 from ..ingest import GerberFileInfo
 from ..results import CheckResult, Violation, ViolationLocation
 
@@ -253,6 +254,13 @@ def run_via_in_pad_thermal_balance(ctx: CheckContext) -> CheckResult:
             for ix in range(ix0, ix1 + 1):
                 grid[(ix, iy)].append(idx)
 
+    # Placement data settles what artwork alone can only guess: which copper is
+    # actually a component pad. Without it every via matches its own landing
+    # ring and the ratio measures the wrong thing; with it, a via-in-pad finding
+    # really is a via dropped into a component's pad -- the actual solder-wicking
+    # concern -- and may fail again.
+    pad_map = get_or_build_pad_map(ctx)
+
     # 3) For each via, find best-matching pad and compute via area / pad area
     worst_ratio_pct = 0.0
     worst_loc: Optional[ViolationLocation] = None
@@ -297,6 +305,11 @@ def run_via_in_pad_thermal_balance(ctx: CheckContext) -> CheckResult:
                     # (a via bigger than its own pad is geometrically impossible),
                     # e.g. a 0.24 mm^2 via matched to a 0.09 mm^2 sliver = 264%.
                     if pad_area < via_area:
+                        continue
+
+                    # With placement data, only a real component pad counts. A
+                    # via's own landing ring is not "via in pad".
+                    if pad_map is not None and not pad_map.is_component_pad(poly):
                         continue
 
                     # Among pads that can hold the via, prefer the smallest, so a
@@ -364,10 +377,18 @@ def run_via_in_pad_thermal_balance(ctx: CheckContext) -> CheckResult:
     # warns, which is a fair thing to surface for review. A footprint-aware
     # version (via the design-data adapters) could identify real SMD pads and
     # promote genuine via-in-pad back to fail.
+    footprint_aware = pad_map is not None
+
     if measured <= recommended_max_pct:
         status = "pass"
         severity = ctx.check_def.severity or ctx.check_def.severity_default
         score = 100.0
+    elif footprint_aware and measured > absolute_max_pct:
+        # Footprint data confirms this really is a via in a COMPONENT pad, so
+        # the check earns back its hard fail (see the advisory note above).
+        status = "fail"
+        severity = "error"
+        score = 0.0
     else:
         status = "warning"
         severity = "warning"

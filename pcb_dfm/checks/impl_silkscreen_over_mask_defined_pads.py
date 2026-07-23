@@ -4,6 +4,7 @@ from typing import List, Optional
 
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
+from ..geometry.pad_map import get_or_build_pad_map
 from ..geometry.polygon_index import PolygonIndex
 from ..geometry.primitives import Bounds
 from ..results import CheckResult, MetricResult, Violation, ViolationLocation
@@ -105,6 +106,11 @@ def run_silkscreen_over_mask_defined_pads(ctx: CheckContext) -> CheckResult:
     silk_min_area_mm2 = float(raw_cfg.get("silk_min_area_mm2", 0.01))
     mask_min_area_mm2 = float(raw_cfg.get("mask_min_area_mm2", 0.01))
 
+    # Placement data identifies real component pads; without it "pad" is an
+    # area/aspect guess that also admits pour fragments, which is why silk over
+    # them could only ever be advisory.
+    pad_map = get_or_build_pad_map(ctx)
+
     geom = ctx.geometry
 
     class _BBox:
@@ -138,6 +144,8 @@ def run_silkscreen_over_mask_defined_pads(ctx: CheckContext) -> CheckResult:
 
         if layer_type == "copper":
             for poly in getattr(layer, "polygons", []):
+                if pad_map is not None and not pad_map.is_component_pad(poly):
+                    continue
                 area = _poly_area_mm2(poly)
                 if area < pad_min_area_mm2 or area > pad_max_area_mm2:
                     continue
@@ -286,12 +294,17 @@ def run_silkscreen_over_mask_defined_pads(ctx: CheckContext) -> CheckResult:
         span = max(1e-9, limit_max - target_max)
         frac = max(0.0, min(1.0, (measured - target_max) / span))
         score = max(0.0, min(100.0, 100.0 - 40.0 * frac))
+    elif pad_map is not None:
+        # Placement data confirms these are real component pads, so silk printed
+        # on them is a genuine solderability defect and may fail again.
+        status = "fail"
+        severity = "error"
+        score = 0.0
     else:
-        # ADVISORY -- never a hard fail. This is a bbox overlap estimate with no
-        # boolean geometry, so it cannot cleanly separate ink genuinely on a pad
-        # from a stroke passing near it or from silk on an adjacent pour. Real
-        # silk-on-pad still warns; it just does not fail a board on the
-        # approximation (#19), matching solder_mask_expansion.
+        # ADVISORY without placement data -- a bbox overlap estimate with no
+        # boolean geometry cannot cleanly separate ink genuinely on a pad from a
+        # stroke passing near it or silk on an adjacent pour. Real silk-on-pad
+        # still warns; it just does not fail a board on the approximation (#19).
         status = "warning"
         severity = "warning"
         score = 40.0

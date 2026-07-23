@@ -208,6 +208,35 @@ class NetMap:
 # Builder
 # --------------------------------------------------------------------------- #
 
+def _polygons_touch(a: Polygon, b: Polygon) -> bool:
+    """True when two copper polygons overlap or abut (i.e. are one conductor).
+
+    Boundary distance alone is NOT enough. ``_min_poly_distance`` samples
+    vertex-to-edge distances, which measures the gap between the two BOUNDARIES;
+    for polygons that genuinely overlap it still returns a positive number,
+    because neither boundary passes near the other's sampled vertices. On the
+    pcb-tools reference board that left 75% of bottom-layer polygons as isolated
+    singletons -- physically impossible for routed copper, where consecutive
+    stroke segments of a trace overlap heavily.
+
+    So test containment as well: if any vertex of either polygon lies inside the
+    other, they overlap. Same failure mode that made the first copper-spacing
+    attempt under-merge (#14).
+    """
+    ba, bb = a.bounds(), b.bounds()
+    if (ba.min_x > bb.max_x or bb.min_x > ba.max_x
+            or ba.min_y > bb.max_y or bb.min_y > ba.max_y):
+        return False
+    pa, pb = _poly_pts(a), _poly_pts(b)
+    for (x, y) in pa:
+        if _point_in_polygon(x, y, pb):
+            return True
+    for (x, y) in pb:
+        if _point_in_polygon(x, y, pa):
+            return True
+    return _min_poly_distance(a, b) <= 1e-6
+
+
 def _propagate_nets_through_connected_copper(
     copper_layers: List[BoardLayer],
     poly_net: Dict[int, str],
@@ -254,7 +283,7 @@ def _propagate_nets_through_connected_copper(
                 j = cast(int, pos)
                 if j <= i:
                     continue
-                if _min_poly_distance(poly, polys[j]) <= 0.0:
+                if _polygons_touch(poly, polys[j]):
                     union(i, j)
 
         groups: Dict[int, List[int]] = {}

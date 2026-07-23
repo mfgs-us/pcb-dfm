@@ -197,6 +197,46 @@ def gerber_traces_mm(path: Path) -> List[Trace]:
     return out
 
 
+def gerber_edges_mm(path: Path):
+    """Outline edges in mm as ``(p_start, p_end, kind, radius, direction)``.
+
+    ``kind`` is ``"line"`` or ``"arc"``; arcs carry their true radius and
+    ``"clockwise"``/``"counterclockwise"`` direction. This is the shape the
+    outline/contour checks consume, and it is where gerbonara pays off most:
+    the pcb-tools path chord-approximated arcs, so a curved board edge or a
+    filleted corner lost its radius entirely.
+    """
+    if not GERBONARA_AVAILABLE:
+        return []
+    edges = []
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", SyntaxWarning)
+        try:
+            gf = GerberFile.open(str(path))
+        except Exception:
+            return []
+        for obj in gf.objects:
+            try:
+                m = obj.converted("mm")
+            except Exception:
+                continue
+            if not (hasattr(m, "x1") and hasattr(m, "y2")):
+                continue  # Flash / Region: not an edge
+            start, end = (float(m.x1), float(m.y1)), (float(m.x2), float(m.y2))
+            if hasattr(m, "clockwise") and hasattr(m, "cx"):
+                center = getattr(m, "center", None)
+                if isinstance(center, (tuple, list)) and len(center) == 2:
+                    cx, cy = float(center[0]), float(center[1])
+                else:  # fall back to the absolute centre fields
+                    cx, cy = float(m.cx), float(m.cy)
+                radius = math.hypot(start[0] - cx, start[1] - cy)
+                direction = "clockwise" if bool(m.clockwise) else "counterclockwise"
+                edges.append((start, end, "arc", radius, direction))
+            else:
+                edges.append((start, end, "line", None, None))
+    return edges
+
+
 # --------------------------------------------------------------------------- #
 # Excellon (drills / slots)
 # --------------------------------------------------------------------------- #

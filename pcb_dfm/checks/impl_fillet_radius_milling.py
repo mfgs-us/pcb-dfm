@@ -5,15 +5,8 @@ from typing import List, Tuple
 
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
+from ..geometry.gerber_backend import GERBONARA_AVAILABLE, gerber_edges_mm
 from ..results import CheckResult, MetricResult, Violation, ViolationLocation
-
-try:
-    import gerber
-    from gerber.primitives import Arc, Line
-except Exception:  # pragma: no cover - defensive
-    gerber = None
-    Line = None  # type: ignore
-    Arc = None  # type: ignore
 
 # Angle below which a vertex is treated as "straight" (no real corner).
 _STRAIGHT_TURN_DEG = 20.0
@@ -59,36 +52,17 @@ def _collect_edges(ctx: CheckContext):
 
     Returns a list of edges: (p_start, p_end, kind, radius, direction).
     kind is 'line' or 'arc'. All coordinates in mm.
+
+    Sourced from the gerbonara parse backend (#3), so arcs carry their **true**
+    radius -- the previous pcb-tools path chord-approximated them, which meant a
+    filleted corner could lose the very radius this check measures.
     """
     edges = []
     for f in ctx.ingest.files:
         if f.layer_type not in ("outline", "mechanical"):
             continue
-        try:
-            layer = gerber.read(str(f.path))
-        except Exception:
-            continue
-        try:
-            layer.to_metric()
-        except Exception:
-            pass
-        for prim in getattr(layer, "primitives", []) or []:
-            try:
-                if Line is not None and isinstance(prim, Line):
-                    edges.append((tuple(prim.start), tuple(prim.end), "line", None, None))
-                elif Arc is not None and isinstance(prim, Arc):
-                    edges.append((
-                        tuple(prim.start),
-                        tuple(prim.end),
-                        "arc",
-                        float(prim.radius),
-                        getattr(prim, "direction", None),
-                    ))
-            except Exception:
-                continue
+        edges.extend(gerber_edges_mm(f.path))
     return edges
-
-
 def _build_loops(edges):
     """Chain edges into one or more ordered, closed vertex loops.
 
@@ -298,7 +272,7 @@ def run_fillet_radius_milling(ctx: CheckContext) -> CheckResult:
     """
     target_min, limit_min = _thresholds(ctx)
 
-    if gerber is None:
+    if not GERBONARA_AVAILABLE:
         return _na(ctx, target_min, limit_min,
                    "Gerber parser unavailable; cannot analyse outline corners.")
 

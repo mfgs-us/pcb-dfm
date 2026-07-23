@@ -4,21 +4,14 @@ import os
 from collections import defaultdict
 from functools import lru_cache
 from math import floor
+from pathlib import Path
 from typing import Any, Dict, List, Optional, Tuple
 
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
 from ..geometry import queries
+from ..geometry.gerber_backend import GERBONARA_AVAILABLE, gerber_polygons_mm
 from ..results import CheckResult, MetricResult, Violation, ViolationLocation
-
-try:
-    import gerber  # type: ignore
-    from gerber.primitives import Circle, Line, Rectangle  # type: ignore
-except Exception:
-    gerber = None  # type: ignore
-    Line = Circle = Rectangle = None  # type: ignore
-
-_INCH_TO_MM = 25.4
 
 
 def _norm_side(v: Optional[str]) -> str:
@@ -30,41 +23,6 @@ def _norm_side(v: Optional[str]) -> str:
     if s in ("bottom", "bot", "b", "back"):
         return "Bottom"
     return str(v).strip() or "Unknown"
-
-
-def _primitive_bbox_inch(prim) -> Optional[Tuple[float, float, float, float]]:
-    """Best-effort bounding box for common silkscreen primitives."""
-    if Line is not None and isinstance(prim, Line):
-        (x1, y1) = prim.start
-        (x2, y2) = prim.end
-        w = getattr(prim, "width", 0.0) or 0.0
-        half = w * 0.5
-        min_x = min(x1, x2) - half
-        max_x = max(x1, x2) + half
-        min_y = min(y1, y2) - half
-        max_y = max(y1, y2) + half
-        return (min_x, max_x, min_y, max_y)
-
-    if Circle is not None and isinstance(prim, Circle):
-        (cx, cy) = prim.position
-        r = prim.radius
-        return (cx - r, cx + r, cy - r, cy + r)
-
-    if Rectangle is not None and isinstance(prim, Rectangle):
-        (cx, cy) = prim.position
-        w = prim.width
-        h = prim.height
-        half_w = w * 0.5
-        half_h = h * 0.5
-        return (cx - half_w, cx + half_w, cy - half_h, cy + half_h)
-
-    verts = getattr(prim, "vertices", None)
-    if verts:
-        xs = [v[0] for v in verts]
-        ys = [v[1] for v in verts]
-        return (min(xs), max(xs), min(ys), max(ys))
-
-    return None
 
 
 def _bbox_intersects(
@@ -182,27 +140,16 @@ def _filter_exposed_copper(
 
 @lru_cache(maxsize=64)
 def _cached_silk_bboxes(path: str, mtime_ns: int):
-    try:
-        g_layer = gerber.read(path)
-        try:
-            g_layer.to_inch()
-        except Exception:
-            pass
-    except Exception:
-        return []
+    """Silkscreen feature bounding boxes in mm as (min_x, max_x, min_y, max_y).
 
+    Derived from the gerbonara parse backend's filled outlines (#3), so text and
+    stroked features get their true extent -- including arcs, which the previous
+    pcb-tools primitive-bbox path could not represent.
+    """
     out = []
-    for prim in getattr(g_layer, "primitives", []):
-        bb_in = _primitive_bbox_inch(prim)
-        if bb_in is None:
-            continue
-        min_x_in, max_x_in, min_y_in, max_y_in = bb_in
-        out.append((
-            min_x_in * _INCH_TO_MM,
-            max_x_in * _INCH_TO_MM,
-            min_y_in * _INCH_TO_MM,
-            max_y_in * _INCH_TO_MM,
-        ))
+    for poly in gerber_polygons_mm(Path(path)):
+        b = poly.bounds()
+        out.append((b.min_x, b.max_x, b.min_y, b.max_y))
     return out
 
 
@@ -217,7 +164,7 @@ def run_silkscreen_on_copper(ctx: CheckContext) -> CheckResult:
       - If we cannot find soldermask openings, we fall back to checking against all copper bboxes.
 
     Approach:
-      - Parse silkscreen Gerbers into primitive bboxes (mm).
+      - Parse silkscreen Gerbers into feature bboxes (mm) via the gerbonara backend.
       - Build a spatial grid for copper bboxes (or exposed-copper bboxes).
       - For each silk bbox, query candidate copper boxes via grid and test bbox intersection.
       - Count overlaps per silk primitive (not per copper hit) to avoid inflation.
@@ -235,10 +182,10 @@ def run_silkscreen_on_copper(ctx: CheckContext) -> CheckResult:
     # Inflate silk bbox a bit to be conservative with bbox approximation
     silk_inflate_mm = float(raw_cfg.get("silk_inflate_mm", 0.0))
 
-    if gerber is None or Line is None:
+    if not GERBONARA_AVAILABLE:
         viol = Violation(
             severity="warning",
-            message="Silkscreen parsing not available (gerber library missing).",
+            message="Silkscreen parsing not available (gerbonara missing).",
             location=None,
         )
         return CheckResult(

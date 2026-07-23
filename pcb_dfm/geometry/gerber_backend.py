@@ -197,6 +197,96 @@ def gerber_traces_mm(path: Path) -> List[Trace]:
     return out
 
 
+@dataclass
+class ApertureInfo:
+    """One aperture definition, normalized to mm."""
+    code: str                      # D-code, e.g. "D10"
+    shape: str                     # circle|rectangle|obround|polygon|macro|unknown
+    min_dim_mm: Optional[float]    # smallest positive dimension, None if none
+    max_dim_mm: Optional[float]    # largest positive dimension, None if none
+    detail: str
+
+
+def _aperture_dims_mm(ap) -> Tuple[str, List[float], List[str]]:
+    """(shape, positive dimensions in mm, notes) for a gerbonara aperture."""
+    name = type(ap).__name__
+    unit = getattr(ap, "unit", None)
+    notes: List[str] = []
+
+    def conv(v, label):
+        if v is None:
+            return None
+        try:
+            mm = float(MM(v, unit))
+        except Exception:
+            return None
+        if mm <= 0.0:
+            notes.append(f"{label}<=0")
+            return None
+        return mm
+
+    if "Circle" in name:
+        shape, raw = "circle", [("diameter", getattr(ap, "diameter", None))]
+    elif "Rectangle" in name:
+        shape, raw = "rectangle", [("w", getattr(ap, "w", None)), ("h", getattr(ap, "h", None))]
+    elif "Obround" in name:
+        shape, raw = "obround", [("w", getattr(ap, "w", None)), ("h", getattr(ap, "h", None))]
+    elif "Polygon" in name:
+        shape, raw = "polygon", [("diameter", getattr(ap, "diameter", None))]
+    elif "Macro" in name:
+        # A macro has no scalar size; fall back to its rendered bounding box.
+        shape, raw = "macro", []
+        try:
+            (x0, y0), (x1, y1) = ap.bounding_box(unit)
+            raw = [("bbox_w", abs(x1 - x0)), ("bbox_h", abs(y1 - y0))]
+        except Exception:
+            notes.append("macro bounding box unavailable")
+    else:
+        shape, raw = "unknown", []
+        notes.append(f"unhandled aperture type {name}")
+
+    dims = [d for d in (conv(v, k) for k, v in raw) if d is not None]
+    return shape, dims, notes
+
+
+def gerber_apertures_mm(path: Path) -> Optional[List[ApertureInfo]]:
+    """Aperture definitions normalized to mm, or None if the file won't parse.
+
+    gerbonara exposes a *typed* aperture model, so shapes and dimensions are
+    read directly instead of sniffing numeric attributes off an untyped object.
+    Dimensions are converted explicitly: an aperture keeps the file's native
+    unit, so an inch-native file would otherwise report mm values 25.4x small.
+    """
+    if not GERBONARA_AVAILABLE:
+        return None
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", SyntaxWarning)
+        try:
+            gf = GerberFile.open(str(path))
+            aps = list(gf.apertures())
+        except Exception:
+            return None
+
+    out: List[ApertureInfo] = []
+    for ap in aps:
+        shape, dims, notes = _aperture_dims_mm(ap)
+        num = getattr(ap, "original_number", None)
+        code = f"D{num}" if num is not None else "(unnumbered)"
+        if dims:
+            detail = f"extracted {len(dims)} dim(s), min={min(dims):.4f}mm, max={max(dims):.4f}mm"
+        else:
+            detail = "no positive dimension found"
+        if notes:
+            detail += f" ({', '.join(notes)})"
+        out.append(ApertureInfo(
+            code=code, shape=shape,
+            min_dim_mm=min(dims) if dims else None,
+            max_dim_mm=max(dims) if dims else None,
+            detail=detail,
+        ))
+    return out
+
+
 def gerber_flash_polygons_mm(path: Path) -> List[Polygon]:
     """Filled outlines of *flashed* features only (pads), in mm.
 

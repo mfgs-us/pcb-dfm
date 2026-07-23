@@ -1,17 +1,10 @@
 from __future__ import annotations
 
-import math
 from dataclasses import dataclass
-from typing import Any, Iterable, List, Optional, Tuple
+from typing import List, Optional
 
+from ..geometry.gerber_backend import GERBONARA_AVAILABLE, gerber_apertures_mm
 from . import GerberFileInfo
-
-try:
-    import gerber  # type: ignore
-except Exception:
-    gerber = None  # type: ignore
-
-_INCH_TO_MM = 25.4
 
 
 @dataclass(frozen=True)
@@ -25,154 +18,6 @@ class ApertureWarning:
     detail: str
 
 
-def _safe_float(v: Any) -> Optional[float]:
-    try:
-        x = float(v)
-    except Exception:
-        return None
-    if not math.isfinite(x):
-        return None
-    return x
-
-
-def _iter_numeric_fields(obj: Any) -> Iterable[Tuple[str, Any]]:
-    direct = [
-        "width",
-        "height",
-        "x_size",
-        "y_size",
-        "diameter",
-        "radius",
-        "outer_diameter",
-        "inner_diameter",
-        "hole_diameter",
-        "hole",
-        "drill",
-    ]
-    for k in direct:
-        if hasattr(obj, k):
-            yield k, getattr(obj, k)
-
-    for k in ("modifiers", "parameters", "param", "params"):
-        if hasattr(obj, k):
-            yield k, getattr(obj, k)
-
-    d = getattr(obj, "__dict__", None)
-    if isinstance(d, dict):
-        for k, v in d.items():
-            lk = str(k).lower()
-            if any(t in lk for t in ("width", "height", "size", "diam", "radius", "hole", "drill", "outer", "inner")):
-                yield str(k), v
-
-
-def _extract_dims_inch(ap: Any) -> Tuple[List[float], List[str]]:
-    dims: List[float] = []
-    notes: List[str] = []
-
-    for name, val in _iter_numeric_fields(ap):
-        if val is None:
-            continue
-
-        lname = name.lower()
-
-        if lname == "radius":
-            fv = _safe_float(val)
-            if fv is None:
-                continue
-            if fv <= 0.0:
-                notes.append("radius<=0")
-                continue
-            dims.append(fv * 2.0)
-            continue
-
-        if isinstance(val, (list, tuple)):
-            for item in val:
-                fv = _safe_float(item)
-                if fv is None or fv <= 0.0:
-                    continue
-                dims.append(fv)
-            continue
-
-        if isinstance(val, dict):
-            for item in val.values():
-                fv = _safe_float(item)
-                if fv is None or fv <= 0.0:
-                    continue
-                dims.append(fv)
-            continue
-
-        fv = _safe_float(val)
-        if fv is None:
-            continue
-        if fv <= 0.0:
-            notes.append(f"{lname}<=0")
-            continue
-        dims.append(fv)
-
-    return dims, notes
-
-
-def _normalize_shape(ap: Any) -> str:
-    shape = getattr(ap, "shape", None)
-
-    if isinstance(shape, str):
-        s = shape.strip().lower()
-        if s in ("c", "circle"):
-            return "circle"
-        if s in ("r", "rect", "rectangle"):
-            return "rectangle"
-        if s in ("o", "oval", "obround"):
-            return "obround"
-        if s in ("p", "poly", "polygon"):
-            return "polygon"
-        if s in ("am", "macro"):
-            return "macro"
-        if s:
-            if s.startswith("am") or "macro" in s:
-                return "macro"
-            return s
-
-    for k in ("macro", "macro_name", "aperture_macro"):
-        v = getattr(ap, k, None)
-        if isinstance(v, str) and v.strip():
-            return "macro"
-
-    if hasattr(ap, "primitives"):
-        return "macro"
-
-    return "unknown"
-
-
-def _extract_aperture_dim_mm(ap: Any) -> Tuple[Optional[float], Optional[float], str]:
-    """Return (min_dim_mm, max_dim_mm, detail).
-
-    The MIN real positive dimension drives the "too small" (minimum feature)
-    check so that sliver apertures (e.g. 0.002mm x 4mm) are caught, while the
-    MAX dimension drives the "too large" check. Both are None when no usable
-    dimension is found.
-    """
-    dims_inch, notes = _extract_dims_inch(ap)
-    if not dims_inch:
-        detail = "no numeric dimension found"
-        if notes:
-            detail += f" ({', '.join(notes)})"
-        return None, None, detail
-
-    dims_inch = [d for d in dims_inch if math.isfinite(d) and d > 0.0]
-    if not dims_inch:
-        detail = "numeric dims present but nonpositive/nonfinite"
-        if notes:
-            detail += f" ({', '.join(notes)})"
-        return None, None, detail
-
-    min_dim_mm = min(dims_inch) * _INCH_TO_MM
-    max_dim_mm = max(dims_inch) * _INCH_TO_MM
-    detail = f"extracted {len(dims_inch)} dim(s), min={min_dim_mm:.4f}mm, max={max_dim_mm:.4f}mm"
-    if notes:
-        detail += f" ({', '.join(notes)})"
-    return min_dim_mm, max_dim_mm, detail
-
-
 def validate_apertures(
     files: List[GerberFileInfo],
     *,
@@ -181,7 +26,16 @@ def validate_apertures(
     max_files: int = 200,
     max_individual: int = 500,
 ) -> List[ApertureWarning]:
-    if gerber is None:
+    """Flag aperture definitions that look wrong.
+
+    Reads gerbonara's *typed* aperture model via the parse backend (#3), so
+    shapes and dimensions come from the parser rather than sniffing numeric
+    attributes off an untyped object, and units are converted explicitly (an
+    aperture keeps the file's native unit). That also removes the old
+    "unit_indeterminate" state, which only existed because the previous path
+    multiplied by 25.4 assuming inches.
+    """
+    if not GERBONARA_AVAILABLE:
         return [
             ApertureWarning(
                 file_label="(all)",
@@ -208,19 +62,8 @@ def validate_apertures(
         layer_label = str(info.logical_layer or info.path.name)
         file_label = str(info.path.name)
 
-        unit_ok = True
-        try:
-            layer = gerber.read(str(info.path))
-            try:
-                layer.to_inch()
-            except Exception:
-                # Unit conversion failed: dims are NOT guaranteed to be in
-                # inches. Since _extract_aperture_dim_mm multiplies by 25.4
-                # assuming inches, a mm-native aperture would be inflated ~25x
-                # and produce a bogus "too_large". Flag as indeterminate
-                # instead of running the numeric size comparisons.
-                unit_ok = False
-        except Exception:
+        apertures = gerber_apertures_mm(info.path)
+        if apertures is None:
             suspicious.append(
                 ApertureWarning(
                     file_label=file_label,
@@ -234,97 +77,56 @@ def validate_apertures(
             )
             continue
 
-        apertures = getattr(layer, "apertures", None)
-        if not apertures:
-            continue
-
-        if isinstance(apertures, dict):
-            ap_items = list(apertures.items())
-        else:
-            items_fn = getattr(apertures, "items", None)
-            if callable(items_fn):
-                ap_items = list(items_fn())
-            else:
-                ap_items = [(f"(idx:{i})", ap) for i, ap in enumerate(list(apertures))]
-
-        for code, ap in ap_items:
+        for ap in apertures:
             if len(suspicious) >= max_individual:
                 break
 
-            shape_norm = _normalize_shape(ap)
-            min_dim_mm_val, max_dim_mm_val, dim_detail = _extract_aperture_dim_mm(ap)
-
-            if shape_norm == "macro" and min_dim_mm_val is None:
+            # A macro with no derivable size is reported distinctly: we cannot
+            # size-check it, but its presence is not itself an error.
+            if ap.min_dim_mm is None and ap.shape == "macro":
                 suspicious.append(
                     ApertureWarning(
-                        file_label=file_label,
-                        layer_name=layer_label,
-                        code=str(code),
-                        shape_norm=shape_norm,
-                        dim_mm=None,
-                        reason="macro_no_size",
-                        detail=dim_detail,
+                        file_label=file_label, layer_name=layer_label, code=ap.code,
+                        shape_norm=ap.shape, dim_mm=None,
+                        reason="macro_no_size", detail=ap.detail,
                     )
                 )
                 continue
 
-            if min_dim_mm_val is None or max_dim_mm_val is None:
+            # No positive dimension at all -- e.g. a zero-size aperture, which
+            # is invalid per the Gerber spec and still gets used to draw with.
+            if ap.min_dim_mm is None or ap.max_dim_mm is None:
                 suspicious.append(
                     ApertureWarning(
-                        file_label=file_label,
-                        layer_name=layer_label,
-                        code=str(code),
-                        shape_norm=shape_norm,
-                        dim_mm=None,
+                        file_label=file_label, layer_name=layer_label, code=ap.code,
+                        shape_norm=ap.shape, dim_mm=None,
                         reason="no_usable_dimension",
-                        detail=f"shape={shape_norm}, {dim_detail}",
+                        detail=f"shape={ap.shape}, {ap.detail}",
                     )
                 )
                 continue
 
-            if not unit_ok:
-                # Unit conversion failed; the dimensions cannot be trusted in
-                # mm-space, so we cannot reliably compare against thresholds.
+            # Minimum-feature check uses the SMALLEST real dimension so thin
+            # slivers (e.g. 0.002mm x 4mm) are caught.
+            if ap.min_dim_mm < min_dim_mm:
                 suspicious.append(
                     ApertureWarning(
-                        file_label=file_label,
-                        layer_name=layer_label,
-                        code=str(code),
-                        shape_norm=shape_norm,
-                        dim_mm=None,
-                        reason="unit_indeterminate",
-                        detail=f"unit conversion failed, size indeterminate ({dim_detail})",
-                    )
-                )
-                continue
-
-            # Minimum-feature check uses the SMALLEST real dimension so that
-            # thin slivers (e.g. 0.002mm x 4mm) are caught.
-            if min_dim_mm_val < min_dim_mm:
-                suspicious.append(
-                    ApertureWarning(
-                        file_label=file_label,
-                        layer_name=layer_label,
-                        code=str(code),
-                        shape_norm=shape_norm,
-                        dim_mm=min_dim_mm_val,
+                        file_label=file_label, layer_name=layer_label, code=ap.code,
+                        shape_norm=ap.shape, dim_mm=ap.min_dim_mm,
                         reason="too_small",
-                        detail=f"{min_dim_mm_val:.6f}mm < min {min_dim_mm:.6f}mm ({dim_detail})",
+                        detail=f"{ap.min_dim_mm:.6f}mm < min {min_dim_mm:.6f}mm ({ap.detail})",
                     )
                 )
                 continue
 
             # Oversized check uses the LARGEST dimension.
-            if max_dim_mm_val > max_dim_mm:
+            if ap.max_dim_mm > max_dim_mm:
                 suspicious.append(
                     ApertureWarning(
-                        file_label=file_label,
-                        layer_name=layer_label,
-                        code=str(code),
-                        shape_norm=shape_norm,
-                        dim_mm=max_dim_mm_val,
+                        file_label=file_label, layer_name=layer_label, code=ap.code,
+                        shape_norm=ap.shape, dim_mm=ap.max_dim_mm,
                         reason="too_large",
-                        detail=f"{max_dim_mm_val:.3f}mm > max {max_dim_mm:.3f}mm ({dim_detail})",
+                        detail=f"{ap.max_dim_mm:.3f}mm > max {max_dim_mm:.3f}mm ({ap.detail})",
                     )
                 )
                 continue

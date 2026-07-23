@@ -55,6 +55,12 @@ class ResultSummary(BaseModel):
     status: str = Field(pattern="^(pass|warning|fail)$")
     violations_total: int = 0
     violations_by_severity: SummaryCounts = Field(default_factory=SummaryCounts)
+    # Where the measured geometry came from. "gerber" means the user's own
+    # fabrication package was audited; "kicad-cli-export" means artwork was
+    # plotted here from a design file, which answers "is this design
+    # manufacturable" but cannot surface export-time faults in the package the
+    # user actually sends (#13).
+    geometry_source: str = "gerber"
 
 
 class ViolationLocation(BaseModel):

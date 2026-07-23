@@ -157,7 +157,11 @@ def build_parser() -> argparse.ArgumentParser:
     sub = parser.add_subparsers(dest="command", required=True)
 
     p_run = sub.add_parser("run", help="Run the full DFM ruleset on a Gerber zip")
-    p_run.add_argument("gerber_zip")
+    p_run.add_argument(
+        "gerber_zip",
+        help="Gerber/Excellon zip, or a KiCad .kicad_pcb / project directory "
+             "(plotted via kicad-cli when KiCad is installed)",
+    )
     p_run.add_argument("--ruleset", default="default")
     p_run.add_argument("--design-id", default="board")
     p_run.add_argument("--design-data", default=None,

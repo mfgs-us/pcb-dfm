@@ -39,8 +39,32 @@ def run_dfm_on_gerber_zip(
 
     ``bom`` (optional) is a BOM CSV layered onto ``design_data`` by reference
     designator, enriching component identity for the assembly checks.
+
+    ``gerber_zip`` may also be a KiCad board or project directory. In that case
+    KiCad's own plotter is invoked to produce the artwork (which fills zones, so
+    poured copper is real rather than whatever fill state the file was saved
+    in), and the board file doubles as the design-data source. The result then
+    records ``geometry_source="kicad-cli-export"``: such a run answers "is this
+    design manufacturable", not "is this fabrication package correct", because
+    an export performed here cannot contain the user's export-time mistakes.
     """
     from ..ingest.design_data import load_design_data
+    from ..ingest.kicad_export import (
+        GEOMETRY_SOURCE_GERBER,
+        GEOMETRY_SOURCE_KICAD_CLI,
+        export_gerber_zip,
+        looks_like_kicad_project,
+    )
+
+    geometry_source = GEOMETRY_SOURCE_GERBER
+    if looks_like_kicad_project(gerber_zip):
+        source_project = Path(gerber_zip)
+        gerber_zip = export_gerber_zip(source_project)
+        geometry_source = GEOMETRY_SOURCE_KICAD_CLI
+        # The board file is also the richest design-data source available, so
+        # use it unless the caller supplied something explicitly.
+        if design_data is None:
+            design_data = source_project
 
     # Resolve design data (+ optional BOM merge) once; run_checks treats an
     # already-built DesignData as a pass-through.
@@ -65,6 +89,14 @@ def run_dfm_on_gerber_zip(
     dfm_result.design.stackup_layers = len(copper_layers)
     dfm_result.design.layers = copper_layers
     dfm_result.warnings = warnings
+    dfm_result.summary.geometry_source = geometry_source
+    if geometry_source == GEOMETRY_SOURCE_KICAD_CLI:
+        dfm_result.warnings = list(dfm_result.warnings) + [
+            "Geometry was plotted from the KiCad board by kicad-cli, not read "
+            "from a supplied fabrication package. This assesses the design; it "
+            "cannot detect export-time faults (wrong plot settings, a missing "
+            "layer, scaling) in the package you send to the fab."
+        ]
     return dfm_result
 
 
@@ -92,8 +124,13 @@ def build_geometry_for(gerber_zip: Path):
     """Ingest + build the board geometry for a Gerber zip (for rendering).
 
     Independent of check execution; used by the HTML report so it can draw
-    the board.
+    the board. Accepts a KiCad board/project too, so ``--html`` works for the
+    same inputs the run itself accepts rather than failing on a directory.
     """
+    from ..ingest.kicad_export import export_gerber_zip, looks_like_kicad_project
+
+    if looks_like_kicad_project(gerber_zip):
+        gerber_zip = export_gerber_zip(gerber_zip)
     ingest_result = ingest_gerber_zip(gerber_zip)
     return build_board_geometry(ingest_result)
 

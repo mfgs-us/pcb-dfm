@@ -8,11 +8,24 @@ from typing import List, Optional
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
 from ..geometry import queries
-from ..geometry.primitives import Bounds
+from ..geometry.gerber_backend import outline_contours_mm
+from ..geometry.primitives import Bounds, Point2D, Polygon
 from ..results import CheckResult, MetricResult, Violation, ViolationLocation
+from .impl_min_annular_ring import _point_in_polygon
 from .impl_solder_mask_expansion import _min_distance_between_polygons
 
 MAX_REPORTED_VIOLATIONS = 100
+
+
+def _poly_area(poly: Polygon) -> float:
+    v = poly.vertices
+    s = 0.0
+    n = len(v)
+    for i in range(n):
+        x1, y1 = v[i].x, v[i].y
+        x2, y2 = v[(i + 1) % n].x, v[(i + 1) % n].y
+        s += x1 * y2 - x2 * y1
+    return abs(s) * 0.5
 
 
 def _bbox_gap(a: Bounds, b: Bounds) -> float:
@@ -47,16 +60,43 @@ def run_copper_to_edge_distance(ctx: CheckContext) -> CheckResult:
     recommended_min = float(limits.get("recommended_min", 0.25))
     absolute_min = float(limits.get("absolute_min", 0.15))
 
-    # True outline geometry drives the measurement. Without a real outline the
-    # "board edge" is unknown -- measuring against the copper bounding box just
-    # reports 0 (copper touches its own bbox), a false failure -- so the honest
-    # result is not_applicable.
-    outline_polys = [
-        p for lyr in ctx.geometry.get_layers_by_type("outline")
-        for p in lyr.polygons if len(p.vertices) >= 3
+    # The board edge is derived from CLOSED contours assembled out of the outline
+    # layer's stroked segments (#18), not from the raw outline geometry. An
+    # outline layer routinely also carries dimension lines, registration/plot
+    # marks and text; those are open chains and are dropped, so a stray mark just
+    # outside the board is not mistaken for the edge (which previously matched its
+    # own stray copper twin and reported 0.000 mm). The largest-area contour is
+    # the board boundary; smaller closed contours are internal cutouts and slots,
+    # which are also real edges.
+    ingest = getattr(ctx, "ingest", None)
+    outline_files = [
+        f for f in (getattr(ingest, "files", None) or [])
+        if getattr(f, "layer_type", None) == "outline"
     ]
+    board_contour: Optional[Polygon] = None
+    edge_polys: List[Polygon] = []
+    for f in outline_files:
+        for verts in outline_contours_mm(f.path):
+            if len(verts) < 3:
+                continue
+            poly = Polygon(vertices=[Point2D(x=x, y=y) for (x, y) in verts])
+            edge_polys.append(poly)
+            if board_contour is None:  # contours come largest-area first
+                board_contour = poly
 
-    if board_bounds is None or not copper_layers or not outline_polys:
+    # Fall back to the outline layer's own polygons when nothing chained into a
+    # closed contour (an exotic/broken outline export, or a geometry-only context
+    # with no source files). The largest such polygon is the board boundary, so
+    # off-board copper is still excluded.
+    if not edge_polys:
+        edge_polys = [
+            p for lyr in ctx.geometry.get_layers_by_type("outline")
+            for p in lyr.polygons if len(p.vertices) >= 3
+        ]
+        if edge_polys:
+            board_contour = max(edge_polys, key=lambda p: _poly_area(p))
+
+    if board_bounds is None or not copper_layers or not edge_polys:
         message = "No board outline or copper geometry available to compute copper to edge distance."
         viol = Violation(
             severity="info",
@@ -93,15 +133,25 @@ def run_copper_to_edge_distance(ctx: CheckContext) -> CheckResult:
     for layer in copper_layers:
         for poly in layer.polygons:
             pb = poly.bounds()
+            loc_x, loc_y = 0.5 * (pb.min_x + pb.max_x), 0.5 * (pb.min_y + pb.max_y)
+
+            # Copper outside the board boundary is not board copper -- it is the
+            # same plot/registration artwork that also appears on the outline
+            # layer (#18). Measuring it (against its own outline twin) is what
+            # produced the 0.000 mm false failure, so skip it.
+            if board_contour is not None and not _point_in_polygon(
+                loc_x, loc_y, board_contour.vertices
+            ):
+                continue
+
             d = math.inf
-            for op in outline_polys:
+            for op in edge_polys:
                 gap = _bbox_gap(pb, op.bounds())
                 # exact distance when close; the bbox gap (a lower bound) is
                 # a fine stand-in for far contours that can't be the minimum
                 dd = _min_distance_between_polygons(poly, op) if gap <= cutoff else gap
                 if dd < d:
                     d = dd
-            loc_x, loc_y = 0.5 * (pb.min_x + pb.max_x), 0.5 * (pb.min_y + pb.max_y)
 
             if min_dist is None or d < min_dist:
                 min_dist = d

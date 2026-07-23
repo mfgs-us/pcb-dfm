@@ -222,3 +222,36 @@ def test_silk_clear_of_pads_passes():
     board.silk = [boards.Trace(9.0, 2.0, 11.0, 2.0, 0.2)]   # mid-board, no pads there
     c = _run_board(board)["silkscreen_over_mask_defined_pads"]
     assert c.status == "pass"
+
+
+def test_copper_to_edge_ignores_stray_marks_outside_the_outline():
+    """A registration mark just outside the board is not the board edge (#18).
+
+    The board edge is the largest closed contour assembled from the outline
+    layer's segments. An outline layer routinely also carries dimension lines,
+    registration/plot marks and panel rails; those are open chains, dropped, so
+    a stray mark ~0.2 mm outside the board is not mistaken for the edge and then
+    measured against its own stray-copper twin -- which reported 0.000 mm on a
+    real board.
+    """
+    board = boards.clean_two_layer()   # outline x 0..20, y 0..14; pads inset
+    # A stray outline mark and a stray copper pad, both ~0.3 mm past the right
+    # edge, mirroring the plot mark that appears on outline AND copper layers.
+    board.outline_marks = [boards.Trace(20.3, 4.0, 20.3, 10.0, 0.0)]
+    board.pads = board.pads + [boards.Pad(20.3, 7.0, 0.3, 6.0)]
+
+    c = _run_board(board)["copper_to_edge_distance"]
+    # The stray pad (outside the board) is excluded, so the measurement reflects
+    # the real in-board pads, not a 0.000 mm stray-vs-stray artifact.
+    assert c.status in ("pass", "warning")
+    assert _measured(c) is not None and _measured(c) > 0.05
+
+
+def test_copper_to_edge_still_flags_real_edge_copper():
+    """Control: copper genuinely close to the board edge is still caught."""
+    board = boards.clean_two_layer()
+    # A pad whose edge sits 0.05 mm from the right board edge (x=20).
+    board.pads = board.pads + [boards.Pad(19.75, 7.0, 0.4, 1.0)]  # right edge at 19.95
+    c = _run_board(board)["copper_to_edge_distance"]
+    assert c.status in ("warning", "fail")
+    assert _measured(c) is not None and _measured(c) < 0.15

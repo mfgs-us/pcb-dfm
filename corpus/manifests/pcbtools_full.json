@@ -4,7 +4,7 @@
   "ruleset": "default",
   "description": "Real 2-layer board, complete 8-file export: both copper layers, both solder masks, both silkscreens, a board outline and a plated drill file.",
   "source": "curtacircuitos/pcb-tools gerber/tests/resources (Apache-2.0)",
-  "notes": "Same physical design as pcbtools_example, but a FULLER export -- that entry's set has no outline and only one side's mask/silk. Both are kept deliberately: this one exercises the outline-dependent checks on real artwork, while pcbtools_example exercises the no-outline paths (copper_thermal_area / copper_to_edge_distance returning not_applicable). \n\nAdding it surfaced a stray-artwork problem (#18): an identical 0.01 x 15.6 mm vertical line sits at x~58.09, about 0.17 mm OUTSIDE the board rectangle (which ends at x=57.912), and it is present on top copper, bottom copper AND the outline layer -- a plot/registration mark, not board copper. copper_to_edge_distance measures that stray copper against the outline layer's own copy of it and reports exactly 0.000 mm, so it is deliberately NOT asserted here. The board outline itself is drawn with a zero-width aperture (%ADD10C,0.0000%), which is legal and common.\n\nThe remaining failures are untriaged and not asserted. Several look genuinely real for a design of this vintage (silk over pads, 3 mil silk lines); solder_mask_expansion reading -1.70 mm is the documented mask-polarity assumption, which cannot be resolved without boolean ops (see impl_solder_mask_expansion._normalize_mask_polarity).",
+  "notes": "Same physical design as pcbtools_example, but a FULLER export -- that entry's set has no outline and only one side's mask/silk. Both are kept deliberately: this one exercises the outline-dependent checks on real artwork, while pcbtools_example exercises the no-outline paths (copper_thermal_area / copper_to_edge_distance returning not_applicable). \n\nAdding it surfaced a stray-artwork problem (#18): an identical 0.01 x 15.6 mm vertical line sits at x~58.09, about 0.17 mm OUTSIDE the board rectangle (which ends at x=57.912), and it is present on top copper, bottom copper AND the outline layer -- a plot/registration mark, not board copper. copper_to_edge_distance now derives the board edge from the largest CLOSED outline contour and ignores that open stray mark and the copper outside the board, so it reports a real 0.262 mm and is guarded (#18 fixed). The board outline itself is drawn with a zero-width aperture (%ADD10C,0.0000%), which is legal and common.\n\nThe remaining failures are untriaged and not asserted. Several look genuinely real for a design of this vintage (silk over pads, 3 mil silk lines); solder_mask_expansion reading -1.70 mm is the documented mask-polarity assumption, which cannot be resolved without boolean ops (see impl_solder_mask_expansion._normalize_mask_polarity).",
   "expect": {
     "min_checks_run": 40,
     "no_crashes": true,
@@ -20,6 +20,7 @@
       "acid_trap_angle",
       "copper_sliver_width",
       "copper_thermal_area",
+      "copper_to_edge_distance",
       "drill_aspect_ratio",
       "drill_to_drill_spacing",
       "etch_compensation_margin",

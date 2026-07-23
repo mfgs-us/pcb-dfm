@@ -417,6 +417,105 @@ def gerber_edges_mm(path: Path):
     return edges
 
 
+def _outline_line_segments_mm(
+    path: Path,
+) -> List[Tuple[Tuple[float, float], Tuple[float, float]]]:
+    """Outline geometry as fine ``(start, end)`` line segments, arcs tessellated.
+
+    Chaining needs plain line segments; an arc edge is expanded into short
+    chords about its true centre so a curved board edge keeps its shape.
+    """
+    segs: List[Tuple[Tuple[float, float], Tuple[float, float]]] = []
+    for start, end, kind, radius, direction in gerber_edges_mm(path):
+        if kind != "arc" or radius is None or radius <= 0.0 or direction is None:
+            segs.append((start, end))
+            continue
+        # Recover the arc centre from the two endpoints, radius and direction.
+        mx, my = 0.5 * (start[0] + end[0]), 0.5 * (start[1] + end[1])
+        dx, dy = end[0] - start[0], end[1] - start[1]
+        chord = math.hypot(dx, dy)
+        if chord <= 0.0 or chord > 2.0 * radius:
+            segs.append((start, end))  # degenerate: fall back to the chord
+            continue
+        h = math.sqrt(max(0.0, radius * radius - 0.25 * chord * chord))
+        ux, uy = -dy / chord, dx / chord  # unit normal to the chord
+        # Two candidate centres; the direction (in the Gerber y-up frame) picks one.
+        clockwise = direction == "clockwise"
+        sign = -1.0 if clockwise else 1.0
+        cx, cy = mx + sign * h * ux, my + sign * h * uy
+        pts = [start] + _tessellate_arc(start, end, (cx, cy), clockwise)
+        for i in range(len(pts) - 1):
+            segs.append((pts[i], pts[i + 1]))
+    return segs
+
+
+def _poly_area_2d(pts: List[Tuple[float, float]]) -> float:
+    s = 0.0
+    n = len(pts)
+    for i in range(n):
+        x1, y1 = pts[i]
+        x2, y2 = pts[(i + 1) % n]
+        s += x1 * y2 - x2 * y1
+    return abs(s) * 0.5
+
+
+def outline_contours_mm(path: Path, tol: float = 1e-3) -> List[List[Tuple[float, float]]]:
+    """Closed contours of the board outline in mm, largest area first.
+
+    The outline layer is stroked (often with a zero-width aperture), so it
+    arrives as a bag of individual segments rather than closed shapes. We chain
+    them end-to-end into loops and keep only the CLOSED ones.
+
+    Open chains -- dimension lines, registration/plot marks, unclosed text --
+    are dropped, so a stray mark that sits just outside the board is not mistaken
+    for the board edge. That false "edge" was measured against its own stray
+    copper twin and reported 0.000 mm clearance (#18). The board boundary is the
+    largest-area closed contour; smaller closed contours are internal cutouts
+    and slots, which are also real edges.
+    """
+    segs = _outline_line_segments_mm(path)
+    if not segs:
+        return []
+
+    def key(p: Tuple[float, float]) -> Tuple[int, int]:
+        return (round(p[0] / tol), round(p[1] / tol))
+
+    adj: dict = {}
+    for idx, (a, b) in enumerate(segs):
+        adj.setdefault(key(a), []).append((idx, a, b))
+        adj.setdefault(key(b), []).append((idx, b, a))
+
+    used: set = set()
+    contours: List[List[Tuple[float, float]]] = []
+    for idx0, (a0, b0) in enumerate(segs):
+        if idx0 in used:
+            continue
+        used.add(idx0)
+        chain = [a0]
+        cur = b0
+        start_key = key(a0)
+        closed = False
+        for _ in range(len(segs) + 1):
+            chain.append(cur)
+            if key(cur) == start_key and len(chain) > 2:
+                closed = True
+                break
+            nxt = None
+            for (i2, _p, q) in adj.get(key(cur), []):
+                if i2 not in used:
+                    nxt = (i2, q)
+                    break
+            if nxt is None:
+                break
+            used.add(nxt[0])
+            cur = nxt[1]
+        if closed and len(chain) >= 4:
+            contours.append(chain[:-1])  # drop the repeated closing point
+
+    contours.sort(key=_poly_area_2d, reverse=True)
+    return contours
+
+
 # --------------------------------------------------------------------------- #
 # Excellon (drills / slots)
 # --------------------------------------------------------------------------- #

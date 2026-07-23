@@ -63,6 +63,10 @@ class Board:
     # a healthy opening; a negative value makes the opening smaller than the pad
     # (a deliberate mask-on-pad defect).
     mask_expansion_mm: float = 0.05
+    # Extra strokes drawn on the OUTLINE layer that are not part of the board
+    # perimeter -- dimension lines, registration/plot marks, panel rails. Used to
+    # exercise stray-artwork handling (#18).
+    outline_marks: Optional[List[Trace]] = None
 
 
 def _coord(v: float) -> str:
@@ -110,6 +114,10 @@ def _emit_outline(board: Board, tf: Transform) -> str:
     for (x, y) in pts[1:]:
         lines.append(f"X{_coord(x)}Y{_coord(y)}D01*")
     lines.append(f"X{_coord(x0)}Y{_coord(y0)}D01*")
+    for mk in (board.outline_marks or []):
+        (sx, sy), (ex, ey) = tf(mk.x0, mk.y0), tf(mk.x1, mk.y1)
+        lines.append(f"X{_coord(sx)}Y{_coord(sy)}D02*")
+        lines.append(f"X{_coord(ex)}Y{_coord(ey)}D01*")
     lines.append("M02*")
     return "\n".join(lines) + "\n"
 

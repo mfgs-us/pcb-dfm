@@ -59,7 +59,7 @@
     {
       "confidence": "high",
       "id": "copper_to_edge_distance",
-      "measured": 1.8,
+      "measured": 1.85,
       "severity": "info",
       "status": "pass",
       "violations": 0

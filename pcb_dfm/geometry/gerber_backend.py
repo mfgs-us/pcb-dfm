@@ -322,7 +322,10 @@ def gerber_edges_mm(path: Path):
     """
     if not GERBONARA_AVAILABLE:
         return []
-    edges = []
+    # (start, end, kind, radius, direction) -- radius/direction are None for lines
+    edges: List[
+        Tuple[Tuple[float, float], Tuple[float, float], str, Optional[float], Optional[str]]
+    ] = []
     with warnings.catch_warnings():
         warnings.simplefilter("ignore", SyntaxWarning)
         try:

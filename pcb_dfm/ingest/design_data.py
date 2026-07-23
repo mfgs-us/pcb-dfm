@@ -26,10 +26,12 @@ from .adapters import (
     from_ipc356,
     from_ipc2581,
     from_kicad,
+    from_odbpp,
     from_sidecar,
     looks_like_ipc356,
     looks_like_ipc2581,
     looks_like_kicad,
+    looks_like_odbpp,
 )
 from .design_model import DesignData
 
@@ -99,6 +101,11 @@ def _load_one(source: DesignDataLike) -> Optional[DesignData]:
     if not path.exists():
         raise ValueError(f"design-data file not found: {path}")
 
+    # ODB++ before KiCad: a job is a directory, and so is a KiCad project, so
+    # the structural check has to come first.
+    if looks_like_odbpp(path):
+        return from_odbpp(path)
+
     if looks_like_kicad(path):
         return from_kicad(path)
 
@@ -119,5 +126,5 @@ def _load_one(source: DesignDataLike) -> Optional[DesignData]:
     raise ValueError(
         f"unrecognized design-data source: {path} "
         f"(expected a KiCad project/.kicad_pcb, a .json sidecar, an IPC-2581 .xml, "
-        f"or an IPC-D-356 netlist)"
+        f"an IPC-D-356 netlist, or an ODB++ job)"
     )

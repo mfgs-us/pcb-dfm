@@ -1,0 +1,10 @@
+#
+#Layer names
+#
+LYR top gnd bot
+#
+#Net names
+#
+$0 GND
+$1 VCC
+$2 SIG_A

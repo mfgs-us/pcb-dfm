@@ -287,6 +287,37 @@ def gerber_apertures_mm(path: Path) -> Optional[List[ApertureInfo]]:
     return out
 
 
+def gerber_aperture_use_bbox_mm(path: Path, code: str):
+    """Bounding box (min_x, min_y, max_x, max_y) in mm of the first object drawn
+    with aperture ``code`` (e.g. ``"D10"``), or None.
+
+    Lets a finding about an aperture *definition* be pinned to somewhere that
+    aperture is actually used, so violation markers still land on the board.
+    """
+    if not GERBONARA_AVAILABLE:
+        return None
+    try:
+        num = int(str(code).lstrip("Dd"))
+    except (TypeError, ValueError):
+        return None
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", SyntaxWarning)
+        try:
+            gf = GerberFile.open(str(path))
+        except Exception:
+            return None
+        for obj in gf.objects:
+            ap = getattr(obj, "aperture", None)
+            if ap is None or getattr(ap, "original_number", None) != num:
+                continue
+            try:
+                (x0, y0), (x1, y1) = obj.bounding_box(MM)
+                return (float(x0), float(y0), float(x1), float(y1))
+            except Exception:
+                return None
+    return None
+
+
 def gerber_flash_polygons_mm(path: Path) -> List[Polygon]:
     """Filled outlines of *flashed* features only (pads), in mm.
 

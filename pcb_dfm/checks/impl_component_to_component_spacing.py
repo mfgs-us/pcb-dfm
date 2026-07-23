@@ -99,6 +99,55 @@ def _is_via_like(poly, via_like_max_diameter_mm: float, via_like_max_area_mm2: f
     return area <= via_like_max_area_mm2
 
 
+def _components_from_design_data(ctx: CheckContext, side_key: str):
+    """Absolute pad positions grouped by component ref, for one board side.
+
+    Returns None when the board carries no usable placement data, so the caller
+    falls back to the geometric clustering heuristic.
+    """
+    dd = getattr(ctx, "design_data", None)
+    comps = getattr(dd, "components", None) if dd is not None else None
+    if not comps:
+        return None
+
+    out: List[Tuple[str, float, float]] = []
+    for c in comps:
+        if not getattr(c, "placed", True) or not getattr(c, "pads", None):
+            continue
+        c_side = (getattr(c, "side", None) or "").lower()
+        # A component with no recorded side is assumed to be on top, matching
+        # the rest of this check's top-side-only scope.
+        if c_side and c_side != side_key:
+            continue
+        for pad in c.pads:
+            out.append((c.ref, pad.x_mm, pad.y_mm))
+
+    return out or None
+
+
+def _label_by_component(pad_polys, design_pads, max_match_mm: float):
+    """Map each copper/mask feature to a component ref via its nearest design pad.
+
+    Geometry has to come from the artwork -- design-data pads are points and
+    carry no size -- but *identity* comes from the placement file, which is the
+    only source that actually knows which pads belong to the same part. Features
+    with no design pad within ``max_match_mm`` (vias, fiducials, test points)
+    return None and are dropped by the caller: they are not component pads, so
+    they cannot participate in component-to-component spacing.
+    """
+    labels: List[Optional[str]] = []
+    for _poly, cx, cy in pad_polys:
+        best_ref: Optional[str] = None
+        best_d = max_match_mm
+        for ref, px, py in design_pads:
+            d = math.hypot(px - cx, py - cy)
+            if d <= best_d:
+                best_d = d
+                best_ref = ref
+        labels.append(best_ref)
+    return labels
+
+
 def _is_pad_plausible(poly, min_area_mm2: float, max_area_mm2: float, max_aspect: float) -> bool:
     """Could this polygon be a single component pad?
 
@@ -338,45 +387,63 @@ def run_component_to_component_spacing(ctx: CheckContext) -> CheckResult:
         centers.append((cx, cy))
         grid_c[_cell_key(cx, cy, cell_c)].append(idx)
 
-    visited = [False] * n
+    # Prefer real component identity over geometric clustering when the board
+    # supplies placement data (#14). Clustering pads by proximity cannot tell a
+    # 2.54 mm-pitch connector from two adjacent parts -- any radius that keeps
+    # one connector together merges genuinely separate components, and any
+    # radius that separates them splits the connector against itself. The
+    # placement file simply knows.
     clusters: List[List[int]] = []
+    design_pads = _components_from_design_data(ctx, "top")
+    if design_pads:
+        labels = _label_by_component(pad_polys, design_pads, cluster_radius_mm * 2.0)
+        by_ref: Dict[str, List[int]] = defaultdict(list)
+        for idx, ref in enumerate(labels):
+            if ref is not None:
+                by_ref[ref].append(idx)
+        if len(by_ref) >= 2:
+            clusters = list(by_ref.values())
+            used_source = f"{used_source}+placement"
 
-    for i in range(n):
-        if visited[i]:
-            continue
-        stack = [i]
-        visited[i] = True
-        cluster: List[int] = []
+    if not clusters:
+        visited = [False] * n
 
-        while stack:
-            k = stack.pop()
-            cluster.append(k)
-            ckx, cky = centers[k]
-            ci, cj = _cell_key(ckx, cky, cell_c)
+        for i in range(n):
+            if visited[i]:
+                continue
+            stack = [i]
+            visited[i] = True
+            cluster: List[int] = []
 
-            # Only check points in nearby cells
-            for di in (-1, 0, 1):
-                for dj in (-1, 0, 1):
-                    for j in grid_c.get((ci + di, cj + dj), []):
-                        if visited[j]:
-                            continue
-                        cjx, cjy = centers[j]
-                        near = math.hypot(cjx - ckx, cjy - cky) <= cluster_radius_mm
-                        # Two pads whose shapes physically overlap cannot belong
-                        # to different components -- that is one footprint, not a
-                        # collision. Without this, a coarse cluster_radius_mm
-                        # splits a single connector (2.54 mm pitch vs a 1.5 mm
-                        # radius) into "components" whose own pads overlap, and
-                        # the check reports 0.00 mm spacing against itself (#14).
-                        if not near:
-                            *_, gap = _bbox_closest_points(
-                                pad_polys[k][0].bounds(), pad_polys[j][0].bounds())
-                            near = gap <= 0.0
-                        if near:
-                            visited[j] = True
-                            stack.append(j)
+            while stack:
+                k = stack.pop()
+                cluster.append(k)
+                ckx, cky = centers[k]
+                ci, cj = _cell_key(ckx, cky, cell_c)
 
-        clusters.append(cluster)
+                # Only check points in nearby cells
+                for di in (-1, 0, 1):
+                    for dj in (-1, 0, 1):
+                        for j in grid_c.get((ci + di, cj + dj), []):
+                            if visited[j]:
+                                continue
+                            cjx, cjy = centers[j]
+                            near = math.hypot(cjx - ckx, cjy - cky) <= cluster_radius_mm
+                            # Two pads whose shapes physically overlap cannot belong
+                            # to different components -- that is one footprint, not a
+                            # collision. Without this, a coarse cluster_radius_mm
+                            # splits a single connector (2.54 mm pitch vs a 1.5 mm
+                            # radius) into "components" whose own pads overlap, and
+                            # the check reports 0.00 mm spacing against itself (#14).
+                            if not near:
+                                *_, gap = _bbox_closest_points(
+                                    pad_polys[k][0].bounds(), pad_polys[j][0].bounds())
+                                near = gap <= 0.0
+                            if near:
+                                visited[j] = True
+                                stack.append(j)
+
+            clusters.append(cluster)
 
     if len(clusters) < 2:
         viol = Violation(

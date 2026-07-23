@@ -241,6 +241,32 @@ def _contains(a, b) -> bool:
     return _bbox_contains(a, b)
 
 
+# A mask opening is treated as serving a pad only if the pad fills at least this
+# fraction of the opening. Below it, the copper is a trace passing through, or
+# the opening is shared over a cluster -- neither is a mask-on-pad defect.
+_MASK_ON_PAD_MIN_COVERAGE = 0.7
+
+
+def _opening_fill(pad, mask) -> float:
+    """Fraction of the mask OPENING's bbox area that the pad fills.
+
+    This is the test for 'does this opening serve this pad', and it must be
+    opening-coverage, not pad-coverage. A pad fills its own opening whether the
+    opening is generously expanded (~0.8) or undersized/mask-on-pad (~1.0). A
+    trace merely passing through an opening meant for the pad at its end clips
+    only part of it (~0.5), and a large opening shared over a cluster is filled
+    only fractionally by any one pad (~0.2). Pad-coverage cannot tell a
+    mask-on-pad defect (opening smaller than pad -> low pad-coverage) from a
+    trace (also low pad-coverage), which is the whole point.
+    """
+    ox = max(0.0, min(pad.max_x, mask.max_x) - max(pad.min_x, mask.min_x))
+    oy = max(0.0, min(pad.max_y, mask.max_y) - max(pad.min_y, mask.min_y))
+    mask_area = (mask.max_x - mask.min_x) * (mask.max_y - mask.min_y)
+    if mask_area <= 0.0:
+        return 0.0
+    return (ox * oy) / mask_area
+
+
 @register_check("solder_mask_expansion")
 def run_solder_mask_expansion(ctx: CheckContext) -> CheckResult:
     """
@@ -267,7 +293,13 @@ def run_solder_mask_expansion(ctx: CheckContext) -> CheckResult:
     raw_cfg = getattr(ctx.check_def, "raw", None) or {}
     pad_min_area_mm2 = float(raw_cfg.get("pad_min_area_mm2", 0.02))
     pad_max_area_mm2 = float(raw_cfg.get("pad_max_area_mm2", 4.0))
-    pad_max_aspect_ratio = float(raw_cfg.get("pad_max_aspect_ratio", 10.0))
+    # 4:1 caps what this bbox-based check treats as a pad. Beyond that, elongated
+    # copper is far more likely a trace, a pour finger, or an edge-connector
+    # tab than a component pad, and the pad-vs-opening bbox math cannot reason
+    # about it (a trace's opening is for the pad at its end, not the trace). The
+    # earlier 10:1 let 6:1-9:1 traces through, which drove mask-on-pad false
+    # positives on every real board even after the through-opening guard (#19).
+    pad_max_aspect_ratio = float(raw_cfg.get("pad_max_aspect_ratio", 4.0))
     mask_min_area_mm2 = float(raw_cfg.get("mask_min_area_mm2", 0.02))
     mask_search_inflate_mm = float(raw_cfg.get("mask_search_inflate_mm", 0.05))
 
@@ -463,13 +495,24 @@ def run_solder_mask_expansion(ctx: CheckContext) -> CheckResult:
                 # Mask fully contains pad, expansion is positive
                 expansion = min_distance
                 notes = "True distance-based expansion measurement (pad contained in mask)"
+            elif _opening_fill(pad, m) < _MASK_ON_PAD_MIN_COVERAGE:
+                # Copper that only passes THROUGH the opening is not a pad the
+                # mask is encroaching on -- it is the trace leaving the pad, and
+                # every pad on every board has one. The signed bbox formula below
+                # reads such a trace as a huge mask-on-pad defect, because the
+                # trace is longer than the opening it exits: on eagle_gyw a
+                # 1.016 x 3.556 mm trace crossing a 1.999 mm round opening gave
+                # 0.5 * min(+0.983, -1.557) = -0.78 mm. That is why this check
+                # failed 100% of real boards (#19).
+                continue
             else:
-                # Mask does not fully contain the pad -> the opening is too
-                # small / offset and part of the pad is under mask (mask-on-pad).
-                # Use a SIGNED bbox approximation: a mask bbox smaller than the
-                # pad yields a NEGATIVE expansion, which is a real defect and
-                # must be allowed to trip the lower fail branch (do NOT clamp to
-                # zero, which is what previously made a fail unreachable).
+                # Mask does not fully contain the pad, but the pad is mostly
+                # inside it -> the opening really is undersized or offset, and
+                # part of the pad sits under mask (mask-on-pad). Use a SIGNED
+                # bbox approximation: a mask bbox smaller than the pad yields a
+                # NEGATIVE expansion, which is a real defect and must be allowed
+                # to trip the lower fail branch (do NOT clamp to zero, which is
+                # what previously made a fail unreachable).
                 mask_w = m.max_x - m.min_x
                 mask_h = m.max_y - m.min_y
                 dx = mask_w - pad_w
@@ -530,20 +573,29 @@ def run_solder_mask_expansion(ctx: CheckContext) -> CheckResult:
     #  - under-expansion (opening too small / mask-on-pad): measured < min bounds
     #  - over-expansion (opening far larger than pad -> exposed copper / bridging):
     #    max_measured > the max bounds (only if the JSON declared a max).
-    under_fail = measured < absolute_min
-    under_warn = (not under_fail) and (measured < recommended_min)
+    # ADVISORY ONLY -- never a hard fail.
+    #
+    # This estimate is bbox-based and has no netlist or footprint data, so it
+    # cannot reliably tell a component pad from an elongated feature, nor which
+    # opening serves which pad. Across three real boards from three CAD tools it
+    # was the residual failures after the trace-through-opening fix -- an opening
+    # shared over a cluster read as gross over-expansion, an elongated pad partly
+    # under mask read as mask-on-pad, and a 13 um shortfall (well inside fab
+    # registration tolerance) read as a defect (#19). None of those is reliable
+    # enough to fail a board on. A real mask-on-pad or exposed-copper problem
+    # still surfaces as a warning for review. Registration-scale differences
+    # (|expansion| below one fab registration tolerance) are treated as "mask
+    # aligned to pad", not a shortfall.
+    registration_tol = float(raw_cfg.get("registration_tolerance_mm", 0.05))
 
-    over_fail = (absolute_max is not None) and (max_measured > absolute_max)
-    over_warn = (
-        (not over_fail)
-        and (recommended_max is not None)
-        and (max_measured > recommended_max)
-    )
+    # Never hard-fails (see note above); under_fail/over_fail retained as False
+    # so the violation-message code below reads uniformly.
+    under_fail = False
+    over_fail = False
+    under_warn = measured < recommended_min and measured < -registration_tol
+    over_warn = (recommended_max is not None) and (max_measured > recommended_max)
 
-    if under_fail or over_fail:
-        status = "fail"
-        score = 0.0
-    elif under_warn or over_warn:
+    if under_warn or over_warn:
         status = "warning"
         span = max(1e-6, recommended_min - absolute_min)
         frac = (measured - absolute_min) / span

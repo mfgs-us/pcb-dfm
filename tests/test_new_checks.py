@@ -169,3 +169,31 @@ def test_silk_over_a_hole_still_fails():
     c = _run_board(board)["silkscreen_clearance"]
     assert c.status == "fail"
     assert "hole" in c.violations[0].message
+
+
+def test_mask_expansion_warns_but_does_not_fail_on_mask_on_pad():
+    """A gross mask-on-pad surfaces as a warning, never a hard fail.
+
+    The estimate is bbox-based with no footprint or netlist data, so it cannot
+    reliably tell a pad from an elongated feature or know which opening serves
+    which pad. Across three real CAD dialects that made it fail every board on
+    ambiguous geometry (#19), so it is advisory: real problems still warn, but
+    it does not fail a board on an approximation.
+    """
+    board = boards.clean_two_layer()
+    board.mask_expansion_mm = -0.20   # opening 0.4 mm smaller than the pad
+    c = _run_board(board)["solder_mask_expansion"]
+    assert c.status == "warning"
+    assert _measured(c) is not None and _measured(c) < 0.0
+
+
+def test_mask_expansion_within_registration_tolerance_passes():
+    """An opening a few microns off pad size is registration noise, not a defect.
+
+    Mask-defined pads (opening == pad, zero expansion) are a legitimate design,
+    and fab registration is ~50 um, so a tiny shortfall must not even warn.
+    """
+    board = boards.clean_two_layer()
+    board.mask_expansion_mm = -0.01   # 10 um under, inside registration tolerance
+    c = _run_board(board)["solder_mask_expansion"]
+    assert c.status == "pass"

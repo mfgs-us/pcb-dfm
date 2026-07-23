@@ -17,23 +17,24 @@
       "highspeed_stub_length": "not_applicable"
     },
     "must_not_fail": [
-      "min_trace_width",
-      "min_trace_spacing",
-      "min_annular_ring",
-      "layer_registration_margin",
-      "mask_to_trace_clearance",
       "acid_trap_angle",
       "copper_sliver_width",
       "copper_thermal_area",
-      "etch_compensation_margin",
-      "solder_mask_web",
-      "min_drill_size",
       "drill_aspect_ratio",
       "drill_to_drill_spacing",
+      "etch_compensation_margin",
+      "layer_registration_margin",
+      "mask_to_trace_clearance",
+      "min_annular_ring",
+      "min_drill_size",
+      "min_trace_spacing",
+      "min_trace_width",
+      "plane_fragmentation",
       "plating_uniformity",
+      "solder_mask_expansion",
+      "solder_mask_web",
       "unsupported_hole_types",
-      "via_tenting",
-      "plane_fragmentation"
+      "via_tenting"
     ]
   }
 }

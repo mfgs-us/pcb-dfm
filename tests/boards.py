@@ -59,6 +59,10 @@ class Board:
     # everything (the "clean" default); pass explicit strokes to build a board
     # with deliberate silk defects.
     silk: Optional[List[Trace]] = None
+    # Per-side mask expansion (mm) added around every pad. The default 0.05 mm is
+    # a healthy opening; a negative value makes the opening smaller than the pad
+    # (a deliberate mask-on-pad defect).
+    mask_expansion_mm: float = 0.05
 
 
 def _coord(v: float) -> str:
@@ -215,7 +219,7 @@ def emit_zip(
     files = {
         "board-F_Cu.gbr": copper,
         "board-B_Cu.gbr": copper,
-        "board-F_Mask.gbr": _emit_mask(board, transform, wscale),
+        "board-F_Mask.gbr": _emit_mask(board, transform, wscale, board.mask_expansion_mm),
         "board-F_Silkscreen.gbr": _emit_silk(board, transform, wscale),
     }
     if board.outline:

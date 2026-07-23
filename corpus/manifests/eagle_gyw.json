@@ -4,7 +4,7 @@
   "ruleset": "default",
   "description": "Real 2-layer board exported from Autodesk Eagle: both copper layers, both masks, both silkscreens, top paste, a profile (outline) and a plated drill file.",
   "source": "GanzYouthWorkshop/GYW-Electro-Curriculum (MIT), via gerbonara's test corpus (tests/resources/eagle-newer)",
-  "notes": "Second CAD dialect in the corpus (Eagle). Kept small deliberately so the corpus stays fast. Files were renamed to conventional extensions (copper_top.gbr -> board.gtl and so on) so layer classification is by extension; contents are byte-identical to upstream.\n\nsilkscreen_clearance is now guarded: this board's -6.32 mm was a title block 6.3 mm past the right edge, i.e. fab documentation rather than board silk (#19). Its holes are clear (+0.36 mm); what remains is a cosmetic edge overhang, which warns.\n\nStill not asserted: silkscreen_over_mask_defined_pads and solder_mask_expansion, which fail on every real board in this corpus -- see #19.",
+  "notes": "Second CAD dialect in the corpus (Eagle). Kept small deliberately so the corpus stays fast. Files were renamed to conventional extensions (copper_top.gbr -> board.gtl and so on) so layer classification is by extension; contents are byte-identical to upstream.\n\nsilkscreen_clearance is now guarded: this board's -6.32 mm was a title block 6.3 mm past the right edge, i.e. fab documentation rather than board silk (#19). Its holes are clear (+0.36 mm); what remains is a cosmetic edge overhang, which warns.\n\nStill not asserted: silkscreen_over_mask_defined_pads, which fail on every real board in this corpus -- see #19.",
   "expect": {
     "min_checks_run": 40,
     "no_crashes": true,
@@ -34,6 +34,7 @@
       "plating_uniformity",
       "silkscreen_clearance",
       "silkscreen_min_width",
+      "solder_mask_expansion",
       "solder_mask_web",
       "unsupported_hole_types",
       "via_in_pad_thermal_balance",

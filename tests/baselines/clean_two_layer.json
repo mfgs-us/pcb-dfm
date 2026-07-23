@@ -195,10 +195,10 @@
     {
       "confidence": "heuristic",
       "id": "min_trace_spacing",
-      "measured": 3.7,
+      "measured": 2.0,
       "severity": "info",
       "status": "pass",
-      "violations": 0
+      "violations": 1
     },
     {
       "confidence": "high",

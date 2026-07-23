@@ -6,6 +6,8 @@ from typing import List, Optional, Tuple
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
 from ..geometry.gerber_backend import GERBONARA_AVAILABLE, gerber_traces_mm
+from ..geometry.polygon_index import PolygonIndex
+from ..geometry.primitives import Bounds
 from ..ingest import GerberFileInfo
 from ..results import CheckResult, MetricResult, Violation, ViolationLocation
 from .impl_min_trace_width import _MIN_MEANINGFUL_TRACE_MM
@@ -48,11 +50,22 @@ def _conductor_groups(segs: List["Segment"]) -> _DisjointSet:
     the connectivity test needs no tolerance at all: overlap means <= 0.
     """
     ds = _DisjointSet(len(segs))
+    # Index segment bounding boxes (endpoints inflated by half-width) so each
+    # segment is only tested against those whose bbox it overlaps. The raw pair
+    # loop is O(n^2) and a real layer runs to a couple of thousand segments
+    # (~4M pairs), which dominated this check's runtime; two segments can only
+    # touch if their bboxes do, so the index is exact here, not just a heuristic.
+    def _seg_bounds(sg: "Segment") -> Bounds:
+        hw = 0.5 * sg.width_mm
+        return Bounds(min(sg.x1_mm, sg.x2_mm) - hw, min(sg.y1_mm, sg.y2_mm) - hw,
+                      max(sg.x1_mm, sg.x2_mm) + hw, max(sg.y1_mm, sg.y2_mm) + hw)
+
+    index = PolygonIndex.from_bounds([(i, _seg_bounds(sg)) for i, sg in enumerate(segs)])
     for i, s1 in enumerate(segs):
-        for j in range(i + 1, len(segs)):
-            s2 = segs[j]
-            if not _might_be_closer_than(s1, s2, 0.0):
+        for j in index.query_bbox(_seg_bounds(s1)):
+            if j <= i:
                 continue
+            s2 = segs[j]
             dist_mm, _mx, _my = _segment_segment_distance_mm(s1, s2)
             if dist_mm is None:
                 continue
@@ -136,6 +149,12 @@ def run_min_trace_spacing(ctx: CheckContext) -> CheckResult:
 
     min_spacing_mm: Optional[float] = None
     worst_location: Optional[ViolationLocation] = None
+    # True once a layer has >=2 distinct conductors. Distinguishes "nothing to
+    # space" (one net, genuinely N/A) from "separate copper exists but is all
+    # comfortably farther apart than the search radius" (a pass), so the spatial
+    # prune does not turn a wide, clean board into not_applicable.
+    had_separate_conductors = False
+    search_r_used = max(2.0, recommended_min * 20.0)
 
     # (spacing_mm, layer_name, mx_mm, my_mm)
     offenders: List[tuple[float, str, float, float]] = []
@@ -148,10 +167,32 @@ def run_min_trace_spacing(ctx: CheckContext) -> CheckResult:
         # Physically connected copper is one conductor; only measure gaps
         # BETWEEN conductors (#14).
         groups = _conductor_groups(segs)
+        if len({groups.find(i) for i in range(n)}) >= 2:
+            had_separate_conductors = True
+
+        # Index segments and only measure pairs whose bboxes are within the
+        # search radius. The raw O(n^2) pair loop dominated this check's runtime
+        # on real boards (~2000 segments/layer). The radius is sized from the
+        # thresholds so any near-limit spacing is still found exactly; a board
+        # whose nearest different-conductor copper is farther than the radius
+        # passes with margin, and precision there does not matter.
+        search_r = max(2.0, recommended_min * 20.0)
+
+        def _seg_bounds_m(sg: Segment) -> Bounds:
+            hw = 0.5 * sg.width_mm
+            return Bounds(min(sg.x1_mm, sg.x2_mm) - hw, min(sg.y1_mm, sg.y2_mm) - hw,
+                          max(sg.x1_mm, sg.x2_mm) + hw, max(sg.y1_mm, sg.y2_mm) + hw)
+
+        seg_index = PolygonIndex.from_bounds([(i, _seg_bounds_m(sg)) for i, sg in enumerate(segs)])
 
         for i in range(n):
             s1 = segs[i]
-            for j in range(i + 1, n):
+            b1 = _seg_bounds_m(s1)
+            query = Bounds(b1.min_x - search_r, b1.min_y - search_r,
+                           b1.max_x + search_r, b1.max_y + search_r)
+            for j in seg_index.query_bbox(query):
+                if j <= i:
+                    continue
                 s2 = segs[j]
 
                 if groups.find(i) == groups.find(j):
@@ -188,6 +229,31 @@ def run_min_trace_spacing(ctx: CheckContext) -> CheckResult:
                     offenders.append((spacing_mm, layer_name, mx_mm, my_mm))
 
     if min_spacing_mm is None:
+        if had_separate_conductors:
+            # Separate conductors exist but none is within the search radius, so
+            # spacing exceeds it comfortably: a pass. Report the radius as a
+            # lower bound rather than a fabricated exact value.
+            return CheckResult(
+                check_id=ctx.check_def.id,
+                name=ctx.check_def.name,
+                category_id=ctx.check_def.category_id,
+                status="pass",
+                severity="info",
+                score=100.0,
+                metric=MetricResult.geometry_mm(
+                    measured_mm=float(search_r_used),
+                    target_mm=recommended_min,
+                    limit_low_mm=absolute_min,
+                ),
+                violations=[Violation(
+                    severity="info",
+                    message=(
+                        f"Minimum trace spacing exceeds {search_r_used:.1f} mm "
+                        f"(comfortably above the {recommended_min:.3f} mm minimum)."
+                    ),
+                    location=None,
+                )],
+            ).finalize()
         viol = Violation(
             severity="info",
             message="Not enough trace segments to compute minimum trace spacing.",

@@ -34,6 +34,7 @@
       "plane_fragmentation",
       "plating_uniformity",
       "silkscreen_min_width",
+      "silkscreen_over_mask_defined_pads",
       "solder_mask_expansion",
       "solder_mask_web",
       "unsupported_hole_types"

@@ -4,6 +4,8 @@ from typing import List, Optional
 
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
+from ..geometry.polygon_index import PolygonIndex
+from ..geometry.primitives import Bounds
 from ..results import CheckResult, MetricResult, Violation, ViolationLocation
 
 
@@ -54,6 +56,10 @@ def _bboxes_overlap(b1, b2) -> bool:
     if b1.max_y < b2.min_y or b2.max_y < b1.min_y:
         return False
     return True
+
+
+def _BBox_area(b) -> float:
+    return max(0.0, (b.max_x - b.min_x)) * max(0.0, (b.max_y - b.min_y))
 
 
 def _bbox_overlap_area(b1, b2) -> float:
@@ -187,12 +193,21 @@ def run_silkscreen_over_mask_defined_pads(ctx: CheckContext) -> CheckResult:
 
     have_mask = bool(mask_openings)
 
+    # Spatially index mask openings so pad exposure is a local query, not a scan
+    # of every opening per pad (both sets run to thousands on real boards).
+    mask_index = PolygonIndex.from_bounds(
+        [(i, Bounds(m.bbox.min_x, m.bbox.min_y, m.bbox.max_x, m.bbox.max_y))
+         for i, m in enumerate(mask_openings)]
+    ) if mask_openings else None
+
     def _pad_is_exposed(pad: _Feature) -> bool:
         """A pad is treated as exposed if a same-side mask opening overlaps it.
         Without a mask layer, treat all pads as exposed (documented fallback)."""
-        if not have_mask:
+        if not have_mask or mask_index is None:
             return True
-        for m in mask_openings:
+        pb = Bounds(pad.bbox.min_x, pad.bbox.min_y, pad.bbox.max_x, pad.bbox.max_y)
+        for mi in mask_index.query_bbox(pb):
+            m = mask_openings[mi]
             if m.side and pad.side and str(m.side).lower() != str(pad.side).lower():
                 continue
             if _bboxes_overlap(m.bbox, pad.bbox):
@@ -201,28 +216,63 @@ def run_silkscreen_over_mask_defined_pads(ctx: CheckContext) -> CheckResult:
 
     exposed_pads = [p for p in pads if _pad_is_exposed(p)]
 
-    total_overlap_area = 0.0
+    # Accumulate silk overlap PER PAD, capped at each pad's own area.
+    #
+    # Silk is drawn as thousands of tessellated stroke segments, each with its
+    # own (inflated) bbox, so summing every silk x pad bbox overlap double-counts
+    # wildly -- a diagonal stroke's bbox is far larger than its ink, and many
+    # strokes clip the same pad's corners. On real boards that produced hundreds
+    # of tiny overlaps summing to tens of mm^2 (pcbtools_full: 1668 pairs,
+    # 51 mm^2) against a 0.2 mm^2 fail threshold, so every real board failed
+    # (#19). Silk physically cannot cover more of a pad than the pad's area, so
+    # capping each pad's accumulated overlap at its own area bounds the
+    # double-count; a pad only counts once it is meaningfully covered.
+    per_pad_overlap: dict[int, float] = {}
+    per_pad_loc: dict[int, ViolationLocation] = {}
+    pad_area = [(_BBox_area(p.bbox)) for p in exposed_pads]
+
+    # Index the pads and query each silk stroke's bbox against it. The raw
+    # silk x pad double loop is O(n*m) and both run to thousands on a real
+    # board (pcbtools_full: ~7500 silk strokes x ~1400 pads), which took ~11 s
+    # for this one check; the index makes it local.
+    pad_index = PolygonIndex.from_bounds(
+        [(idx, Bounds(p.bbox.min_x, p.bbox.min_y, p.bbox.max_x, p.bbox.max_y))
+         for idx, p in enumerate(exposed_pads)]
+    ) if exposed_pads else None
+
+    if pad_index is not None:
+        for sf in silks:
+            sb = Bounds(sf.bbox.min_x, sf.bbox.min_y, sf.bbox.max_x, sf.bbox.max_y)
+            for idx in pad_index.query_bbox(sb):
+                p = exposed_pads[idx]
+                if sf.side and p.side and str(sf.side).lower() != str(p.side).lower():
+                    continue
+                area = _bbox_overlap_area(sf.bbox, p.bbox)
+                if area <= 0.0:
+                    continue
+                prev = per_pad_overlap.get(idx, 0.0)
+                per_pad_overlap[idx] = min(pad_area[idx], prev + area)
+                if idx not in per_pad_loc:
+                    per_pad_loc[idx] = ViolationLocation(
+                        layer=sf.layer, x_mm=p.cx, y_mm=p.cy,
+                        notes="Exposed pad with silkscreen ink over it (bbox approximation).",
+                    )
+
+    # A pad is "silk-covered" only if silk covers a meaningful fraction of it,
+    # which discards the thin-stroke corner clips that dominated the old sum.
+    min_cover_frac = float(raw_cfg.get("min_pad_cover_fraction", 0.15))
+    covered = {
+        idx: a for idx, a in per_pad_overlap.items()
+        if pad_area[idx] > 0.0 and a >= min_cover_frac * pad_area[idx]
+    }
+    total_overlap_area = sum(covered.values())
+    overlap_pairs = len(covered)
     worst_area = 0.0
     worst_loc: Optional[ViolationLocation] = None
-    overlap_pairs = 0
-
-    for s in silks:
-        for p in exposed_pads:
-            if s.side and p.side and str(s.side).lower() != str(p.side).lower():
-                continue
-            area = _bbox_overlap_area(s.bbox, p.bbox)
-            if area <= 0.0:
-                continue
-            total_overlap_area += area
-            overlap_pairs += 1
-            if area > worst_area:
-                worst_area = area
-                worst_loc = ViolationLocation(
-                    layer=s.layer,
-                    x_mm=s.cx,
-                    y_mm=s.cy,
-                    notes="Silkscreen overlapping exposed pad copper (bbox approximation).",
-                )
+    for idx, a in covered.items():
+        if a > worst_area:
+            worst_area = a
+            worst_loc = per_pad_loc.get(idx)
 
     measured = float(total_overlap_area)
 
@@ -237,9 +287,14 @@ def run_silkscreen_over_mask_defined_pads(ctx: CheckContext) -> CheckResult:
         frac = max(0.0, min(1.0, (measured - target_max) / span))
         score = max(0.0, min(100.0, 100.0 - 40.0 * frac))
     else:
-        status = "fail"
-        severity = "error"
-        score = 0.0
+        # ADVISORY -- never a hard fail. This is a bbox overlap estimate with no
+        # boolean geometry, so it cannot cleanly separate ink genuinely on a pad
+        # from a stroke passing near it or from silk on an adjacent pour. Real
+        # silk-on-pad still warns; it just does not fail a board on the
+        # approximation (#19), matching solder_mask_expansion.
+        status = "warning"
+        severity = "warning"
+        score = 40.0
 
     margin_to_limit = float(limit_max - measured)
 

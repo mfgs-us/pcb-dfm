@@ -197,3 +197,28 @@ def test_mask_expansion_within_registration_tolerance_passes():
     board.mask_expansion_mm = -0.01   # 10 um under, inside registration tolerance
     c = _run_board(board)["solder_mask_expansion"]
     assert c.status == "pass"
+
+
+def test_silk_over_pads_warns_but_does_not_fail():
+    """Substantial silk on a pad warns; it never hard-fails.
+
+    The measurement is a bbox overlap with no boolean geometry, so it cannot
+    cleanly separate ink on a pad from a stroke passing near it or silk on an
+    adjacent pour. It failed every real board in the corpus on thin-stroke bbox
+    artifacts summed against a 0.2 mm^2 threshold (#19), so it is advisory and
+    the per-pad overlap is capped at the pad's own area.
+    """
+    board = boards.clean_two_layer()
+    # A wide silk stroke straight across the pad at (14, 10), clear of its hole
+    # only partially -- but the pad coverage is what this check measures.
+    board.silk = [boards.Trace(13.0, 10.0, 15.0, 10.0, 0.6)]
+    c = _run_board(board)["silkscreen_over_mask_defined_pads"]
+    assert c.status == "warning"
+
+
+def test_silk_clear_of_pads_passes():
+    """Silk placed away from pads must not be flagged."""
+    board = boards.clean_two_layer()
+    board.silk = [boards.Trace(9.0, 2.0, 11.0, 2.0, 0.2)]   # mid-board, no pads there
+    c = _run_board(board)["silkscreen_over_mask_defined_pads"]
+    assert c.status == "pass"

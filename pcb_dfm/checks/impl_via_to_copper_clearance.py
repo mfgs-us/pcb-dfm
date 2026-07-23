@@ -207,8 +207,8 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
             name=ctx.check_def.name,
             category_id=ctx.check_def.category_id,
             severity=ctx.check_def.severity,
-            status="warning",
-            score=50.0,
+            status="not_applicable",
+            score=None,
             metric=MetricResult(
                 kind="geometry",
                 units="mm",  # Pydantic requires geometry metrics to use mm
@@ -237,8 +237,8 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
             name=ctx.check_def.name,
             category_id=ctx.check_def.category_id,
             severity=ctx.check_def.severity,
-            status="warning",
-            score=50.0,
+            status="not_applicable",
+            score=None,
             metric=MetricResult(
                 kind="geometry",
                 units="mm",  # Pydantic requires geometry metrics to use mm
@@ -281,8 +281,8 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
             name=ctx.check_def.name,
             category_id=ctx.check_def.category_id,
             severity=ctx.check_def.severity,
-            status="warning",
-            score=50.0,
+            status="not_applicable",
+            score=None,
             metric=MetricResult(
                 kind="geometry",
                 units="mm",  # Pydantic requires geometry metrics to use mm

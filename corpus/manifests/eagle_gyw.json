@@ -1,0 +1,42 @@
+{
+  "name": "eagle_gyw",
+  "board": "testdata/eagle_gyw.zip",
+  "ruleset": "default",
+  "description": "Real 2-layer board exported from Autodesk Eagle: both copper layers, both masks, both silkscreens, top paste, a profile (outline) and a plated drill file.",
+  "source": "GanzYouthWorkshop/GYW-Electro-Curriculum (MIT), via gerbonara's test corpus (tests/resources/eagle-newer)",
+  "notes": "Second CAD dialect in the corpus (Eagle). Kept small deliberately so the corpus stays fast. Files were renamed to conventional extensions (copper_top.gbr -> board.gtl and so on) so layer classification is by extension; contents are byte-identical to upstream.\n\nNot asserted: silkscreen_clearance, silkscreen_over_mask_defined_pads and solder_mask_expansion, which fail on EVERY real board in this corpus -- see #19.",
+  "expect": {
+    "min_checks_run": 40,
+    "no_crashes": true,
+    "status": {
+      "impedance_control": "not_applicable",
+      "diff_pair_spacing": "not_applicable",
+      "diff_pair_skew": "not_applicable",
+      "return_path_interruptions": "not_applicable",
+      "crosstalk_estimate": "not_applicable",
+      "highspeed_stub_length": "not_applicable"
+    },
+    "must_not_fail": [
+      "aperture_definition_errors",
+      "copper_sliver_width",
+      "copper_thermal_area",
+      "copper_to_edge_distance",
+      "drill_aspect_ratio",
+      "drill_to_drill_spacing",
+      "etch_compensation_margin",
+      "layer_registration_margin",
+      "mask_to_trace_clearance",
+      "min_annular_ring",
+      "min_drill_size",
+      "min_trace_spacing",
+      "min_trace_width",
+      "plane_fragmentation",
+      "plating_uniformity",
+      "silkscreen_min_width",
+      "solder_mask_web",
+      "unsupported_hole_types",
+      "via_in_pad_thermal_balance",
+      "via_tenting"
+    ]
+  }
+}

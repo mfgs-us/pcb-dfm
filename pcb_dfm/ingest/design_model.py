@@ -108,11 +108,30 @@ class Via:
 
 
 @dataclass
+class NetPoint:
+    """A net access point in absolute board mm-space.
+
+    This is what a NETLIST gives you (IPC-D-356 and friends): the location of a
+    pad, pin or via together with the net it belongs to. Unlike ``NetFeature``
+    it carries no routed path -- just "this point is on this net" -- which is
+    still enough to label copper by net, because any copper polygon containing
+    the point is on that net.
+    """
+    x_mm: float
+    y_mm: float
+    kind: str = "through"          # "through" (via/THT pin) | "smd"
+    ref: Optional[str] = None      # component reference designator, or "VIA"
+    pin: Optional[str] = None
+    layer: Optional[str] = None    # None = all layers (through-hole)
+
+
+@dataclass
 class Net:
     name: str
     features: List[NetFeature] = field(default_factory=list)
     net_class: Optional[str] = None
     vias: List[Via] = field(default_factory=list)
+    points: List[NetPoint] = field(default_factory=list)
 
     def routed_length_mm(self) -> float:
         return sum(f.length_mm for f in self.features)
@@ -127,6 +146,10 @@ class Net:
 
     def has_geometry(self) -> bool:
         return any(f.segments for f in self.features)
+
+    def has_points(self) -> bool:
+        """True when a netlist supplied access points for this net."""
+        return bool(self.points)
 
 
 @dataclass

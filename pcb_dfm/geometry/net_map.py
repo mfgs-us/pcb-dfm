@@ -208,13 +208,81 @@ class NetMap:
 # Builder
 # --------------------------------------------------------------------------- #
 
+def _propagate_nets_through_connected_copper(
+    copper_layers: List[BoardLayer],
+    poly_net: Dict[int, str],
+    poly_ref: Dict[int, NetPolygon],
+) -> None:
+    """Spread net labels from access points across physically connected copper.
+
+    A netlist tags only the copper its access points land in -- the pads and
+    vias -- which on a real board is a small minority (roughly 12% of polygons
+    on the pcb-tools reference board). Everything else, the traces and pour
+    fragments doing the actual routing, stays unlabelled, and an unlabelled
+    polygon is useless to a net-aware check: it cannot be called same-net or
+    foreign.
+
+    But copper that physically touches is one conductor and therefore one net,
+    by definition. So we union touching polygons per layer and give every
+    polygon in a group the net of whichever labelled polygon it is connected to,
+    which is the same reasoning min_trace_spacing uses to merge conductors.
+
+    Groups holding two different labels are left alone: that means either the
+    netlist disagrees with the artwork or the two shapes only appear to touch,
+    and guessing there would be worse than staying silent.
+    """
+    for lyr in copper_layers:
+        polys = [p for p in lyr.polygons if len(p.vertices) >= 3]
+        if len(polys) < 2:
+            continue
+        index = PolygonIndex.from_polygons(polys)
+        parent = list(range(len(polys)))
+
+        def find(a: int) -> int:
+            while parent[a] != a:
+                parent[a] = parent[parent[a]]
+                a = parent[a]
+            return a
+
+        def union(a: int, b: int) -> None:
+            ra, rb = find(a), find(b)
+            if ra != rb:
+                parent[rb] = ra
+
+        for i, poly in enumerate(polys):
+            for pos in index.query_bbox(poly.bounds()):
+                j = cast(int, pos)
+                if j <= i:
+                    continue
+                if _min_poly_distance(poly, polys[j]) <= 0.0:
+                    union(i, j)
+
+        groups: Dict[int, List[int]] = {}
+        for i in range(len(polys)):
+            groups.setdefault(find(i), []).append(i)
+
+        for members in groups.values():
+            labels = {poly_net[id(polys[i])] for i in members if id(polys[i]) in poly_net}
+            if len(labels) != 1:
+                continue  # unlabelled, or ambiguous -- leave as is
+            net = labels.pop()
+            for i in members:
+                pid = id(polys[i])
+                if pid not in poly_net:
+                    poly_net[pid] = net
+                    poly_ref[pid] = (lyr.logical_layer, polys[i])
+
+
 def build_net_map(geometry: BoardGeometry,
                   design_data: Optional[DesignData]) -> Optional[NetMap]:
     """Correlate routed net geometry with copper polygons. None when there is
     nothing to correlate (no design data / no routed geometry / no copper)."""
     if design_data is None:
         return None
-    netted = [(name, net) for name, net in design_data.nets.items() if net.has_geometry()]
+    netted = [
+        (name, net) for name, net in design_data.nets.items()
+        if net.has_geometry() or net.has_points()
+    ]
     if not netted:
         return None
     copper_layers = geometry.get_layers_by_type("copper")
@@ -238,6 +306,26 @@ def build_net_map(geometry: BoardGeometry,
     votes: Dict[int, Dict[str, int]] = {}
     poly_ref: Dict[int, NetPolygon] = {}
 
+    # A NETLIST (IPC-D-356) supplies access POINTS rather than routed paths: the
+    # location of each pad, pin and via together with its net. Any copper
+    # polygon containing such a point is on that net -- a direct and very
+    # reliable association, and often the only one available, since most CAD
+    # tools export a netlist far more readily than full routed geometry.
+    for name, net in netted:
+        for pt in net.points:
+            canon = _canon_layer(pt.layer)
+            targets = layers_by_canon.get(canon) or copper_layers
+            pb = Bounds(pt.x_mm, pt.y_mm, pt.x_mm, pt.y_mm)
+            for lyr in targets:
+                index, polys = _index_of(lyr)
+                for pos in index.query_bbox(pb):
+                    poly = polys[cast(int, pos)]
+                    if _point_in_polygon(pt.x_mm, pt.y_mm, _poly_pts(poly)):
+                        pid = id(poly)
+                        bucket = votes.setdefault(pid, {})
+                        bucket[name] = bucket.get(name, 0) + 1
+                        poly_ref[pid] = (lyr.logical_layer, poly)
+
     for name, net in netted:
         for (a, b), seg_layer, _w in net.route_segments():
             canon = _canon_layer(seg_layer)
@@ -258,12 +346,16 @@ def build_net_map(geometry: BoardGeometry,
     if not votes:
         return None
 
-    net_to_polys: Dict[str, List[NetPolygon]] = {}
     poly_net: Dict[int, str] = {}
     for pid, counts in votes.items():
         winner = max(counts.items(), key=lambda kv: (kv[1], kv[0]))[0]
         poly_net[pid] = winner
-        net_to_polys.setdefault(winner, []).append(poly_ref[pid])
+
+    _propagate_nets_through_connected_copper(copper_layers, poly_net, poly_ref)
+
+    net_to_polys: Dict[str, List[NetPolygon]] = {}
+    for pid, net_name in poly_net.items():
+        net_to_polys.setdefault(net_name, []).append(poly_ref[pid])
 
     return NetMap(net_to_polys, poly_net)
 

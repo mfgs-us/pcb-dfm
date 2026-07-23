@@ -8,7 +8,9 @@ from typing import Callable, Dict, Iterable
 from ..checks import _ensure_impls_loaded
 from ..checks.definitions import CheckDefinition
 from ..geometry import build_board_geometry
+from ..geometry.gerber_backend import excellon_hits_mm
 from ..ingest import ingest_gerber_zip
+from ..ingest.adapters.ipc356 import register_to_board
 from ..ingest.design_data import DesignDataLike, load_design_data
 from ..results import CheckResult, Violation
 from .context import CheckContext
@@ -53,6 +55,33 @@ HEURISTIC_CHECK_IDS = {
     "wave_solder_shadowing",
     "polarity_marking_consistency",
 }
+
+
+def _auto_register_netlist(design_data, ingest) -> None:
+    """Align a netlist's coordinates to the board, in place.
+
+    A netlist states coordinates in whatever frame its CAD tool used, which is
+    frequently the board's corner rather than the Gerber origin. Callers should
+    not have to know that, so whenever design data carries net access points we
+    derive the offset from the board's own drill hits and apply it. If it does
+    not register convincingly the netlist is left untouched, and the net-aware
+    checks simply fall back to their advisory behaviour -- a mis-registered
+    netlist would mislabel every net, which is worse than having none.
+    """
+    if design_data is None or not getattr(design_data, "nets", None):
+        return
+    if not any(getattr(n, "points", None) for n in design_data.nets.values()):
+        return
+    try:
+        drills = [
+            (h.x_mm, h.y_mm)
+            for f in ingest.files if getattr(f, "layer_type", None) == "drill"
+            for h in excellon_hits_mm(f.path)
+        ]
+    except Exception:
+        return
+    if drills:
+        register_to_board(design_data, drills)
 
 
 def _confidence_for(check_def) -> str:
@@ -115,6 +144,7 @@ def run_single_check(
     t0 = time.perf_counter()
     ingest_result = ingest_gerber_zip(gerber_zip)
     geom = build_board_geometry(ingest_result)
+    _auto_register_netlist(design_data, ingest_result)
     t_setup = time.perf_counter() - t0
 
     cache = GeometryCache()
@@ -197,6 +227,7 @@ def run_checks(
     t0 = time.perf_counter()
     ingest_result = prebuilt_ingest if prebuilt_ingest is not None else ingest_gerber_zip(gerber_zip)
     geom = build_board_geometry(ingest_result)
+    _auto_register_netlist(design_data, ingest_result)
     setup_time = time.perf_counter() - t0
 
     cache = GeometryCache()

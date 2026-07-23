@@ -23,9 +23,11 @@ from typing import Any, Dict, Optional, Union
 
 from .adapters import (
     from_bom,
+    from_ipc356,
     from_ipc2581,
     from_kicad,
     from_sidecar,
+    looks_like_ipc356,
     looks_like_ipc2581,
     looks_like_kicad,
 )
@@ -100,6 +102,11 @@ def _load_one(source: DesignDataLike) -> Optional[DesignData]:
     if looks_like_kicad(path):
         return from_kicad(path)
 
+    # Before IPC-2581: both formats use the .ipc extension, so order matters
+    # and both detectors are content-based.
+    if looks_like_ipc356(path):
+        return from_ipc356(path)
+
     if looks_like_ipc2581(path):
         return from_ipc2581(path)
 
@@ -111,5 +118,6 @@ def _load_one(source: DesignDataLike) -> Optional[DesignData]:
 
     raise ValueError(
         f"unrecognized design-data source: {path} "
-        f"(expected a KiCad project/.kicad_pcb, a .json sidecar, or an IPC-2581 .xml file)"
+        f"(expected a KiCad project/.kicad_pcb, a .json sidecar, an IPC-2581 .xml, "
+        f"or an IPC-D-356 netlist)"
     )

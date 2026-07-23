@@ -15,6 +15,18 @@ deliberately *not* vendored, even where they would be useful.
 | `diptrace_fd1.zip` | FD1 project mainboard (DipTrace) | BSD 3-clause, © 2014 Przemysław Węgrzyn | [codepainters/FD1](https://github.com/codepainters/FD1), via gerbonara `tests/resources/diptrace` |
 | `mini_board.zip` | synthetic | this project | — |
 
+### Netlists
+
+| file | for | licence | via |
+|---|---|---|---|
+| `pcbtools_full.ipc` | `pcbtools_full.zip` | Apache-2.0 | [curtacircuitos/pcb-tools](https://github.com/curtacircuitos/pcb-tools) `gerber/tests/resources/ipc-d-356.ipc` |
+
+An IPC-D-356 netlist for the same design as `pcbtools_full.zip`, from the same
+source. Verified to be that board: all 30 of its through-hole records register
+onto real drill hits once the netlist's origin offset (the board's lower-left
+corner) is derived. It is what makes the net-aware path testable on real
+artwork rather than only on synthetic fixtures.
+
 Gerber files are byte-identical to upstream. Some were **renamed** to
 conventional extensions (e.g. `copper_top.gbr` → `board.gtl`) so that layer
 classification happens by extension; no content is modified.

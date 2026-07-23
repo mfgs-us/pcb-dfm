@@ -11,6 +11,7 @@ from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
 from ..geometry import queries
 from ..geometry.gerber_backend import GERBONARA_AVAILABLE, excellon_hits_mm
+from ..geometry.net_map import get_or_build_net_map
 from ..geometry.primitives import Bounds
 from ..ingest import GerberFileInfo
 from ..results import CheckResult, MetricResult, Violation, ViolationLocation
@@ -309,7 +310,37 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
             for ix in range(ix0, ix1 + 1):
                 grid[(ix, iy)].append(idx)
 
+    # NET AWARENESS. With a netlist (e.g. an IPC-D-356 file via the design-data
+    # adapters) we can finally tell copper the via CONNECTS to from a foreign
+    # net it must clear -- the exact distinction whose absence forced this check
+    # to be advisory. Same-net copper is skipped outright; what remains is real
+    # different-net proximity, which is allowed to fail again.
+    net_map = get_or_build_net_map(ctx)
+
+    # Net of each via, taken from the netlist access point at its location.
+    via_net_at: Dict[Tuple[float, float], str] = {}
+    if net_map is not None and getattr(ctx, "design_data", None) is not None:
+        for net_name, net in ctx.design_data.nets.items():
+            for pt in getattr(net, "points", []) or []:
+                via_net_at[(round(pt.x_mm, 3), round(pt.y_mm, 3))] = net_name
+
+    def _net_of_via(x: float, y: float) -> Optional[str]:
+        if not via_net_at:
+            return None
+        key = (round(x, 3), round(y, 3))
+        hit_net = via_net_at.get(key)
+        if hit_net is not None:
+            return hit_net
+        # Tolerate sub-micron registration residue.
+        for (px, py), nm in via_net_at.items():
+            if abs(px - x) <= 0.02 and abs(py - y) <= 0.02:
+                return nm
+        return None
+
     min_clear: Optional[float] = None
+    # Smallest clearance to copper whose net is KNOWN and different from the
+    # via's. Only this can hard-fail; see the net-relationship note below.
+    min_clear_foreign: Optional[float] = None
     worst_location: Optional[ViolationLocation] = None
 
     # (clearance_mm, layer_name, via_x_mm, via_y_mm, marker_x_mm, marker_y_mm)
@@ -319,6 +350,7 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
         cx = hit.x_mm
         cy = hit.y_mm
         r = hit.d_mm / 2.0
+        via_net = _net_of_via(cx, cy)
 
         # Exclusion radius for copper considered to be "this via's own pad/annular ring"
         pad_exclusion_r = r + assumed_annular_ring_mm + pad_exclusion_margin_mm
@@ -347,6 +379,26 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
                     seen.add(idx)
 
                     layer_name, poly, b, edge_dist = copper_entries[idx]
+
+                    # Net relationship between this copper and the via:
+                    #   same    -> what the via CONNECTS to; never a violation
+                    #   foreign -> a genuine clearance concern (can hard-fail)
+                    #   unknown -> no netlist point falls inside this polygon
+                    #
+                    # Unknown is NOT foreign. A netlist tags only the pads and
+                    # vias its access points land in -- on this board 88% of
+                    # copper (traces, pour fragments) carries no access point --
+                    # so treating untagged copper as a different net would let
+                    # ordinary routing drive a hard failure. Untagged copper is
+                    # still measured, but only known-foreign copper is allowed to
+                    # fail the board.
+                    poly_net = net_map.net_of(poly) if net_map is not None else None
+                    if via_net is not None and poly_net is not None:
+                        if poly_net == via_net:
+                            continue
+                        is_foreign = True
+                    else:
+                        is_foreign = False
 
                     if perimeter_ignore_mm > 0.0 and edge_dist is not None and edge_dist <= perimeter_ignore_mm:
                         continue
@@ -415,6 +467,9 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
                     marker_x = cx
                     marker_y = cy
 
+                    if is_foreign and (min_clear_foreign is None or clearance < min_clear_foreign):
+                        min_clear_foreign = clearance
+
                     if min_clear is None or clearance < min_clear:
                         min_clear = clearance
                         worst_location = ViolationLocation(
@@ -480,9 +535,17 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
     # trace/fill, a via inside a plane -- were the failures, so a hard fail here
     # is a false positive generator. The own-pad/own-connection exclusions above
     # remove the clear-cut cases; what remains is genuine ambiguity, surfaced for
-    # review. A net-aware version (once the design-data adapters feed a netlist)
-    # could promote real different-net violations back to fail.
-    if min_clear < recommended_min:
+    # review.
+    #
+    # WITH a netlist that ambiguity is gone: same-net copper was skipped above,
+    # so a remaining violation really is a via too close to a FOREIGN net, and
+    # the check earns back its hard fail. This is the capability the advisory
+    # downgrade was holding in trust, not a permanent concession.
+    net_aware = bool(via_net_at) and net_map is not None
+
+    if net_aware and min_clear_foreign is not None and min_clear_foreign < absolute_min:
+        status = "fail"
+    elif min_clear < recommended_min:
         status = "warning"
     else:
         status = "pass"

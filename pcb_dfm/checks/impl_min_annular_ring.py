@@ -155,6 +155,69 @@ def _collect_drills_from_excellon(ctx: CheckContext) -> List[DrillHole]:
     return drills
 
 
+def compute_min_annular_ring(drills, pad_candidates):
+    """Thinnest annular ring over all holes, as ``(ring_mm, x_mm, y_mm, layer)``.
+
+    ``pad_candidates`` is a list of ``(polygon, layer_name)``. Returns None when
+    no hole lands in any candidate.
+
+    Per hole we take the LARGEST ring over the copper shapes containing it, then
+    the smallest such value over all holes (#14). The ring is really the
+    distance from the hole to the boundary of the *union* of the copper covering
+    it, and we have no boolean union -- but for a point p inside shape A, A u B
+    contains A, so a union can only push the boundary further away:
+    dist(p, boundary(A u B)) >= dist(p, boundary(A)). The max over containing
+    shapes is therefore a valid (if conservative) lower bound on the true ring.
+
+    A min over shapes is not a bound at all: on pour-heavy boards any
+    overlapping sliver or trace stub clipping the hole dragged the reported ring
+    to 0.0 even where the actual pad was generous.
+
+    Shared by min_annular_ring and layer_registration_margin, which measure the
+    same geometry against different budgets and previously carried two copies of
+    this loop -- one of which kept the min-over-shapes bug after the other was
+    fixed.
+    """
+    if not drills or not pad_candidates:
+        return None
+
+    cell = max(0.5, max(d.diameter_mm for d in drills))
+    grid = defaultdict(list)
+    for idx, (poly, _layer_name) in enumerate(pad_candidates):
+        b = poly.bounds()
+        for iy in range(int(floor(b.min_y / cell)), int(floor(b.max_y / cell)) + 1):
+            for ix in range(int(floor(b.min_x / cell)), int(floor(b.max_x / cell)) + 1):
+                grid[(ix, iy)].append(idx)
+
+    best: Optional[tuple] = None
+    for hole in drills:
+        r_drill = hole.diameter_mm * 0.5
+        ci = int(floor(hole.x_mm / cell))
+        cj = int(floor(hole.y_mm / cell))
+
+        hole_ring: Optional[float] = None
+        hole_layer: Optional[str] = None
+        for di in (-1, 0, 1):
+            for dj in (-1, 0, 1):
+                for idx in grid.get((ci + di, cj + dj), []):
+                    poly, layer_name = pad_candidates[idx]
+                    if not _point_in_polygon(hole.x_mm, hole.y_mm, poly.vertices):
+                        continue
+                    ring = _min_distance_to_polygon_edges(hole.x_mm, hole.y_mm, poly.vertices) - r_drill
+                    if ring < 0.0:
+                        ring = 0.0
+                    if hole_ring is None or ring > hole_ring:
+                        hole_ring = ring
+                        hole_layer = layer_name
+
+        if hole_ring is None:
+            continue  # hole sits in no pad-like copper on any layer
+        if best is None or hole_ring < best[0]:
+            best = (hole_ring, hole.x_mm, hole.y_mm, hole_layer)
+
+    return best
+
+
 @register_check("min_annular_ring")
 def run_min_annular_ring(ctx: CheckContext) -> CheckResult:
     """
@@ -242,75 +305,15 @@ def run_min_annular_ring(ctx: CheckContext) -> CheckResult:
             violations=[viol],
         ).finalize()
 
-    # Build spatial grid for efficient candidate selection
-    cell = max(0.5, max(d.diameter_mm for d in drills))
-    grid = defaultdict(list)
-
-    for idx, (poly, layer_name) in enumerate(pad_candidates):
-        b = poly.bounds()
-        ix0 = int(floor(b.min_x / cell))
-        ix1 = int(floor(b.max_x / cell))
-        iy0 = int(floor(b.min_y / cell))
-        iy1 = int(floor(b.max_y / cell))
-        for iy in range(iy0, iy1 + 1):
-            for ix in range(ix0, ix1 + 1):
-                grid[(ix, iy)].append(idx)
-
-    # Check each drill against nearby pad candidates.
-    #
-    # Per hole we take the LARGEST ring over the copper shapes containing it,
-    # then the smallest such value over all holes (#14).
-    #
-    # The ring is really the distance from the hole to the boundary of the
-    # *union* of the copper covering it, and we have no boolean union. But for a
-    # point p inside shape A, A u B contains A, so a union can only push the
-    # boundary further away: dist(p, boundary(A u B)) >= dist(p, boundary(A)).
-    # The max over containing shapes is therefore a valid (if conservative)
-    # lower bound on the true ring. The old min-over-shapes was not a bound at
-    # all -- on pour-heavy boards any overlapping sliver or trace stub clipping
-    # the hole dragged the reported ring to 0.0 even where the actual pad was
-    # generous, which is the false-positive class this check exhibited.
-    for hole in drills:
-        r_drill = hole.diameter_mm * 0.5
-
-        ci = int(floor(hole.x_mm / cell))
-        cj = int(floor(hole.y_mm / cell))
-
-        best_ring: Optional[float] = None
-        best_layer: Optional[str] = None
-
-        for di in (-1, 0, 1):
-            for dj in (-1, 0, 1):
-                for idx in grid.get((ci + di, cj + dj), []):
-                    poly, layer_name = pad_candidates[idx]
-
-                    # 1B) Use point-in-polygon test instead of bbox containment
-                    if not _point_in_polygon(hole.x_mm, hole.y_mm, poly.vertices):
-                        continue
-
-                    # 1C) Compute true annular ring as distance from drill edge to polygon edge
-                    min_dist_to_edge = _min_distance_to_polygon_edges(hole.x_mm, hole.y_mm, poly.vertices)
-                    ring = min_dist_to_edge - r_drill
-
-                    # Clamp to 0 (negative ring means drill extends beyond pad)
-                    if ring < 0.0:
-                        ring = 0.0
-
-                    if best_ring is None or ring > best_ring:
-                        best_ring = ring
-                        best_layer = layer_name
-
-        if best_ring is None:
-            continue  # hole sits in no pad-like copper on any layer
-
-        if min_ring is None or best_ring < min_ring:
-            min_ring = best_ring
-            worst_location = ViolationLocation(
-                layer=best_layer,
-                x_mm=hole.x_mm,
-                y_mm=hole.y_mm,
-                notes="True annular ring computed from drill edge to polygon edge.",
-            )
+    found = compute_min_annular_ring(drills, pad_candidates)
+    if found is not None:
+        min_ring, hx, hy, hlayer = found
+        worst_location = ViolationLocation(
+            layer=hlayer,
+            x_mm=hx,
+            y_mm=hy,
+            notes="True annular ring computed from drill edge to polygon edge.",
+        )
 
     if min_ring is None:
         viol = Violation(

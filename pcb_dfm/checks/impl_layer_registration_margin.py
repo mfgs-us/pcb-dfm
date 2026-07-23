@@ -1,6 +1,5 @@
 from __future__ import annotations
 
-from math import floor
 from typing import List, Optional, Tuple
 
 from ..engine.check_runner import register_check
@@ -10,8 +9,7 @@ from ..results import CheckResult, MetricResult, Violation, ViolationLocation
 from .impl_min_annular_ring import (
     _collect_drills_from_excellon,
     _is_pad_like_polygon,
-    _min_distance_to_polygon_edges,
-    _point_in_polygon,
+    compute_min_annular_ring,
 )
 
 
@@ -97,38 +95,20 @@ def run_layer_registration_margin(ctx: CheckContext) -> CheckResult:
             )],
         ).finalize()
 
-    # Spatial grid over pad candidates (mirrors min_annular_ring).
-    cell = max(0.5, max(d.diameter_mm for d in drills))
-    grid: dict = {}
-    for idx, (poly, _name) in enumerate(pad_candidates):
-        b = poly.bounds()
-        for iy in range(int(floor(b.min_y / cell)), int(floor(b.max_y / cell)) + 1):
-            for ix in range(int(floor(b.min_x / cell)), int(floor(b.max_x / cell)) + 1):
-                grid.setdefault((ix, iy), []).append(idx)
-
+    # Shared with min_annular_ring: same geometry, different budget. See
+    # compute_min_annular_ring for why this is a max over the shapes containing
+    # each hole (#14).
+    found = compute_min_annular_ring(drills, pad_candidates)
     min_ring: Optional[float] = None
     worst_location: Optional[ViolationLocation] = None
-    for hole in drills:
-        r_drill = hole.diameter_mm * 0.5
-        ci = int(floor(hole.x_mm / cell))
-        cj = int(floor(hole.y_mm / cell))
-        for di in (-1, 0, 1):
-            for dj in (-1, 0, 1):
-                for idx in grid.get((ci + di, cj + dj), []):
-                    poly, layer_name = pad_candidates[idx]
-                    if not _point_in_polygon(hole.x_mm, hole.y_mm, poly.vertices):
-                        continue
-                    ring = _min_distance_to_polygon_edges(hole.x_mm, hole.y_mm, poly.vertices) - r_drill
-                    if ring < 0.0:
-                        ring = 0.0
-                    if min_ring is None or ring < min_ring:
-                        min_ring = ring
-                        worst_location = ViolationLocation(
-                            layer=layer_name,
-                            x_mm=hole.x_mm,
-                            y_mm=hole.y_mm,
-                            notes="Thinnest annular ring available to absorb registration error.",
-                        )
+    if found is not None:
+        min_ring, hx, hy, hlayer = found
+        worst_location = ViolationLocation(
+            layer=hlayer,
+            x_mm=hx,
+            y_mm=hy,
+            notes="Thinnest annular ring available to absorb registration error.",
+        )
 
     if min_ring is None:
         return CheckResult(

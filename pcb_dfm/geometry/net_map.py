@@ -26,7 +26,7 @@ from __future__ import annotations
 
 import math
 import re
-from typing import Dict, List, Optional, Tuple, cast
+from typing import Dict, List, Optional, Sequence, Tuple, cast
 
 from ..ingest.design_model import DesignData
 from .layer_model import BoardGeometry, BoardLayer
@@ -241,69 +241,109 @@ def _propagate_nets_through_connected_copper(
     copper_layers: List[BoardLayer],
     poly_net: Dict[int, str],
     poly_ref: Dict[int, NetPolygon],
+    bridges: Sequence[Tuple[float, float]] = (),
 ) -> None:
-    """Spread net labels from access points across physically connected copper.
+    """Spread net labels from access points across connected copper.
 
     A netlist tags only the copper its access points land in -- the pads and
-    vias -- which on a real board is a small minority (roughly 12% of polygons
-    on the pcb-tools reference board). Everything else, the traces and pour
-    fragments doing the actual routing, stays unlabelled, and an unlabelled
-    polygon is useless to a net-aware check: it cannot be called same-net or
-    foreign.
+    vias -- which on a real board is a small minority. Everything else, the
+    traces and pour fragments doing the actual routing, stays unlabelled, and an
+    unlabelled polygon is useless to a net-aware check: it cannot be called
+    same-net or foreign.
 
-    But copper that physically touches is one conductor and therefore one net,
-    by definition. So we union touching polygons per layer and give every
-    polygon in a group the net of whichever labelled polygon it is connected to,
-    which is the same reasoning min_trace_spacing uses to merge conductors.
+    Copper that physically touches is one conductor and therefore one net, so we
+    union touching polygons. But a net is a THREE-DIMENSIONAL object: a
+    bottom-layer trace routed away from a via belongs to the same net as the
+    top-layer copper on the other side of it. Unioning only within each layer
+    left bottom copper at 10.7% labelled against 98.7% on top, because the
+    netlist's SMD access points are nearly all on the component side (#20).
+
+    ``bridges`` are plated through-hole locations -- vias and THT pins. Each is
+    one conductor spanning every layer it passes through, so the polygons it
+    lands in are unioned across layers. Unplated holes must NOT be passed here:
+    a mounting hole connects nothing.
 
     Groups holding two different labels are left alone: that means either the
-    netlist disagrees with the artwork or the two shapes only appear to touch,
-    and guessing there would be worse than staying silent.
+    netlist disagrees with the artwork or the shapes only appear to touch, and
+    guessing there would be worse than staying silent.
     """
+    # One union-find over every copper polygon on the board, so a conductor can
+    # span layers.
+    per_layer: List[Tuple[BoardLayer, List[Polygon], int, PolygonIndex]] = []
+    total = 0
     for lyr in copper_layers:
         polys = [p for p in lyr.polygons if len(p.vertices) >= 3]
-        if len(polys) < 2:
+        if not polys:
             continue
-        index = PolygonIndex.from_polygons(polys)
-        parent = list(range(len(polys)))
+        per_layer.append((lyr, polys, total, PolygonIndex.from_polygons(polys)))
+        total += len(polys)
+    if total == 0:
+        return
 
-        def find(a: int) -> int:
-            while parent[a] != a:
-                parent[a] = parent[parent[a]]
-                a = parent[a]
-            return a
+    parent = list(range(total))
 
-        def union(a: int, b: int) -> None:
-            ra, rb = find(a), find(b)
-            if ra != rb:
-                parent[rb] = ra
+    def find(a: int) -> int:
+        while parent[a] != a:
+            parent[a] = parent[parent[a]]
+            a = parent[a]
+        return a
 
+    def union(a: int, b: int) -> None:
+        ra, rb = find(a), find(b)
+        if ra != rb:
+            parent[rb] = ra
+
+    # 1) Within each layer: touching copper is one conductor.
+    for _lyr, polys, off, index in per_layer:
         for i, poly in enumerate(polys):
             for pos in index.query_bbox(poly.bounds()):
                 j = cast(int, pos)
                 if j <= i:
                     continue
                 if _polygons_touch(poly, polys[j]):
-                    union(i, j)
+                    union(off + i, off + j)
 
-        groups: Dict[int, List[int]] = {}
-        for i in range(len(polys)):
-            groups.setdefault(find(i), []).append(i)
+    # 2) Across layers: a plated through-hole ties together the copper it passes
+    #    through on every layer.
+    for (bx, by) in bridges:
+        pb = Bounds(bx, by, bx, by)
+        landed: List[int] = []
+        for _lyr, polys, off, index in per_layer:
+            for pos in index.query_bbox(pb):
+                k = cast(int, pos)
+                if _point_in_polygon(bx, by, _poly_pts(polys[k])):
+                    landed.append(off + k)
+        for other in landed[1:]:
+            union(landed[0], other)
 
-        for members in groups.values():
-            labels = {poly_net[id(polys[i])] for i in members if id(polys[i]) in poly_net}
-            if len(labels) != 1:
-                continue  # unlabelled, or ambiguous -- leave as is
-            net = labels.pop()
-            for i in members:
-                pid = id(polys[i])
-                if pid not in poly_net:
-                    poly_net[pid] = net
-                    poly_ref[pid] = (lyr.logical_layer, polys[i])
+    # 3) Label each conductor from whichever of its polygons the netlist tagged.
+    poly_at: List[Tuple[BoardLayer, Polygon]] = []
+    for lyr, polys, _off, _index in per_layer:
+        poly_at.extend((lyr, p) for p in polys)
+
+    groups: Dict[int, List[int]] = {}
+    for i in range(total):
+        groups.setdefault(find(i), []).append(i)
+
+    for members in groups.values():
+        labels = {
+            poly_net[id(poly_at[i][1])] for i in members
+            if id(poly_at[i][1]) in poly_net
+        }
+        if len(labels) != 1:
+            continue  # unlabelled, or ambiguous -- leave as is
+        net = labels.pop()
+        for i in members:
+            lyr, poly = poly_at[i]
+            pid = id(poly)
+            if pid not in poly_net:
+                poly_net[pid] = net
+                poly_ref[pid] = (lyr.logical_layer, poly)
 
 
 def build_net_map(geometry: BoardGeometry,
-                  design_data: Optional[DesignData]) -> Optional[NetMap]:
+                  design_data: Optional[DesignData],
+                  plated_vias: Optional[Sequence[Tuple[float, float]]] = None) -> Optional[NetMap]:
     """Correlate routed net geometry with copper polygons. None when there is
     nothing to correlate (no design data / no routed geometry / no copper)."""
     if design_data is None:
@@ -380,7 +420,17 @@ def build_net_map(geometry: BoardGeometry,
         winner = max(counts.items(), key=lambda kv: (kv[1], kv[0]))[0]
         poly_net[pid] = winner
 
-    _propagate_nets_through_connected_copper(copper_layers, poly_net, poly_ref)
+    # Plated through-holes bridge layers. Prefer the board's own plated drills;
+    # fall back to the netlist's through-hole access points when the caller has
+    # not supplied them. Unplated holes are excluded by the caller -- a mounting
+    # hole joins nothing.
+    bridges: Sequence[Tuple[float, float]] = plated_vias if plated_vias is not None else [
+        (pt.x_mm, pt.y_mm)
+        for net in design_data.nets.values()
+        for pt in getattr(net, "points", []) or []
+        if getattr(pt, "kind", None) == "through"
+    ]
+    _propagate_nets_through_connected_copper(copper_layers, poly_net, poly_ref, bridges)
 
     net_to_polys: Dict[str, List[NetPolygon]] = {}
     for pid, net_name in poly_net.items():
@@ -389,14 +439,39 @@ def build_net_map(geometry: BoardGeometry,
     return NetMap(net_to_polys, poly_net)
 
 
+def _plated_vias_from_ingest(ctx) -> Optional[List[Tuple[float, float]]]:
+    """Plated drill locations, which are what tie copper together across layers.
+
+    Only PLATED holes conduct; an unplated mounting hole passes through the board
+    without connecting anything, so bridging on one would merge unrelated nets.
+    """
+    ingest = getattr(ctx, "ingest", None)
+    files = getattr(ingest, "files", None)
+    if not files:
+        return None
+    from .gerber_backend import excellon_hits_mm
+    out: List[Tuple[float, float]] = []
+    for f in files:
+        if getattr(f, "layer_type", None) != "drill":
+            continue
+        if getattr(f, "is_plated", None) is False:
+            continue
+        try:
+            out.extend((h.x_mm, h.y_mm) for h in excellon_hits_mm(f.path))
+        except Exception:
+            continue
+    return out or None
+
+
 def get_or_build_net_map(ctx) -> Optional[NetMap]:
     """Cached accessor: build once per run, shared by all net-aware checks."""
     cache = getattr(ctx, "geometry_cache", None)
+    vias = _plated_vias_from_ingest(ctx)
     if cache is None:
-        return build_net_map(ctx.geometry, ctx.design_data)
+        return build_net_map(ctx.geometry, ctx.design_data, vias)
     key = cache.key("net_map")
     if cache.has(key):
         return cache.get(key)
-    value = build_net_map(ctx.geometry, ctx.design_data)
+    value = build_net_map(ctx.geometry, ctx.design_data, vias)
     cache.set(key, value)
     return value

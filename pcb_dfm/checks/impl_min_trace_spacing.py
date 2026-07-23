@@ -11,11 +11,54 @@ from ..results import CheckResult, MetricResult, Violation, ViolationLocation
 from .impl_min_trace_width import _MIN_MEANINGFUL_TRACE_MM
 
 MAX_REPORTED_VIOLATIONS = 100
-# Copper closer than this is merged (one conductor), not a spacing violation.
-# 20 µm is below the finest fab spacing capability (~2 mil), so any "gap" this
-# small is a junction / trace-into-pad / polygonization noise, not a real gap
-# between different nets. Real spacing violations (≈ 0.05-0.1 mm) are ~5x larger.
-_MERGED_COPPER_MM = 0.02
+
+
+class _DisjointSet:
+    """Union-find over segment indices, for grouping connected copper."""
+
+    def __init__(self, n: int) -> None:
+        self._parent = list(range(n))
+
+    def find(self, a: int) -> int:
+        root = a
+        while self._parent[root] != root:
+            root = self._parent[root]
+        while self._parent[a] != root:  # path compression
+            self._parent[a], a = root, self._parent[a]
+        return root
+
+    def union(self, a: int, b: int) -> None:
+        ra, rb = self.find(a), self.find(b)
+        if ra != rb:
+            self._parent[rb] = ra
+
+
+def _conductor_groups(segs: List["Segment"]) -> _DisjointSet:
+    """Group segments into physically connected conductors.
+
+    Copper that overlaps IS one conductor -- it is the same net by definition,
+    so the gap "between" two such segments is a junction, not a spacing
+    violation. Previously this was approximated with a 20 um merge floor, which
+    did not remove the problem so much as relocate it: every pair below the
+    floor was skipped, so the reported minimum became the smallest gap just
+    *above* it and the metric tracked the constant (0.0201 mm against a 0.02 mm
+    floor) rather than the board.
+
+    Segments carry an exact width, so segment-to-segment distance is exact and
+    the connectivity test needs no tolerance at all: overlap means <= 0.
+    """
+    ds = _DisjointSet(len(segs))
+    for i, s1 in enumerate(segs):
+        for j in range(i + 1, len(segs)):
+            s2 = segs[j]
+            if not _might_be_closer_than(s1, s2, 0.0):
+                continue
+            dist_mm, _mx, _my = _segment_segment_distance_mm(s1, s2)
+            if dist_mm is None:
+                continue
+            if dist_mm - 0.5 * (s1.width_mm + s2.width_mm) <= 0.0:
+                ds.union(i, j)
+    return ds
 
 
 @dataclass
@@ -102,10 +145,17 @@ def run_min_trace_spacing(ctx: CheckContext) -> CheckResult:
         if n < 2:
             continue
 
+        # Physically connected copper is one conductor; only measure gaps
+        # BETWEEN conductors (#14).
+        groups = _conductor_groups(segs)
+
         for i in range(n):
             s1 = segs[i]
             for j in range(i + 1, n):
                 s2 = segs[j]
+
+                if groups.find(i) == groups.find(j):
+                    continue  # same conductor: a junction, not a gap
 
                 # Quick bbox reject
                 if min_spacing_mm is not None:
@@ -118,13 +168,11 @@ def run_min_trace_spacing(ctx: CheckContext) -> CheckResult:
 
                 # Copper-to-copper spacing = center distance - half widths
                 spacing_mm = dist_mm - 0.5 * (s1.width_mm + s2.width_mm)
-                if spacing_mm <= _MERGED_COPPER_MM:
-                    # Touching/overlapping below fab resolution = the same
-                    # conductor (a junction, or trace-into-pad), not a spacing
-                    # violation. Without net data we can't prove two touching
-                    # segments are different nets, and connected copper is far
-                    # more common than an actual short, so treat it as merged.
-                    continue
+                if spacing_mm < 0.0:
+                    # Overlapping copper in different connected groups cannot
+                    # happen (they would have been unioned), so this is float
+                    # noise on a touching pair; clamp rather than report negative.
+                    spacing_mm = 0.0
 
                 if min_spacing_mm is None or spacing_mm < min_spacing_mm:
                     min_spacing_mm = spacing_mm

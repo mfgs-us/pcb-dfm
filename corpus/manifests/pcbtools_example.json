@@ -4,7 +4,7 @@
   "ruleset": "default",
   "description": "Real 2-layer board (top/bottom copper, both masks, silk, drill) from the pcb-tools examples \u2014 a copper-pour-heavy, inch-unit board.",
   "source": "curtacircuitos/pcb-tools examples/gerbers (Apache-2.0)",
-  "notes": "No outline (Edge.Cuts) layer, and heavy copper pours rendered as many zero-/near-zero-width boundary primitives. Adding it surfaced three false-positive classes that are now fixed: (1) min_trace_width / etch_compensation_margin counted degenerate pour-boundary lines as 0.000 mm traces; (2) copper_to_edge_distance measured against the copper bounding box with no real outline; (3) arc handedness -- stroked traces' round end caps were swept the wrong way and folded into the stroke, so every trace was a self-intersecting bowtie whose boundary ran along its own axis (#14). That third fix is what makes min_annular_ring, acid_trap_angle and copper_sliver_width read real values here instead of 0.0 / artifacts. Three checks (min_trace_spacing, component_to_component_spacing, mask_to_trace_clearance) still read ~0 on this board and are deliberately NOT asserted, pending the polygon-union work tracked on #14.",
+  "notes": "No outline (Edge.Cuts) layer, and heavy copper pours rendered as many zero-/near-zero-width boundary primitives. Adding it surfaced three false-positive classes that are now fixed: (1) min_trace_width / etch_compensation_margin counted degenerate pour-boundary lines as 0.000 mm traces; (2) copper_to_edge_distance measured against the copper bounding box with no real outline; (3) arc handedness -- stroked traces' round end caps were swept the wrong way and folded into the stroke, so every trace was a self-intersecting bowtie whose boundary ran along its own axis (#14). That third fix is what makes min_annular_ring, acid_trap_angle and copper_sliver_width read real values here instead of 0.0 / artifacts. Two checks (component_to_component_spacing, mask_to_trace_clearance) still read ~0 on this board and are deliberately NOT asserted, pending the polygon-union work tracked on #14.",
   "expect": {
     "min_checks_run": 40,
     "no_crashes": true,
@@ -23,7 +23,8 @@
       "min_annular_ring",
       "acid_trap_angle",
       "copper_sliver_width",
-      "layer_registration_margin"
+      "layer_registration_margin",
+      "min_trace_spacing"
     ]
   }
 }

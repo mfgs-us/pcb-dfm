@@ -64,12 +64,32 @@ def test_degenerate_copper_polygons_are_dropped_at_build():
     assert _MIN_COPPER_POLY_AREA_MM2 < 0.02  # below copper_sliver's min_area
 
 
-def test_merged_copper_below_fab_resolution_is_not_a_spacing_violation():
-    # The min_trace_spacing merge floor sits below the finest fab spacing, so
-    # touching/merged copper is never reported as a spacing gap.
-    from pcb_dfm.checks.impl_min_trace_spacing import _MERGED_COPPER_MM
+def test_touching_copper_is_one_conductor_not_a_spacing_violation():
+    # Physically connected copper is the same net by definition, so the gap
+    # "between" two overlapping segments is a junction, not a spacing gap.
+    # This used to be approximated with a 20 um merge floor, which relocated the
+    # problem rather than fixing it: pairs below the floor were skipped, so the
+    # reported minimum became the smallest gap just above it and the metric
+    # tracked the constant instead of the board (#14). Segments carry an exact
+    # width, so the connectivity test needs no tolerance.
+    from pcb_dfm.checks.impl_min_trace_spacing import Segment, _conductor_groups
 
-    assert 0.0 < _MERGED_COPPER_MM <= 0.025
+    def seg(x1, y1, x2, y2, w=0.2):
+        return Segment("TopCopper", x1, y1, x2, y2, w)
+
+    horizontal = seg(0.0, 0.0, 10.0, 0.0)
+    tee = seg(5.0, 0.0, 5.0, 6.0)        # meets `horizontal` -> same conductor
+    far = seg(0.0, 20.0, 10.0, 20.0)     # 20 mm away -> its own conductor
+
+    ds = _conductor_groups([horizontal, tee, far])
+    assert ds.find(0) == ds.find(1), "a T junction is one conductor"
+    assert ds.find(0) != ds.find(2), "separated copper is a different conductor"
+
+    # Connectivity is transitive: a chain of touching segments is one conductor
+    # even where the ends are far apart.
+    chain = [seg(float(i), 0.0, float(i + 1), 0.0) for i in range(6)]
+    ds2 = _conductor_groups(chain)
+    assert len({ds2.find(i) for i in range(len(chain))}) == 1
 
 
 def test_copper_to_edge_not_applicable_without_outline():

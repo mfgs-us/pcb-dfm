@@ -4,6 +4,7 @@ from typing import List
 
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
+from ..geometry.gerber_backend import excellon_tool_diameters_mm
 from ..ingest import GerberFileInfo
 from ..results import CheckResult, MetricResult, Violation
 
@@ -166,49 +167,10 @@ def run_drill_aspect_ratio(ctx: CheckContext) -> CheckResult:
 
 
 def _extract_tool_diameters_mm(path) -> List[float]:
-    if gerber is None:
-        return []
-    try:
-        drill_layer = gerber.read(str(path))
-    except Exception:
-        return []
+    """Drill tool diameters in mm, via the gerbonara parse backend (#3).
 
-    try:
-        drill_layer.to_inch()
-    except Exception:
-        pass
-
-    diameters_inch: List[float] = []
-
-    tools = getattr(drill_layer, "tools", None)
-    if isinstance(tools, dict):
-        for tool in tools.values():
-            d = getattr(tool, "diameter", None)
-            if d is None:
-                d = getattr(tool, "size", None)
-            if d is not None:
-                try:
-                    diameters_inch.append(float(d))
-                except Exception:
-                    continue
-
-    hits = getattr(drill_layer, "hits", None)
-    if hits is not None:
-        for hit in hits:
-            try:
-                tool = getattr(hit, "tool", None)
-                d = getattr(tool, "diameter", None) if tool is not None else None
-                if d is not None:
-                    diameters_inch.append(float(d))
-                    continue
-            except Exception:
-                pass
-            try:
-                tool, _pos = hit
-                d = getattr(tool, "diameter", None)
-                if d is not None:
-                    diameters_inch.append(float(d))
-            except Exception:
-                continue
-
-    return [d * _INCH_TO_MM for d in diameters_inch]
+    The pcb-tools path read tool diameters in the file's native unit and
+    multiplied by 25.4 unconditionally, so mm-native drill files reported
+    diameters 25.4x too large.
+    """
+    return excellon_tool_diameters_mm(path)

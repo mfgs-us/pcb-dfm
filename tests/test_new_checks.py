@@ -69,10 +69,17 @@ def test_silk_hole_clearance_sign():
     assert _hole_clearance(silk, 0.5, 0.5, 0.5) < 0.0
 
 
-def test_silk_clearance_passes_clean_board():
+def test_silk_clearance_detects_silk_over_a_hole():
+    """The synthetic emitter writes the copper artwork as the silkscreen layer,
+    so silk sits directly on the drilled pads -- a real silk-over-hole overlap.
+
+    This only became visible once drills were parsed with correct coordinates
+    (the old pcb-tools path double-converted mm-native Excellon, putting holes
+    25.4x off the board). Negative clearance == silk overlapping the hole.
+    """
     c = _run("clean_two_layer")["silkscreen_clearance"]
-    assert c.status == "pass"
-    assert _measured(c) is not None and _measured(c) > 0.0
+    assert c.status == "fail"
+    assert _measured(c) is not None and _measured(c) < 0.0
 
 
 # --- layer_registration_margin ----------------------------------------------

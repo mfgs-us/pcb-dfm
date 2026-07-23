@@ -7,14 +7,8 @@ from typing import Dict, List, Optional, Tuple
 
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
+from ..geometry.gerber_backend import excellon_hits_mm
 from ..results import CheckResult, MetricResult, Violation, ViolationLocation
-
-try:
-    from gerber import excellon  # type: ignore
-except Exception:
-    excellon = None  # type: ignore
-
-_INCH_TO_MM = 25.4
 
 
 @dataclass
@@ -38,60 +32,20 @@ def _min_possible_center_dist_between_cells(dx_cells: int, dy_cells: int, cell: 
 
 
 def _collect_drills(ctx: CheckContext) -> List[DrillHole]:
-    if excellon is None:
-        return []
-    drills: List[DrillHole] = []
+    """All drilled holes in mm, via the gerbonara parse backend (#3).
 
+    Replaces the pcb-tools path, which called ``to_inch()`` then multiplied by
+    25.4 and so double-converted **mm-native** Excellon files (holes landed
+    25.4x off the board).
+    """
+    drills: List[DrillHole] = []
     for f in ctx.ingest.files:
         if f.layer_type != "drill":
             continue
-        if f.format != "excellon":
-            continue
-
-        try:
-            drill_file = excellon.read(str(f.path))
-        except Exception:
-            continue
-
-        try:
-            drill_file.to_inch()
-        except Exception:
-            pass
-
-        hits = getattr(drill_file, "hits", [])
-        for hit in hits:
-            x = y = d = None
-            try:
-                if hasattr(hit, "x") and hasattr(hit, "y"):
-                    x = float(hit.x)
-                    y = float(hit.y)
-                elif hasattr(hit, "position"):
-                    px, py = hit.position  # type: ignore[attr-defined]
-                    x = float(px)
-                    y = float(py)
-                tool = getattr(hit, "tool", None)
-                if tool is not None and hasattr(tool, "diameter"):
-                    d = float(tool.diameter)
-            except Exception:
-                pass
-
-            if x is None or y is None or d is None:
-                try:
-                    tool, (px, py) = hit  # type: ignore[misc]
-                    x = float(px)
-                    y = float(py)
-                    d = float(tool.diameter)
-                except Exception:
-                    continue
-
-            drills.append(
-                DrillHole(
-                    x_mm=x * _INCH_TO_MM,
-                    y_mm=y * _INCH_TO_MM,
-                    diameter_mm=d * _INCH_TO_MM,
-                )
-            )
-
+        for hit in excellon_hits_mm(f.path):
+            drills.append(DrillHole(
+                x_mm=hit.x_mm, y_mm=hit.y_mm, diameter_mm=hit.diameter_mm,
+            ))
     return drills
 
 

@@ -1,9 +1,11 @@
 from __future__ import annotations
 
+from pathlib import Path
 from typing import List
 
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
+from ..geometry.gerber_backend import excellon_hits_mm
 from ..ingest import GerberFileInfo
 from ..results import CheckResult, MetricResult, Violation, ViolationLocation
 
@@ -44,97 +46,16 @@ def _resolve_limit(check_def, key: str, default):
 
 
 def _extract_drill_hits_mm(path: str) -> List[dict]:
+    """Drill hits in mm, via the gerbonara parse backend (#3).
+
+    Returns dicts with ``x_mm`` / ``y_mm`` / ``diameter_mm``. The pcb-tools path
+    chained to_metric()/to_inch() and re-scaled by 25.4, which double-converted
+    mm-native drill files.
     """
-    Use gerber.read on a drill file and extract hits as mm.
-
-    Returns list of dicts with:
-      - x_mm
-      - y_mm
-      - diameter_mm
-    """
-    if gerber is None:
-        return []
-
-    try:
-        drill_layer = gerber.read(path)
-    except Exception:
-        return []
-
-    try:
-        drill_layer.to_metric()
-        inch_to_mm = 25.4  # fallback if to_metric is a no-op
-        units = getattr(drill_layer, "units", "").lower()
-        if units == "mm":
-            inch_to_mm = 25.4  # we still treat internal conversions via inch scaling below
-    except Exception:
-        try:
-            drill_layer.to_inch()
-        except Exception:
-            pass
-
-    # We will always go via inch to mm, as in other drill based checks
-    try:
-        drill_layer.to_inch()
-    except Exception:
-        pass
-
-    INCH_TO_MM = 25.4
-
-    hits_out: List[dict] = []
-    hits = getattr(drill_layer, "hits", None)
-    if hits is None:
-        return hits_out
-
-    for hit in hits:
-        x_in = y_in = None
-        d_in = None
-
-        # New style object API
-        try:
-            if hasattr(hit, "x") and hasattr(hit, "y"):
-                x_in = float(hit.x)
-                y_in = float(hit.y)
-            elif hasattr(hit, "position"):
-                px, py = hit.position  # type: ignore[attr-defined]
-                x_in = float(px)
-                y_in = float(py)
-
-            tool = getattr(hit, "tool", None)
-            if tool is not None:
-                d_in = getattr(tool, "diameter", None)
-                if d_in is None:
-                    d_in = getattr(tool, "size", None)
-        except Exception:
-            x_in = y_in = d_in = None
-
-        # Older tuple API: (tool, (x, y))
-        if x_in is None or y_in is None or d_in is None:
-            try:
-                tool, (px, py) = hit  # type: ignore[misc]
-                x_in = float(px)
-                y_in = float(py)
-                d_in = getattr(tool, "diameter", None)
-                if d_in is None:
-                    d_in = getattr(tool, "size", None)
-            except Exception:
-                continue
-
-        try:
-            d_in_float = float(d_in)
-        except Exception:
-            continue
-
-        hits_out.append(
-            {
-                "x_mm": x_in * INCH_TO_MM,
-                "y_mm": y_in * INCH_TO_MM,
-                "diameter_mm": d_in_float * INCH_TO_MM,
-            }
-        )
-
-    return hits_out
-
-
+    return [
+        {"x_mm": h.x_mm, "y_mm": h.y_mm, "diameter_mm": h.diameter_mm}
+        for h in excellon_hits_mm(Path(path))
+    ]
 @register_check("missing_tooling_holes")
 def run_missing_tooling_holes(ctx: CheckContext) -> CheckResult:
     """

@@ -5,17 +5,8 @@ from typing import List, Tuple
 
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
+from ..geometry.gerber_backend import GERBONARA_AVAILABLE, excellon_slots_mm
 from ..results import CheckResult, MetricResult, Violation, ViolationLocation
-
-# pcb-tools / gerber is optional at runtime; degrade gracefully if missing.
-try:
-    import gerber
-    from gerber.excellon import DrillSlot
-    from gerber.primitives import Slot as GerberSlot
-except Exception:  # pragma: no cover - defensive
-    gerber = None
-    DrillSlot = None  # type: ignore
-    GerberSlot = None  # type: ignore
 
 _INCH_TO_MM = 25.4
 
@@ -46,66 +37,23 @@ def _severity(ctx: CheckContext) -> str:
 def _collect_slots_mm(ctx: CheckContext) -> List[Tuple[float, float, float, float]]:
     """Return detected slots as (width_mm, length_mm, cx_mm, cy_mm).
 
-    Slots are routed/elongated features. We measure them from two honest
-    sources that pcb-tools exposes directly:
-      - Excellon routed slots (DrillSlot: tool diameter = slot width,
-        start->end distance = slot length).
-      - Slot primitives that a parsed Excellon file may emit.
-    The slot *width* is the narrow dimension a milling/routing tool must fit.
+    Slots are routed/elongated features: the routing tool diameter is the slot
+    *width* (the narrow dimension a tool must fit) and the start->end distance is
+    its length. Parsed via the gerbonara backend (#3), which reports both in mm.
     """
-    if gerber is None:
-        return []
-
     slots: List[Tuple[float, float, float, float]] = []
-
     for f in ctx.ingest.files:
-        # Slots live in drill (Excellon) programs.
         if f.layer_type != "drill":
             continue
-        try:
-            layer = gerber.read(str(f.path))
-        except Exception:
-            continue
-        try:
-            layer.to_metric()  # normalize everything to mm
-        except Exception:
-            pass
-
-        # DrillSlot hits: width = tool diameter, length = |end - start|.
-        for hit in getattr(layer, "hits", []) or []:
-            if DrillSlot is not None and isinstance(hit, DrillSlot):
-                try:
-                    tool = getattr(hit, "tool", None)
-                    width = float(getattr(tool, "diameter"))
-                    (x0, y0) = hit.start
-                    (x1, y1) = hit.end
-                    length = hypot(float(x1) - float(x0), float(y1) - float(y0))
-                    cx = 0.5 * (float(x0) + float(x1))
-                    cy = 0.5 * (float(y0) + float(y1))
-                    slots.append((width, length, cx, cy))
-                except Exception:
-                    continue
-
-        # Slot primitives (if present) - width from short bbox dimension.
-        for prim in getattr(layer, "primitives", []) or []:
-            if GerberSlot is not None and isinstance(prim, GerberSlot):
-                try:
-                    (min_x, max_x), (min_y, max_y) = prim.bounding_box
-                    w = float(max_x) - float(min_x)
-                    h = float(max_y) - float(min_y)
-                    width = min(w, h)
-                    length = max(w, h)
-                    if width <= 0.0:
-                        continue
-                    slots.append(
-                        (width, length, 0.5 * (min_x + max_x), 0.5 * (min_y + max_y))
-                    )
-                except Exception:
-                    continue
-
+        for s in excellon_slots_mm(f.path):
+            if s.width_mm <= 0.0:
+                continue
+            length = hypot(s.x2_mm - s.x1_mm, s.y2_mm - s.y1_mm)
+            slots.append((
+                s.width_mm, length,
+                0.5 * (s.x1_mm + s.x2_mm), 0.5 * (s.y1_mm + s.y2_mm),
+            ))
     return slots
-
-
 @register_check("min_slot_width")
 def run_min_slot_width(ctx: CheckContext) -> CheckResult:
     """Minimum routed/drilled slot width.
@@ -116,7 +64,7 @@ def run_min_slot_width(ctx: CheckContext) -> CheckResult:
     """
     target_min, limit_min = _thresholds(ctx)
 
-    if gerber is None:
+    if not GERBONARA_AVAILABLE:
         return CheckResult(
             check_id=ctx.check_def.id,
             name=ctx.check_def.name,
@@ -127,7 +75,7 @@ def run_min_slot_width(ctx: CheckContext) -> CheckResult:
             metric=MetricResult.geometry_mm(None, target_mm=target_min, limit_low_mm=limit_min),
             violations=[Violation(
                 severity="info",
-                message="Gerber/Excellon parser unavailable; cannot measure slot width.",
+                message="Excellon parser unavailable; cannot measure slot width.",
                 location=None,
             )],
         ).finalize()

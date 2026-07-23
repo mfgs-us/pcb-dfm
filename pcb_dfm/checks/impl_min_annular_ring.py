@@ -8,15 +8,8 @@ from typing import List, Optional
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
 from ..geometry import queries
+from ..geometry.gerber_backend import excellon_hits_mm
 from ..results import CheckResult, MetricResult, Violation, ViolationLocation
-
-# pcb-tools excellon reader (optional)
-try:
-    from gerber import excellon  # type: ignore
-except Exception:
-    excellon = None  # type: ignore
-
-_INCH_TO_MM = 25.4
 
 
 @dataclass
@@ -25,27 +18,6 @@ class DrillHole:
     y_mm: float
     diameter_mm: float
     is_plated: bool = True
-
-
-def _detect_excellon_units(drill_file) -> str:
-    """Detect Excellon file units from header."""
-    # Try to get units from the file object
-    if hasattr(drill_file, 'units'):
-        units = getattr(drill_file, 'units', None)
-        if units in ('inch', 'mm'):
-            return units
-
-    # Try to detect from header/comments
-    if hasattr(drill_file, 'header'):
-        header = getattr(drill_file, 'header', '')
-        if isinstance(header, str):
-            if 'M71' in header.upper():
-                return 'mm'
-            elif 'M72' in header.upper():
-                return 'inch'
-
-    # Default to inch if undetectable
-    return 'inch'
 
 
 def _point_in_polygon(x: float, y: float, vertices: List) -> bool:
@@ -162,94 +134,24 @@ def _is_pad_like_polygon(poly, drill_diameter_mm: float, absolute_min: float) ->
 
 
 def _collect_drills_from_excellon(ctx: CheckContext) -> List[DrillHole]:
-    """Collect plated drills from Excellon files if available."""
-    if excellon is None:
-        return []
+    """Plated drills in mm, via the gerbonara parse backend (#3).
 
+    Replaces hand-rolled Excellon unit detection that mis-handled mm-native
+    files (holes came out 25.4x off the board, so no pad ever contained them).
+    Non-plated drills are excluded using the ingest's classification.
+    """
     drills: List[DrillHole] = []
     for f in ctx.ingest.files:
         if f.layer_type != "drill":
             continue
-        if f.format != "excellon":
-            continue
-
-        # 1E) Only use plated drills, exclude NPTH
+        # Only plated drills carry an annular ring; exclude NPTH.
         if f.logical_layer == "DrillNonPlated" or f.is_plated is False:
             continue
-
-        try:
-            drill_file = excellon.read(str(f.path))
-        except Exception:
-            continue
-
-        # 1D) Detect units and only convert if needed
-        units = _detect_excellon_units(drill_file)
-
-        # Only convert to inch if the file is in mm and we need inch for internal processing
-        if units == 'mm':
-            # Convert mm to inch for internal processing, then to mm at the end
-            try:
-                drill_file.to_inch()
-            except Exception:
-                # If conversion fails, assume coordinates are already in inch
-                pass
-        elif units == 'inch':
-            # Already in inch, no conversion needed
-            pass
-        else:
-            # Unknown units, try to convert as fallback
-            try:
-                drill_file.to_inch()
-            except Exception:
-                pass
-
-        hits = getattr(drill_file, "hits", [])
-        for hit in hits:
-            x = y = d = None
-            # new-style DrillHit
-            try:
-                if hasattr(hit, "x") and hasattr(hit, "y"):
-                    x = float(hit.x)
-                    y = float(hit.y)
-                elif hasattr(hit, "position"):
-                    px, py = hit.position  # type: ignore[attr-defined]
-                    x = float(px)
-                    y = float(py)
-
-                tool = getattr(hit, "tool", None)
-                if tool is not None and hasattr(tool, "diameter"):
-                    d = float(tool.diameter)
-            except Exception:
-                pass
-
-            # old-style (tool, (x, y)) tuple
-            if x is None or y is None or d is None:
-                try:
-                    tool, (px, py) = hit  # type: ignore[misc]
-                    x = float(px)
-                    y = float(py)
-                    d = float(tool.diameter)
-                except Exception:
-                    continue
-
-            # Store diameter_mm directly with proper unit conversion
-            if units == 'mm':
-                # File was originally in mm, coordinates are now in inch after to_inch()
-                # Convert back to mm
-                diameter_mm = d * _INCH_TO_MM
-            else:
-                # File was in inch, coordinates are in inch
-                diameter_mm = d * _INCH_TO_MM
-
-            drills.append(
-                DrillHole(
-                    x_mm=x * _INCH_TO_MM,
-                    y_mm=y * _INCH_TO_MM,
-                    diameter_mm=diameter_mm,
-                    is_plated=True,
-                )
-            )
-
+        for hit in excellon_hits_mm(f.path):
+            drills.append(DrillHole(
+                x_mm=hit.x_mm, y_mm=hit.y_mm,
+                diameter_mm=hit.diameter_mm, is_plated=True,
+            ))
     return drills
 
 

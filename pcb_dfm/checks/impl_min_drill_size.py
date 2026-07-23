@@ -5,6 +5,7 @@ from typing import List
 
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
+from ..geometry.gerber_backend import excellon_tool_diameters_mm
 from ..ingest import GerberFileInfo
 from ..results import CheckResult, MetricResult, Violation
 
@@ -173,67 +174,5 @@ def run_min_drill_size(ctx: CheckContext) -> CheckResult:
 
 
 def _extract_tool_diameters_mm(path: Path) -> List[float]:
-    """
-    Use gerber.read on a drill file and extract tool diameters in mm.
-
-    We are deliberately defensive because pcb-tools Excellon API
-    varies between versions.
-
-    Strategy:
-      - gerber.read(path) -> drill_layer
-      - drill_layer.to_inch()
-      - collect diameters from:
-          - drill_layer.tools[*].diameter or .size
-          - hits[*].tool.diameter as fallback
-    """
-    if gerber is None:
-        return []
-
-    try:
-        drill_layer = gerber.read(str(path))
-    except Exception:
-        return []
-
-    try:
-        # Normalize units to inch
-        drill_layer.to_inch()
-    except Exception:
-        # If to_inch is unavailable, we assume it is already inch
-        pass
-
-    diameters_inch: List[float] = []
-
-    tools = getattr(drill_layer, "tools", None)
-    if isinstance(tools, dict):
-        for tool in tools.values():
-            d = getattr(tool, "diameter", None)
-            if d is None:
-                d = getattr(tool, "size", None)
-            if d is not None:
-                try:
-                    diameters_inch.append(float(d))
-                except Exception:
-                    continue
-
-    # Fallback: inspect hits and their tool diameters
-    hits = getattr(drill_layer, "hits", None)
-    if hits is not None:
-        for hit in hits:
-            try:
-                tool = getattr(hit, "tool", None)
-                d = getattr(tool, "diameter", None) if tool is not None else None
-                if d is not None:
-                    diameters_inch.append(float(d))
-                    continue
-            except Exception:
-                pass
-            # Older formats: tool, (x, y)
-            try:
-                tool, _pos = hit
-                d = getattr(tool, "diameter", None)
-                if d is not None:
-                    diameters_inch.append(float(d))
-            except Exception:
-                continue
-
-    return [d_in * _INCH_TO_MM for d_in in diameters_inch]
+    """Drill tool diameters in mm, via the gerbonara parse backend (#3)."""
+    return excellon_tool_diameters_mm(path)

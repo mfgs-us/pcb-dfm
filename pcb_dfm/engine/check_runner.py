@@ -8,7 +8,6 @@ from typing import Callable, Dict, Iterable
 from ..checks import _ensure_impls_loaded
 from ..checks.definitions import CheckDefinition
 from ..geometry import build_board_geometry
-from ..geometry.gerber_compat import rU_open_shim
 from ..ingest import ingest_gerber_zip
 from ..ingest.design_data import DesignDataLike, load_design_data
 from ..results import CheckResult, Violation
@@ -113,32 +112,29 @@ def run_single_check(
     gerber_zip = Path(gerber_zip).resolve()
     design_data = load_design_data(design_data)
 
-    # The pcb-tools "rU" open-mode shim is active only for the duration of this
-    # block (ingest, geometry build, and the check run all call gerber.read).
-    with rU_open_shim():
-        t0 = time.perf_counter()
-        ingest_result = ingest_gerber_zip(gerber_zip)
-        geom = build_board_geometry(ingest_result)
-        t_setup = time.perf_counter() - t0
+    t0 = time.perf_counter()
+    ingest_result = ingest_gerber_zip(gerber_zip)
+    geom = build_board_geometry(ingest_result)
+    t_setup = time.perf_counter() - t0
 
-        cache = GeometryCache()
+    cache = GeometryCache()
 
-        ctx = CheckContext(
-            check_def=check_def,
-            ingest=ingest_result,
-            geometry=geom,
-            geometry_cache=cache,
-            ruleset_id=ruleset_id,
-            design_id=design_id,
-            gerber_zip=gerber_zip,
-            design_data=design_data,
-        )
+    ctx = CheckContext(
+        check_def=check_def,
+        ingest=ingest_result,
+        geometry=geom,
+        geometry_cache=cache,
+        ruleset_id=ruleset_id,
+        design_id=design_id,
+        gerber_zip=gerber_zip,
+        design_data=design_data,
+    )
 
-        runner = get_check_runner(check_def.id)
+    runner = get_check_runner(check_def.id)
 
-        t1 = time.perf_counter()
-        result = runner(ctx)
-        t_run = time.perf_counter() - t1
+    t1 = time.perf_counter()
+    result = runner(ctx)
+    t_run = time.perf_counter() - t1
 
     _log(
         f"[DFM TIMING] {check_def.id:<40} "
@@ -197,12 +193,10 @@ def run_checks(
     gerber_zip = Path(gerber_zip).resolve()
     design_data = load_design_data(design_data)
 
-    # ---- Shared ingest + geometry (major speed win). pcb-tools "rU" shim is
-    # scoped to the read calls rather than patched globally at import time.
+    # ---- Shared ingest + geometry (major speed win).
     t0 = time.perf_counter()
-    with rU_open_shim():
-        ingest_result = prebuilt_ingest if prebuilt_ingest is not None else ingest_gerber_zip(gerber_zip)
-        geom = build_board_geometry(ingest_result)
+    ingest_result = prebuilt_ingest if prebuilt_ingest is not None else ingest_gerber_zip(gerber_zip)
+    geom = build_board_geometry(ingest_result)
     setup_time = time.perf_counter() - t0
 
     cache = GeometryCache()
@@ -246,8 +240,7 @@ def run_checks(
 
         t1 = time.perf_counter()
         try:
-            with rU_open_shim():
-                result = runner(ctx)
+            result = runner(ctx)
         except Exception as exc:
             t_run = time.perf_counter() - t1
             _log(

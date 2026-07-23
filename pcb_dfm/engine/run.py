@@ -6,7 +6,6 @@ from pathlib import Path
 
 from ..checks.definitions import load_check_definitions_for_ruleset
 from ..geometry import build_board_geometry
-from ..geometry.gerber_compat import rU_open_shim
 from ..ingest import ingest_gerber_zip
 from ..results import (
     CategoryResult,
@@ -49,8 +48,7 @@ def run_dfm_on_gerber_zip(
 
     # Ingest once up front so we can both run checks against it AND report the
     # detected copper stackup / warnings (so a dropped inner layer is visible).
-    with rU_open_shim():
-        ingest_result = ingest_gerber_zip(gerber_zip)
+    ingest_result = ingest_gerber_zip(gerber_zip)
 
     check_defs = load_check_definitions_for_ruleset(ruleset_id)
     check_results = run_checks(
@@ -93,12 +91,11 @@ def describe_stackup(ingest_result):
 def build_geometry_for(gerber_zip: Path):
     """Ingest + build the board geometry for a Gerber zip (for rendering).
 
-    Runs inside the pcb-tools shim. Independent of check execution; used by the
-    HTML report so it can draw the board.
+    Independent of check execution; used by the HTML report so it can draw
+    the board.
     """
-    with rU_open_shim():
-        ingest_result = ingest_gerber_zip(gerber_zip)
-        return build_board_geometry(ingest_result)
+    ingest_result = ingest_gerber_zip(gerber_zip)
+    return build_board_geometry(ingest_result)
 
 
 def run_dfm_bundle(
@@ -130,9 +127,8 @@ def run_dfm_bundle(
 
         check_defs = load_check_definitions_for_ruleset(ruleset_id)
 
-        with rU_open_shim():
-            ingest_result = ingest_gerber_zip(gerber_zip)
-            geom = build_board_geometry(ingest_result)
+        ingest_result = ingest_gerber_zip(gerber_zip)
+        geom = build_board_geometry(ingest_result)
         cache = GeometryCache()
 
         stats = {"total": 0, "passed": 0, "warnings": 0, "failed": 0}
@@ -157,8 +153,7 @@ def run_dfm_bundle(
             )
 
             try:
-                with rU_open_shim():
-                    result = runner(ctx)
+                result = runner(ctx)
             except Exception as exc:
                 # A crash is a failure, never a silent pass.
                 stats["failed"] += 1

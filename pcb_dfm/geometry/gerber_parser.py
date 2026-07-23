@@ -15,7 +15,7 @@ from .layer_model import BoardGeometry, BoardLayer
 from .primitives import Point2D, Polygon
 
 # Gerber layer polygons are extracted via gerbonara (see gerber_backend, #3):
-# proper arcs/regions/apertures, mm-native, no "rU" open-mode shim.
+# proper arcs/regions/apertures, mm-native.
 
 
 # Copper polygons below this area (mm^2) are degenerate pour-boundary

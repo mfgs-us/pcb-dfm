@@ -131,3 +131,41 @@ def test_registration_budget_thresholds_are_micron_scale():
     rec, ab = _thresholds(_Ctx())
     assert math.isclose(rec, 0.05, abs_tol=1e-9)
     assert math.isclose(ab, 0.025, abs_tol=1e-9)
+
+
+def test_silk_off_the_board_is_documentation_not_a_clearance_violation():
+    """A title block beside the board is not silkscreen that is 'too close' to it.
+
+    Silk lying entirely outside the outline is fab documentation -- title
+    blocks, layer-identification text, fab notes. It is never printed on the
+    board. Counting it failed every real board in the corpus: eagle_gyw carries
+    a title block 6.3 mm past its right edge, reported as -6.32 mm of
+    clearance (#19).
+    """
+    board = boards.clean_two_layer()          # outline spans x 0..20, y 0..14
+    board.silk = [boards.Trace(30.0, 5.0, 36.0, 5.0, 0.2)]   # entirely off-board
+    c = _run_board(board)["silkscreen_clearance"]
+    assert c.status == "not_applicable"
+
+
+def test_silk_over_the_board_edge_warns_but_does_not_fail():
+    """Silk running off the edge is routed away when the board is cut out.
+
+    Cosmetic, and very often just an annotation drawn on the silk layer, so it
+    never fails on its own -- unlike silk over a drilled hole.
+    """
+    board = boards.clean_two_layer()
+    # Crosses the right edge (x=20) but is clear of both holes at (4,10)/(14,10).
+    board.silk = [boards.Trace(17.0, 2.0, 23.0, 2.0, 0.2)]
+    c = _run_board(board)["silkscreen_clearance"]
+    assert c.status == "warning"
+    assert _measured(c) is not None and _measured(c) < 0.0
+
+
+def test_silk_over_a_hole_still_fails():
+    """The control: the genuine defect must survive the fix above."""
+    board = boards.clean_two_layer()
+    board.silk = [boards.Trace(2.0, 10.0, 6.0, 10.0, 0.2)]   # across the hole at (4,10)
+    c = _run_board(board)["silkscreen_clearance"]
+    assert c.status == "fail"
+    assert "hole" in c.violations[0].message

@@ -94,10 +94,30 @@ def run_silkscreen_clearance(ctx: CheckContext) -> CheckResult:
     if not silk_bboxes:
         return _na(ctx, rec, ab, "No silkscreen features found to evaluate clearance.")
 
+    # Silk lying ENTIRELY outside the board is fab documentation -- title
+    # blocks, layer-identification text, fab notes -- not board silkscreen. It
+    # is not printed on the board and cannot be "too close" to anything on it.
+    # Counting it made every real board fail: eagle_gyw has a title block 6.3 mm
+    # past the right edge, which was reported as -6.32 mm of clearance (#19).
+    silk_bboxes = [
+        bb for bb in silk_bboxes
+        if not (bb[0] > board.max_x or bb[1] < board.min_x
+                or bb[2] > board.max_y or bb[3] < board.min_y)
+    ]
+    if not silk_bboxes:
+        return _na(ctx, rec, ab,
+                   "All silkscreen features lie outside the board outline (fab "
+                   "documentation); no on-board silkscreen to evaluate.")
+
     drills = _collect_drills(ctx)
     holes = [(h.x_mm, h.y_mm, 0.5 * h.diameter_mm) for h in drills if h.diameter_mm > 0.0]
 
     min_clear: Optional[float] = None
+    # Graded separately: silk running off the board edge is trimmed at
+    # fabrication (cosmetic), while silk over a drilled hole is smeared by the
+    # drill and is a real defect. See the grading below.
+    min_hole_clear: Optional[float] = None
+    min_edge_clear: Optional[float] = None
     worst_location: Optional[ViolationLocation] = None
     worst_kind = ""
     # (clearance_mm, kind, x_mm, y_mm)
@@ -107,7 +127,8 @@ def run_silkscreen_clearance(ctx: CheckContext) -> CheckResult:
         min_x, max_x, min_y, max_y = bb
         cx, cy = 0.5 * (min_x + max_x), 0.5 * (min_y + max_y)
 
-        clr = _edge_clearance(bb, board)
+        edge_clr = _edge_clearance(bb, board)
+        clr = edge_clr
         kind = "board edge"
 
         for hx, hy, r in holes:
@@ -117,6 +138,11 @@ def run_silkscreen_clearance(ctx: CheckContext) -> CheckResult:
             if gap < clr:
                 clr = gap
                 kind = "drilled hole"
+            if min_hole_clear is None or gap < min_hole_clear:
+                min_hole_clear = gap
+
+        if min_edge_clear is None or edge_clr < min_edge_clear:
+            min_edge_clear = edge_clr
 
         if min_clear is None or clr < min_clear:
             min_clear = clr
@@ -132,12 +158,27 @@ def run_silkscreen_clearance(ctx: CheckContext) -> CheckResult:
 
     assert min_clear is not None
 
-    if min_clear < ab:
-        status = "fail"
-    elif min_clear < rec:
-        status = "warning"
-    else:
-        status = "pass"
+    # Silk over a drilled HOLE is a genuine defect: the drill smears the ink and
+    # can leave it in the barrel, so it grades normally and can fail.
+    #
+    # Silk past the board EDGE is different in kind. It is routed away when the
+    # board is cut out, so the printed board is unaffected; it is also very
+    # commonly just an annotation or leader line drawn on the silk layer. It
+    # therefore never fails on its own -- it is capped at a warning. Grading the
+    # two together failed every real board in the corpus on what is, for two of
+    # them, a cosmetic overhang (#19).
+    def _grade(v: Optional[float], can_fail: bool) -> str:
+        if v is None:
+            return "pass"
+        if v < ab:
+            return "fail" if can_fail else "warning"
+        if v < rec:
+            return "warning"
+        return "pass"
+
+    _ORDER = {"pass": 0, "warning": 1, "fail": 2}
+    status = max(_grade(min_hole_clear, True), _grade(min_edge_clear, False),
+                 key=lambda st: _ORDER[st])
 
     if min_clear >= rec:
         score = 100.0
@@ -150,7 +191,10 @@ def run_silkscreen_clearance(ctx: CheckContext) -> CheckResult:
     violations: List[Violation] = []
     if status != "pass":
         severity = "error" if status == "fail" else (ctx.check_def.severity or "warning")
-        for clr, kind, x_mm, y_mm in sorted(offenders, key=lambda t: t[0])[:MAX_REPORTED_VIOLATIONS]:
+        # Hole overlaps first: those are what can fail the board, so they must
+        # lead the list even when a (cosmetic) edge overhang is numerically worse.
+        offenders.sort(key=lambda t: (t[1] != "drilled hole", t[0]))
+        for clr, kind, x_mm, y_mm in offenders[:MAX_REPORTED_VIOLATIONS]:
             where = "overlaps" if clr < 0.0 else f"is {clr * 1000:.0f} µm from"
             violations.append(Violation(
                 severity=severity,

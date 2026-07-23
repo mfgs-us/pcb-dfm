@@ -6,7 +6,15 @@ from typing import List, Optional
 
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
+from ..geometry.gerber_backend import gerber_traces_mm
 from ..results import CheckResult, MetricResult, Violation, ViolationLocation
+from .impl_min_annular_ring import _point_in_polygon
+from .impl_min_trace_spacing import (
+    Segment,
+    _conductor_groups,
+    _segment_segment_distance_mm,
+)
+from .impl_min_trace_width import _MIN_MEANINGFUL_TRACE_MM
 
 
 # --------------------------------------------------------------------------
@@ -124,6 +132,49 @@ class _Feature:
         self.cy = 0.5 * (b.min_y + b.max_y)
 
 
+def _opening_to_segment_clearance(opening_poly, seg: Segment) -> float:
+    """Clearance in mm from a mask opening to a trace, negative if they overlap.
+
+    Works on the trace's exact capsule (centerline + width) rather than on its
+    tessellated outline polygon. Polygon-to-polygon edge distance cannot see
+    containment -- a small opening sitting entirely inside a wide trace has a
+    positive edge distance from it -- which is precisely the case that has to
+    read as "overlapping" for the conductor test below to work.
+    """
+    # A trace endpoint or midpoint inside the opening is unambiguous overlap.
+    mx = 0.5 * (seg.x1_mm + seg.x2_mm)
+    my = 0.5 * (seg.y1_mm + seg.y2_mm)
+    verts = opening_poly.vertices
+    for px, py in ((seg.x1_mm, seg.y1_mm), (seg.x2_mm, seg.y2_mm), (mx, my)):
+        if _point_in_polygon(px, py, verts):
+            return -1.0
+
+    best = math.inf
+    n = len(verts)
+    for i in range(n):
+        j = (i + 1) % n
+        edge = Segment("", verts[i].x, verts[i].y, verts[j].x, verts[j].y, 0.0)
+        d, _mx, _my = _segment_segment_distance_mm(edge, seg)
+        if d is not None and d < best:
+            best = d
+    if not math.isfinite(best):
+        return math.inf
+    # `best` is to the centerline; the copper reaches half a width further out.
+    return best - 0.5 * seg.width_mm
+
+
+def _seg_bounds(seg: Segment):
+    half = 0.5 * seg.width_mm
+
+    class _B:
+        min_x = min(seg.x1_mm, seg.x2_mm) - half
+        max_x = max(seg.x1_mm, seg.x2_mm) + half
+        min_y = min(seg.y1_mm, seg.y2_mm) - half
+        max_y = max(seg.y1_mm, seg.y2_mm) + half
+
+    return _B
+
+
 def _side_key(side) -> str:
     return str(side).lower() if side is not None else "unknown"
 
@@ -142,17 +193,23 @@ def run_mask_to_trace_clearance(ctx: CheckContext) -> CheckResult:
 
     Method:
       - openings   = solder-mask-layer polygons (per side)
-      - traces     = copper polygons classified as trace-like (elongated: aspect
-                     ratio >= trace_min_aspect), i.e. Line-type routed copper
-                     rather than pads.
-      - For each opening, measure the minimum edge-to-edge distance to every
-        same-side trace the opening does NOT belong to (a trace essentially
-        coincident with / under the opening -- distance <= belongs_epsilon -- is
-        the opening's own feature and is skipped).
-      - Report the global minimum clearance.
+      - traces     = drawn copper segments (exact centerline + width), grouped
+                     into physically connected conductors.
+      - An opening BELONGS to every conductor it overlaps. Nothing in those
+        conductors is a "neighbor": it is the pad the opening is for, and the
+        routing attached to that pad, all on one net.
+      - For each opening, measure the minimum clearance to segments of every
+        OTHER conductor. Report the global minimum.
 
-    Data-gap honesty: if there is no mask layer, no trace-like copper, or every
-    opening only overlaps its own trace (so no neighbor clearance is
+    This replaces a ``belongs_epsilon_mm`` distance threshold (1e-4 mm) that
+    tried to skip "the opening's own trace" by proximity alone. It could only
+    ever exclude the copper directly under the opening, not the rest of that
+    pad's net, so the trace leaving the pad still counted as its own neighbor --
+    and the reported minimum simply tracked the epsilon (0.00029 mm against a
+    0.0001 mm threshold) instead of measuring the board (#14).
+
+    Data-gap honesty: if there is no mask layer, no drawn copper, or every
+    opening only touches its own conductor (so no neighbor clearance is
     measurable), we return not_applicable rather than silently reporting a
     bogus number. Mask polarity is assumed to be "openings" geometry (this
     engine cannot invert coverage geometry; see solder_mask_expansion).
@@ -165,11 +222,6 @@ def run_mask_to_trace_clearance(ctx: CheckContext) -> CheckResult:
 
     raw_cfg = getattr(ctx.check_def, "raw", None) or {}
     mask_min_area_mm2 = float(raw_cfg.get("mask_min_area_mm2", 0.02))
-    trace_min_aspect = float(raw_cfg.get("trace_min_aspect_ratio", 3.0))
-    belongs_epsilon = float(raw_cfg.get("belongs_epsilon_mm", 1e-4))
-    # Only search traces whose bbox is within this margin of an opening -- a
-    # clearance larger than this is comfortably safe and not worth the O(n^2).
-    search_margin = float(raw_cfg.get("search_margin_mm", max(2.0, recommended_min * 20.0)))
 
     geom = ctx.geometry
 
@@ -187,22 +239,25 @@ def run_mask_to_trace_clearance(ctx: CheckContext) -> CheckResult:
                     continue
                 openings_by_side[_side_key(side)].append(_Feature(side, logical, poly))
 
-        elif layer_type == "copper":
-            for poly in getattr(layer, "polygons", []):
-                b = poly.bounds()
-                w = max(0.0, b.max_x - b.min_x)
-                h = max(0.0, b.max_y - b.min_y)
-                if w <= 0.0 or h <= 0.0:
-                    continue
-                short_dim = min(w, h)
-                long_dim = max(w, h)
-                aspect = long_dim / short_dim if short_dim > 0.0 else 1.0
-                # Trace-like = elongated copper (routed line), not a pad blob.
-                if aspect >= trace_min_aspect:
-                    traces_by_side[_side_key(side)].append(_Feature(side, logical, poly))
+    # Copper comes from the drawn segments, not the tessellated outlines: the
+    # exact centerline + width lets us test overlap (and hence conductor
+    # membership) without a polygon boolean.
+    segments_by_side: dict[str, List[Segment]] = defaultdict(list)
+    for info in ctx.ingest.files:
+        if info.layer_type != "copper":
+            continue
+        for t in gerber_traces_mm(info.path):
+            if t.width_mm < _MIN_MEANINGFUL_TRACE_MM:
+                continue  # region/pour boundary draw, not a real trace
+            segments_by_side[_side_key(info.side)].append(Segment(
+                layer_name=info.logical_layer,
+                x1_mm=t.x1_mm, y1_mm=t.y1_mm,
+                x2_mm=t.x2_mm, y2_mm=t.y2_mm,
+                width_mm=t.width_mm,
+            ))
 
     have_openings = any(openings_by_side.values())
-    have_traces = any(traces_by_side.values())
+    have_traces = any(segments_by_side.values())
 
     def _not_applicable(reason: str) -> CheckResult:
         return CheckResult(
@@ -235,37 +290,55 @@ def run_mask_to_trace_clearance(ctx: CheckContext) -> CheckResult:
     measured_any = False
 
     for side_key, openings in openings_by_side.items():
-        traces = traces_by_side.get(side_key, [])
-        if not traces:
+        segs = segments_by_side.get(side_key, [])
+        if not segs:
             continue
 
+        groups = _conductor_groups(segs)
+        group_of = [groups.find(i) for i in range(len(segs))]
+        seg_bounds = [_seg_bounds(sg) for sg in segs]
+
         for opening in openings:
-            for tr in traces:
-                gap = _bbox_gap(opening.bounds, tr.bounds)
-                # Prune traces that are already farther than the best clearance
-                # found, or comfortably beyond the search margin.
-                if gap > search_margin and gap >= min_clearance:
+            # Pass 1: which conductors does this opening sit on? Those are its
+            # own pad and that pad's routing -- not neighbors. Overlap requires
+            # the bounding boxes to overlap, so that is an exact cheap filter.
+            owning: set = set()
+            for i, sg in enumerate(segs):
+                if _bbox_gap(opening.bounds, seg_bounds[i]) > 0.0:
                     continue
-                if gap >= min_clearance:
+                if _opening_to_segment_clearance(opening.poly, sg) <= 0.0:
+                    owning.add(group_of[i])
+
+            # Pass 2: nearest copper belonging to any OTHER conductor.
+            #
+            # The bbox gap is a valid lower bound on the true clearance (every
+            # point of a shape lies inside its bbox), so skipping pairs whose
+            # bbox gap already exceeds the best clearance found is exact -- it
+            # can never discard the true minimum. A fixed search radius is not:
+            # it silently drops boards whose nearest neighbouring copper is
+            # farther than the radius, reporting "not applicable" for a board
+            # that has a perfectly good, if generous, clearance.
+            for i, sg in enumerate(segs):
+                if group_of[i] in owning:
                     continue
-
-                dist = _min_distance_between_polygons(opening.poly, tr.poly)
-
-                # The trace the opening belongs to (coincident / under it) is
-                # not a "neighbor"; skip it.
-                if dist <= belongs_epsilon:
+                if _bbox_gap(opening.bounds, seg_bounds[i]) >= min_clearance:
                     continue
-
+                clearance = _opening_to_segment_clearance(opening.poly, sg)
+                if clearance <= 0.0:
+                    # Unreachable in practice: overlapping copper would have put
+                    # this conductor in `owning` above. Guard anyway so a
+                    # degenerate shape cannot report a negative clearance.
+                    continue
                 measured_any = True
-                if dist < min_clearance:
-                    min_clearance = dist
+                if clearance < min_clearance:
+                    min_clearance = clearance
                     worst_loc = ViolationLocation(
                         layer=opening.layer,
                         x_mm=opening.cx,
                         y_mm=opening.cy,
                         notes=(
                             f"Mask opening edge to nearest neighboring trace on "
-                            f"copper layer {tr.layer}."
+                            f"copper layer {sg.layer_name}."
                         ),
                     )
 

@@ -141,6 +141,62 @@ def gerber_polygons_mm(path: Path) -> List[Polygon]:
     return polys
 
 
+@dataclass
+class Trace:
+    """A drawn conductor segment in mm (``width_mm`` is the aperture width)."""
+    x1_mm: float
+    y1_mm: float
+    x2_mm: float
+    y2_mm: float
+    width_mm: float
+
+
+def _aperture_width_mm(aperture) -> float:
+    """Aperture width in mm.
+
+    Same unit trap as drill tools: an aperture keeps the file's native unit even
+    when the owning object is converted, so convert it explicitly.
+    """
+    if aperture is None:
+        return 0.0
+    try:
+        return float(aperture.equivalent_width(MM))
+    except Exception:
+        return 0.0
+
+
+def gerber_traces_mm(path: Path) -> List[Trace]:
+    """Drawn segments (traces) with their aperture width, in mm.
+
+    Covers gerbonara ``Line`` *and* ``Arc`` objects — pcb-tools only exposed
+    lines, so arc-routed traces were previously invisible to width/spacing
+    checks. An arc contributes its endpoints (chord) for position; its width is
+    exact.
+    """
+    if not GERBONARA_AVAILABLE:
+        return []
+    out: List[Trace] = []
+    with warnings.catch_warnings():
+        warnings.simplefilter("ignore", SyntaxWarning)
+        try:
+            gf = GerberFile.open(str(path))
+        except Exception:
+            return []
+        for obj in gf.objects:
+            if not (hasattr(obj, "x1") and hasattr(obj, "y2")):
+                continue  # Flash / Region: not a drawn segment
+            try:
+                m = obj.converted("mm")
+                width = _aperture_width_mm(getattr(obj, "aperture", None))
+                out.append(Trace(
+                    x1_mm=float(m.x1), y1_mm=float(m.y1),
+                    x2_mm=float(m.x2), y2_mm=float(m.y2), width_mm=width,
+                ))
+            except Exception:
+                continue
+    return out
+
+
 # --------------------------------------------------------------------------- #
 # Excellon (drills / slots)
 # --------------------------------------------------------------------------- #

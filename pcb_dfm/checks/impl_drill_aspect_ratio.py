@@ -4,14 +4,9 @@ from typing import List
 
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
-from ..geometry.gerber_backend import excellon_tool_diameters_mm
+from ..geometry.gerber_backend import GERBONARA_AVAILABLE, excellon_tool_diameters_mm
 from ..ingest import GerberFileInfo
 from ..results import CheckResult, MetricResult, Violation
-
-try:
-    import gerber
-except Exception:
-    gerber = None
 
 _INCH_TO_MM = 25.4
 _DEFAULT_BOARD_THICKNESS_MM = 1.6
@@ -68,7 +63,7 @@ def run_drill_aspect_ratio(ctx: CheckContext) -> CheckResult:
         f for f in ctx.ingest.files if f.layer_type == "drill"
     ]
 
-    if gerber is None or not drill_files:
+    if not GERBONARA_AVAILABLE or not drill_files:
         viol = Violation(
             severity="warning",
             message="No drill parser available or no drill files found to compute drill aspect ratio.",

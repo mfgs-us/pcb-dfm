@@ -4,23 +4,15 @@ from typing import List, Optional
 
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
+from ..geometry.gerber_backend import GERBONARA_AVAILABLE, gerber_traces_mm
 from ..ingest import GerberFileInfo
 from ..results import CheckResult, MetricResult, Violation, ViolationLocation
-
-# Use pcb-tools if available
-try:
-    import gerber
-    from gerber.primitives import Line
-except Exception:
-    gerber = None
-    Line = None  # type: ignore
 
 # Line primitives thinner than this are region/pour boundary draws or artifacts,
 # not fabricable traces (no fab makes sub-0.8-mil copper). Counting them makes a
 # board with a copper pour report a spurious 0.000 mm minimum trace width.
 _MIN_MEANINGFUL_TRACE_MM = 0.02
 
-_INCH_TO_MM = 25.4
 MAX_REPORTED_VIOLATIONS = 100
 
 
@@ -29,15 +21,9 @@ def run_min_trace_width(ctx: CheckContext) -> CheckResult:
     """
     Minimum trace width check.
 
-    Instead of approximating from polygon bounding boxes (which is noisy and
-    heavily affected by polygonization artifacts), we re-parse the original
-    copper Gerber files and inspect Line primitives:
-
-        - layer = gerber.read(path)
-        - layer.to_inch()
-        - for each Line primitive, take its width (or aperture width/diameter)
-
-    Internal geometry and metrics are reported in mm.
+    Widths come from the drawn segments' apertures via the gerbonara parse
+    backend (mm-native), which also covers arc-routed traces that the previous
+    pcb-tools Line-only path could not see.
     """
     metric_cfg = ctx.check_def.metric or {}
     units_raw = metric_cfg.get("units", metric_cfg.get("unit", "mm"))
@@ -53,7 +39,7 @@ def run_min_trace_width(ctx: CheckContext) -> CheckResult:
         f for f in ctx.ingest.files if f.layer_type == "copper"
     ]
 
-    if gerber is None or Line is None or not copper_files:
+    if not GERBONARA_AVAILABLE or not copper_files:
         viol = Violation(
             severity="info",
             message="Cannot compute minimum trace width (missing Gerber parser or no copper files).",
@@ -82,58 +68,24 @@ def run_min_trace_width(ctx: CheckContext) -> CheckResult:
 
     for info in copper_files:
         layer_name = info.logical_layer
-
-        try:
-            g_layer = gerber.read(str(info.path))
-        except Exception:
-            continue
-
-        # Normalize to inch, then convert to mm
-        try:
-            g_layer.to_inch()
-        except Exception:
-            # assume already inch if to_inch not available
-            pass
-
-        for prim in getattr(g_layer, "primitives", []):
-            if not isinstance(prim, Line):
-                continue
-
-            width_in = _get_line_width_inch(prim)
-            if width_in is None:
-                continue
-
-            width_mm = width_in * _INCH_TO_MM
+        for t in gerber_traces_mm(info.path):
+            width_mm = t.width_mm
             if width_mm < _MIN_MEANINGFUL_TRACE_MM:
                 continue  # region/pour boundary draw, not a real trace
 
-            # Compute a representative location: midpoint of the segment
-            try:
-                x1_in, y1_in = prim.start
-                x2_in, y2_in = prim.end
-                mx_mm = (x1_in + x2_in) * 0.5 * _INCH_TO_MM
-                my_mm = (y1_in + y2_in) * 0.5 * _INCH_TO_MM
-            except Exception:
-                mx_mm = my_mm = None
+            mx_mm = (t.x1_mm + t.x2_mm) * 0.5
+            my_mm = (t.y1_mm + t.y2_mm) * 0.5
 
             if min_width_mm is None or width_mm < min_width_mm:
                 min_width_mm = width_mm
-                if mx_mm is not None and my_mm is not None:
-                    worst_location = ViolationLocation(
-                        layer=layer_name,
-                        x_mm=mx_mm,
-                        y_mm=my_mm,
-                        notes="Narrowest trace segment found from Gerber line width.",
-                    )
-                else:
-                    worst_location = None
+                worst_location = ViolationLocation(
+                    layer=layer_name,
+                    x_mm=mx_mm,
+                    y_mm=my_mm,
+                    notes="Narrowest trace segment found from Gerber line width.",
+                )
 
-            # Track any segment that violates the recommended minimum
-            if (
-                mx_mm is not None
-                and my_mm is not None
-                and width_mm < recommended_min
-            ):
+            if width_mm < recommended_min:
                 offenders.append((width_mm, layer_name, mx_mm, my_mm))
 
     if min_width_mm is None:
@@ -228,26 +180,3 @@ def run_min_trace_width(ctx: CheckContext) -> CheckResult:
     ).finalize()
 
 
-def _get_line_width_inch(prim) -> Optional[float]:
-    """
-    Try to extract a width in inches from a pcb-tools Line primitive.
-    """
-    width = getattr(prim, "width", None)
-    if width is not None:
-        try:
-            return float(width)
-        except Exception:
-            pass
-
-    ap = getattr(prim, "aperture", None)
-    if ap is not None:
-        for attr in ("width", "diameter", "size"):
-            val = getattr(ap, attr, None)
-            if val is not None:
-                try:
-                    return float(val)
-                except Exception:
-                    continue
-
-    # Fallback to something tiny if we really cannot get it
-    return None

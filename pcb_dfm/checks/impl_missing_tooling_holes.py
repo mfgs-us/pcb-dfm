@@ -5,16 +5,11 @@ from typing import List
 
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
-from ..geometry.gerber_backend import excellon_hits_mm
+from ..geometry.gerber_backend import GERBONARA_AVAILABLE, excellon_hits_mm
 from ..ingest import GerberFileInfo
 from ..results import CheckResult, MetricResult, Violation, ViolationLocation
 
 # Reuse the same drill parser used by via_in_pad_thermal_balance
-try:
-    import gerber
-except Exception:
-    gerber = None
-
 
 def _resolve_limit(check_def, key: str, default):
     """Resolve a threshold, preferring the pre-normalized ``check_def.limits``
@@ -98,7 +93,7 @@ def run_missing_tooling_holes(ctx: CheckContext) -> CheckResult:
     ]
 
     hits: List[dict] = []
-    if gerber is not None:
+    if GERBONARA_AVAILABLE:
         for info in drill_files:
             hits.extend(_extract_drill_hits_mm(str(info.path)))
 

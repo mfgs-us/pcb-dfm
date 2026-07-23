@@ -4,20 +4,10 @@ from typing import List, Optional, Tuple
 
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
+from ..geometry.gerber_backend import GERBONARA_AVAILABLE, gerber_traces_mm
 from ..ingest import GerberFileInfo
 from ..results import CheckResult, MetricResult, Violation, ViolationLocation
-from .impl_min_trace_width import (
-    _INCH_TO_MM,
-    _MIN_MEANINGFUL_TRACE_MM,
-    _get_line_width_inch,
-)
-
-try:
-    import gerber
-    from gerber.primitives import Line
-except Exception:  # pragma: no cover - defensive
-    gerber = None
-    Line = None  # type: ignore
+from .impl_min_trace_width import _MIN_MEANINGFUL_TRACE_MM
 
 
 def _thresholds(ctx: CheckContext) -> Tuple[float, float]:
@@ -70,8 +60,8 @@ def run_etch_compensation_margin(ctx: CheckContext) -> CheckResult:
 
     A feature at 0.09 mm over a 0.075 mm floor scores +20 %; a feature at or
     below the floor scores <= 0 %. Copper trace widths are read from Gerber
-    ``Line`` primitives (the same honest source as ``min_trace_width``), not
-    polygon bounding boxes.
+    the drawn segments' apertures (the same honest
+    source as ``min_trace_width``), not polygon bounding boxes.
     """
     target_pct, limit_pct = _thresholds(ctx)
     etch_floor = _etch_floor_mm(ctx)
@@ -79,7 +69,7 @@ def run_etch_compensation_margin(ctx: CheckContext) -> CheckResult:
     copper_files: List[GerberFileInfo] = [
         f for f in ctx.ingest.files if f.layer_type == "copper"
     ]
-    if gerber is None or Line is None or not copper_files or etch_floor <= 0.0:
+    if not GERBONARA_AVAILABLE or not copper_files or etch_floor <= 0.0:
         return _na(ctx, target_pct, limit_pct,
                    "Cannot compute etch margin (missing Gerber parser, no copper, or invalid etch floor).")
 
@@ -87,37 +77,18 @@ def run_etch_compensation_margin(ctx: CheckContext) -> CheckResult:
     worst_location: Optional[ViolationLocation] = None
 
     for info in copper_files:
-        try:
-            g_layer = gerber.read(str(info.path))
-        except Exception:
-            continue
-        try:
-            g_layer.to_inch()
-        except Exception:
-            pass
-
-        for prim in getattr(g_layer, "primitives", []):
-            if not isinstance(prim, Line):
-                continue
-            width_in = _get_line_width_inch(prim)
-            if width_in is None:
-                continue
-            width_mm = width_in * _INCH_TO_MM
+        for t in gerber_traces_mm(info.path):
+            width_mm = t.width_mm
             if width_mm < _MIN_MEANINGFUL_TRACE_MM:
                 continue  # region/pour boundary draw, not a real trace
             if min_width_mm is None or width_mm < min_width_mm:
                 min_width_mm = width_mm
-                try:
-                    x1_in, y1_in = prim.start
-                    x2_in, y2_in = prim.end
-                    worst_location = ViolationLocation(
-                        layer=info.logical_layer,
-                        x_mm=(x1_in + x2_in) * 0.5 * _INCH_TO_MM,
-                        y_mm=(y1_in + y2_in) * 0.5 * _INCH_TO_MM,
-                        notes="Narrowest copper feature relative to the etch floor.",
-                    )
-                except Exception:
-                    worst_location = None
+                worst_location = ViolationLocation(
+                    layer=info.logical_layer,
+                    x_mm=(t.x1_mm + t.x2_mm) * 0.5,
+                    y_mm=(t.y1_mm + t.y2_mm) * 0.5,
+                    notes="Narrowest copper feature relative to the etch floor.",
+                )
 
     if min_width_mm is None:
         return _na(ctx, target_pct, limit_pct,

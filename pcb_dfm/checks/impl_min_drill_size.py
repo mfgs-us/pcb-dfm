@@ -5,16 +5,9 @@ from typing import List
 
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
-from ..geometry.gerber_backend import excellon_tool_diameters_mm
+from ..geometry.gerber_backend import GERBONARA_AVAILABLE, excellon_tool_diameters_mm
 from ..ingest import GerberFileInfo
 from ..results import CheckResult, MetricResult, Violation
-
-# We use pcb-tools via gerber.read, but do not import excellon directly
-try:
-    import gerber
-except Exception:
-    gerber = None
-
 
 _INCH_TO_MM = 25.4
 
@@ -24,7 +17,7 @@ def run_min_drill_size(ctx: CheckContext) -> CheckResult:
     """
     Compute the minimum drill diameter across all drill files.
 
-    Uses pcb-tools gerber.read on any file classified as layer_type="drill"
+    Reads any file classified as layer_type="drill" via the gerbonara backend
     (Excellon .drl etc), normalizes to inch via .to_inch(), then converts
     tool diameters to mm.
 
@@ -48,7 +41,7 @@ def run_min_drill_size(ctx: CheckContext) -> CheckResult:
         f for f in ctx.ingest.files if f.layer_type == "drill"
     ]
 
-    if gerber is None or not drill_files:
+    if not GERBONARA_AVAILABLE or not drill_files:
         # Cannot measure, report as warning with None metric
         message = "No drill parser available or no drill files found to compute minimum drill size."
         viol = Violation(

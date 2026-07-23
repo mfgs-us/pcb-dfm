@@ -5,19 +5,11 @@ from typing import List, Optional, Tuple
 
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
+from ..geometry.gerber_backend import GERBONARA_AVAILABLE, gerber_traces_mm
 from ..ingest import GerberFileInfo
 from ..results import CheckResult, MetricResult, Violation, ViolationLocation
 from .impl_min_trace_width import _MIN_MEANINGFUL_TRACE_MM
 
-# pcb-tools (same as min_trace_width impl)
-try:
-    import gerber
-    from gerber.primitives import Line
-except Exception:
-    gerber = None
-    Line = None  # type: ignore
-
-_INCH_TO_MM = 25.4
 MAX_REPORTED_VIOLATIONS = 100
 # Copper closer than this is merged (one conductor), not a spacing violation.
 # 20 µm is below the finest fab spacing capability (~2 mil), so any "gap" this
@@ -42,8 +34,7 @@ def run_min_trace_spacing(ctx: CheckContext) -> CheckResult:
     Minimum trace spacing based on Gerber trace geometry.
 
     Approach:
-      - Re-parse copper Gerber files.
-      - Extract Line primitives (traces) with start/end in inch, convert to mm.
+      - Read drawn segments (mm) via the gerbonara parse backend.
       - For each pair of segments on the same layer, compute:
             centerline distance between finite segments
             spacing = max(0, distance - 0.5*(w1 + w2))
@@ -65,7 +56,7 @@ def run_min_trace_spacing(ctx: CheckContext) -> CheckResult:
         f for f in ctx.ingest.files if f.layer_type == "copper"
     ]
 
-    if gerber is None or Line is None or not copper_files:
+    if not GERBONARA_AVAILABLE or not copper_files:
         viol = Violation(
             severity="info",
             message="Cannot compute minimum trace spacing (missing Gerber parser or no copper files).",
@@ -90,42 +81,15 @@ def run_min_trace_spacing(ctx: CheckContext) -> CheckResult:
     segments_by_layer: dict[str, List[Segment]] = {}
 
     for info in copper_files:
-        try:
-            g_layer = gerber.read(str(info.path))
-        except Exception:
-            continue
-
-        try:
-            g_layer.to_inch()
-        except Exception:
-            # assume already inch
-            pass
-
-        for prim in getattr(g_layer, "primitives", []):
-            if not isinstance(prim, Line):
-                continue
-
-            width_in = _get_line_width_inch(prim)
-            if width_in is None:
-                continue
-            if width_in * _INCH_TO_MM < _MIN_MEANINGFUL_TRACE_MM:
+        for t in gerber_traces_mm(info.path):
+            if t.width_mm < _MIN_MEANINGFUL_TRACE_MM:
                 continue  # region/pour boundary draw, not a real trace
-
-            try:
-                (x1_in, y1_in) = prim.start
-                (x2_in, y2_in) = prim.end
-            except Exception:
-                continue
-
-            seg = Segment(
+            segments_by_layer.setdefault(info.logical_layer, []).append(Segment(
                 layer_name=info.logical_layer,
-                x1_mm=x1_in * _INCH_TO_MM,
-                y1_mm=y1_in * _INCH_TO_MM,
-                x2_mm=x2_in * _INCH_TO_MM,
-                y2_mm=y2_in * _INCH_TO_MM,
-                width_mm=width_in * _INCH_TO_MM,
-            )
-            segments_by_layer.setdefault(info.logical_layer, []).append(seg)
+                x1_mm=t.x1_mm, y1_mm=t.y1_mm,
+                x2_mm=t.x2_mm, y2_mm=t.y2_mm,
+                width_mm=t.width_mm,
+            ))
 
     min_spacing_mm: Optional[float] = None
     worst_location: Optional[ViolationLocation] = None
@@ -266,30 +230,6 @@ def run_min_trace_spacing(ctx: CheckContext) -> CheckResult:
         ),
         violations=violations,
     ).finalize()
-
-
-def _get_line_width_inch(prim) -> Optional[float]:
-    """
-    Try to extract a width in inches from a pcb-tools Line primitive.
-    """
-    width = getattr(prim, "width", None)
-    if width is not None:
-        try:
-            return float(width)
-        except Exception:
-            pass
-
-    ap = getattr(prim, "aperture", None)
-    if ap is not None:
-        for attr in ("width", "diameter", "size"):
-            val = getattr(ap, attr, None)
-            if val is not None:
-                try:
-                    return float(val)
-                except Exception:
-                    continue
-
-    return None
 
 
 def _might_be_closer_than(s1: Segment, s2: Segment, limit_mm: float) -> bool:

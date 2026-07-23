@@ -161,3 +161,87 @@ def test_silk_clear_of_pads_passes_with_footprint_data():
     board.silk = [boards.Trace(9.0, 2.0, 11.0, 2.0, 0.2)]      # nowhere near a pad
     c = _run(board, _footprint_for(*_PADS))["silkscreen_over_mask_defined_pads"]
     assert c.status == "pass"
+
+
+# --------------------------------------------------------------------------
+# Real artwork
+#
+# Everything above uses synthetic fixtures with clean, non-overlapping pads.
+# Real boards are messier, and the difference matters: the first version of
+# build_pad_map marked EVERY polygon containing a pad point, which on clean
+# fixtures is exactly one polygon but on real artwork reached twelve -- the pad,
+# the trace leaving it, and the pour it sits in. A 3.4 x 1.9 mm region was then
+# measured for mask expansion as if it were a pad. Only real geometry exposed
+# that, so it is covered here.
+# --------------------------------------------------------------------------
+_BOARD = Path(__file__).resolve().parent.parent / "testdata" / "pcbtools_full.zip"
+_IPC = Path(__file__).resolve().parent.parent / "testdata" / "pcbtools_full.ipc"
+
+_real = pytest.mark.skipif(
+    not (_BOARD.exists() and _IPC.exists()), reason="corpus board/netlist missing"
+)
+
+
+@_real
+def test_components_are_derived_from_a_real_netlist():
+    """A netlist names the component each pin belongs to, which is placement
+    data -- enough to identify pads even though it carries no pad outlines."""
+    from pcb_dfm.ingest.design_data import load_design_data
+
+    dd = load_design_data(str(_IPC))
+    refs = {c.ref for c in dd.components}
+    assert len(refs) >= 20, f"expected the board's components, got {sorted(refs)}"
+    assert {"U1", "U2", "J1", "C1", "R1"} <= refs
+    assert "VIA" not in refs, "a via is not a component"
+
+    # Sides come from the IPC access codes (A01 primary / A02 secondary);
+    # through-hole parts are reachable from both and keep side=None.
+    assert any(c.side == "top" for c in dd.components)
+    assert all(p.through_hole for c in dd.components if c.side is None for p in c.pads)
+
+
+@_real
+def test_pad_map_on_real_artwork_marks_one_polygon_per_pad():
+    """The over-marking regression: a pad point sits inside several polygons."""
+    from pcb_dfm.engine.run import build_geometry_for
+    from pcb_dfm.geometry.gerber_backend import excellon_hits_mm
+    from pcb_dfm.geometry.pad_map import build_pad_map
+    from pcb_dfm.ingest import ingest_gerber_zip
+    from pcb_dfm.ingest.adapters.ipc356 import register_to_board
+    from pcb_dfm.ingest.design_data import load_design_data
+
+    dd = load_design_data(str(_IPC))
+    drills = [
+        (h.x_mm, h.y_mm)
+        for f in ingest_gerber_zip(_BOARD).files if f.layer_type == "drill"
+        for h in excellon_hits_mm(f.path)
+    ]
+    assert register_to_board(dd, drills) is not None
+
+    pm = build_pad_map(build_geometry_for(_BOARD), dd)
+    assert pm is not None
+    assert len(pm.components()) >= 20, "every component should match real copper"
+
+    # A through-hole pad legitimately matches on both copper layers, so allow up
+    # to 2 polygons per pad -- but nothing like the 12 the naive version marked.
+    pad_points = sum(len(c.pads) for c in dd.components)
+    assert pm.pad_polygon_count() <= 2 * pad_points, (
+        f"{pm.pad_polygon_count()} polygons for {pad_points} pads -- over-marking"
+    )
+
+
+@_real
+def test_real_board_pad_checks_are_sane_with_placement_data():
+    """Placement data must sharpen these checks, not manufacture findings."""
+    from pcb_dfm.engine.run import run_dfm_on_gerber_zip
+
+    res = run_dfm_on_gerber_zip(_BOARD, ruleset_id="default", design_data=str(_IPC))
+    got = {c.check_id: c for cat in res.categories for c in cat.checks}
+
+    # No via on this board sits in a real component pad, so the 99% artwork-only
+    # reading (every via matched to its own landing ring) resolves to a pass.
+    assert got["via_in_pad_thermal_balance"].status == "pass"
+
+    # Measured against real pads the mask expansion is a healthy positive value,
+    # not the -1.7 mm that trace stubs and pour fingers produced.
+    assert _measured(got["solder_mask_expansion"]) > 0.0

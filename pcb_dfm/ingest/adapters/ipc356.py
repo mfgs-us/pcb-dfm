@@ -26,12 +26,18 @@ import re
 from pathlib import Path
 from typing import Dict, List, Optional, Tuple, Union
 
-from ..design_model import DesignData, Net, NetPoint
+from ..design_model import Component, DesignData, Net, NetPoint, Pad
 
 # Location is the FIRST X/Y pair after the access flags; a second pair (and an
 # optional R rotation) describes the pad size, which we do not need.
 _XY_RE = re.compile(r"X\s*(-?\d+)\s*Y\s*(-?\d+)")
 _UNITS_RE = re.compile(r"^P\s+UNITS\s+(\S+)(?:\s+(\d+))?", re.IGNORECASE)
+# Access flag: A00 = both sides (through-hole), A01 = primary (top),
+# A02 = secondary (bottom). Optionally preceded by P (plated) or U (unplated).
+_ACCESS_RE = re.compile(r"[PU]?A(\d\d)")
+
+# Reference designator used for a plain via rather than a component pin.
+_VIA_REFS = {"VIA", ""}
 
 # IPC-D-356 unit codes -> millimetres per integer count.
 #   CUST 0 : 0.0001 inch      CUST 1 : 0.00001 inch
@@ -93,6 +99,7 @@ def from_ipc356(source: Union[str, Path]) -> DesignData:
     scale = _unit_scale_mm(text)
 
     nets: Dict[str, Net] = {}
+    components: Dict[str, Component] = {}
     for line in text.splitlines():
         rec = line[:3]
         if rec not in ("317", "327"):
@@ -116,16 +123,39 @@ def from_ipc356(source: Union[str, Path]) -> DesignData:
             continue
 
         ref = line[20:26].strip() or None
-        pin = line[27:31].strip().lstrip("-") or None
+        pin = line[26:31].strip().lstrip("-").strip() or None
+
+        am = _ACCESS_RE.search(line, 26)
+        access = am.group(1) if am else None
+        # A01 = primary side, A02 = secondary. A00 (both) means through-hole, so
+        # the pad exists on every layer and has no single side.
+        side = {"01": "top", "02": "bottom"}.get(access or "")
+        through = rec == "317"
 
         net = nets.setdefault(net_name, Net(name=net_name))
         net.points.append(NetPoint(
             x_mm=x_mm, y_mm=y_mm,
-            kind="through" if rec == "317" else "smd",
-            ref=ref, pin=pin,
+            kind="through" if through else "smd",
+            ref=ref, pin=pin, layer=side,
         ))
 
-    return DesignData(nets=nets)
+        # A netlist names the component each pin belongs to, which is placement
+        # data: enough to say which copper is a real component pad, even though
+        # it carries no pad outline. Vias are not components.
+        if ref and ref.upper() not in _VIA_REFS:
+            comp = components.setdefault(ref, Component(ref=ref, placed=True))
+            comp.pads.append(Pad(
+                name=pin or str(len(comp.pads) + 1),
+                x_mm=x_mm, y_mm=y_mm,
+                pad_type="thru_hole" if through else "smd",
+                through_hole=through,
+            ))
+            if side and comp.side is None:
+                comp.side = side
+
+    # A component whose side is still unknown is through-hole only; those are
+    # accessible from both sides, so leave it None rather than inventing one.
+    return DesignData(nets=nets, components=list(components.values()))
 
 
 def register_to_board(
@@ -196,4 +226,11 @@ def register_to_board(
             for p in net.points:
                 p.x_mm += dx
                 p.y_mm += dy
+        # Component pads come from the same records and share the same frame, so
+        # they must be shifted too -- otherwise placement data would be silently
+        # offset from the artwork it is meant to identify.
+        for comp in (design.components or []):
+            for pad in comp.pads:
+                pad.x_mm += dx
+                pad.y_mm += dy
     return (dx, dy)

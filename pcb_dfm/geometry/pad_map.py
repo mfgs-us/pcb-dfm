@@ -118,11 +118,34 @@ def build_pad_map(
                 if not getattr(pad, "through_hole", False) and comp_side and side and comp_side != side:
                     continue
                 pb = Bounds(pad.x_mm, pad.y_mm, pad.x_mm, pad.y_mm)
+
+                # A pad point typically falls inside SEVERAL polygons: the pad
+                # itself, the trace stroke leaving it, and any pour it sits in.
+                # Marking them all would call a pour or a trace "a component
+                # pad" -- on the pcb-tools board that reached 12 polygons for one
+                # pad, and a 3.4 x 1.9 mm region was measured for mask expansion
+                # as though it were a pad.
+                #
+                # Keep the single best representative per pad per layer: the
+                # polygon whose centroid sits nearest the pad point. A pad is
+                # centred on its own point; a trace leaving it is offset by half
+                # its length, and a pour by much more.
+                best_poly: Optional[Polygon] = None
+                best_d = float("inf")
                 for pos in index.query_bbox(pb):
                     poly = polys[cast(int, pos)]
-                    if _point_in_polygon(pad.x_mm, pad.y_mm, poly):
-                        pad_polys[id(poly)] = (comp.ref, getattr(pad, "name", None))
-                        by_component.setdefault(comp.ref, []).append(poly)
+                    if not _point_in_polygon(pad.x_mm, pad.y_mm, poly):
+                        continue
+                    b = poly.bounds()
+                    cx, cy = 0.5 * (b.min_x + b.max_x), 0.5 * (b.min_y + b.max_y)
+                    d = (cx - pad.x_mm) ** 2 + (cy - pad.y_mm) ** 2
+                    if d < best_d:
+                        best_d = d
+                        best_poly = poly
+
+                if best_poly is not None:
+                    pad_polys[id(best_poly)] = (comp.ref, getattr(pad, "name", None))
+                    by_component.setdefault(comp.ref, []).append(best_poly)
 
     if not pad_polys:
         return None

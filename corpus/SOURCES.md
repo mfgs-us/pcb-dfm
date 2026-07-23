@@ -27,6 +27,14 @@ onto real drill hits once the netlist's origin offset (the board's lower-left
 corner) is derived. It is what makes the net-aware path testable on real
 artwork rather than only on synthetic fixtures.
 
+It doubles as **placement data**: every 317/327 record names the component and
+pin it belongs to, so 21 components (C1-C5, DMX, J1, L1, LED1, MIDI, PWR, R1-R5,
+U1-U4) with per-pin locations are derived from it. That is what makes the
+footprint-aware checks testable on real artwork too. One quirk to be aware of:
+the file carries a single record with the placeholder refdes `NA` on net
+`NNAME1`, which is test scaffolding for long net names and duplicates the
+location of `U4-8`.
+
 Gerber files are byte-identical to upstream. Some were **renamed** to
 conventional extensions (e.g. `copper_top.gbr` → `board.gtl`) so that layer
 classification happens by extension; no content is modified.

@@ -27,10 +27,10 @@
     {
       "confidence": "heuristic",
       "id": "component_to_component_spacing",
-      "measured": 2.475,
+      "measured": null,
       "severity": "info",
-      "status": "pass",
-      "violations": 0
+      "status": "not_applicable",
+      "violations": 1
     },
     {
       "confidence": "heuristic",

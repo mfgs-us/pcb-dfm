@@ -99,6 +99,26 @@ def _is_via_like(poly, via_like_max_diameter_mm: float, via_like_max_area_mm2: f
     return area <= via_like_max_area_mm2
 
 
+def _is_pad_plausible(poly, min_area_mm2: float, max_area_mm2: float, max_aspect: float) -> bool:
+    """Could this polygon be a single component pad?
+
+    Screens out both the too-small (degenerate pour-boundary artifacts) and the
+    too-large / too-elongated (planes, keep-out regions, long mask reliefs). Used
+    for the solder-mask and the copper candidate sources alike, so one stray
+    board-scale region cannot become a "component".
+    """
+    area = _poly_area_mm2(poly)
+    if area < min_area_mm2 or area > max_area_mm2:
+        return False
+    b = poly.bounds()
+    w = max(0.0, b.max_x - b.min_x)
+    h = max(0.0, b.max_y - b.min_y)
+    if w <= 0.0 or h <= 0.0:
+        return False
+    short_dim, long_dim = min(w, h), max(w, h)
+    return (long_dim / short_dim if short_dim > 0.0 else 1.0) <= max_aspect
+
+
 def _cell_key(x: float, y: float, cell: float) -> Tuple[int, int]:
     return (int(floor(x / cell)), int(floor(y / cell)))
 
@@ -135,7 +155,10 @@ def run_component_to_component_spacing(ctx: CheckContext) -> CheckResult:
 
     raw_cfg = getattr(ctx.check_def, "raw", None) or {}
 
-    # Copper pad heuristic (fallback)
+    # Pad plausibility. Applied to BOTH candidate sources: a solder-mask layer
+    # carries plenty of openings that are not component pads (large keep-out or
+    # cutout regions), and letting one through makes it a "component" whose
+    # bounding box overlaps half the board -- reported as 0.00 mm spacing (#14).
     pad_min_area_mm2 = float(raw_cfg.get("pad_min_area_mm2", 0.02))
     pad_max_area_mm2 = float(raw_cfg.get("pad_max_area_mm2", 4.0))
     pad_max_aspect_ratio = float(raw_cfg.get("pad_max_aspect_ratio", 10.0))
@@ -169,6 +192,8 @@ def run_component_to_component_spacing(ctx: CheckContext) -> CheckResult:
         if layer_type != "mask" or side.lower() != "top":
             continue
         for poly in getattr(layer, "polygons", []):
+            if not _is_pad_plausible(poly, pad_min_area_mm2, pad_max_area_mm2, pad_max_aspect_ratio):
+                continue
             b = poly.bounds()
             cx, cy = _center_of_bounds(b)
             is_via = _is_via_like(poly, via_like_max_diameter_mm, via_like_max_area_mm2, via_like_roundness)
@@ -185,22 +210,10 @@ def run_component_to_component_spacing(ctx: CheckContext) -> CheckResult:
                 continue
 
             for poly in getattr(layer, "polygons", []):
-                area = _poly_area_mm2(poly)
-                if area < pad_min_area_mm2 or area > pad_max_area_mm2:
+                if not _is_pad_plausible(poly, pad_min_area_mm2, pad_max_area_mm2, pad_max_aspect_ratio):
                     continue
 
                 b = poly.bounds()
-                w = max(0.0, b.max_x - b.min_x)
-                h = max(0.0, b.max_y - b.min_y)
-                if w <= 0.0 or h <= 0.0:
-                    continue
-
-                short_dim = min(w, h)
-                long_dim = max(w, h)
-                aspect = long_dim / short_dim if short_dim > 0.0 else 1.0
-                if aspect > pad_max_aspect_ratio:
-                    continue
-
                 cx, cy = _center_of_bounds(b)
                 is_via = _is_via_like(poly, via_like_max_diameter_mm, via_like_max_area_mm2, via_like_roundness)
                 candidates.append((poly, cx, cy, is_via))
@@ -348,7 +361,18 @@ def run_component_to_component_spacing(ctx: CheckContext) -> CheckResult:
                         if visited[j]:
                             continue
                         cjx, cjy = centers[j]
-                        if math.hypot(cjx - ckx, cjy - cky) <= cluster_radius_mm:
+                        near = math.hypot(cjx - ckx, cjy - cky) <= cluster_radius_mm
+                        # Two pads whose shapes physically overlap cannot belong
+                        # to different components -- that is one footprint, not a
+                        # collision. Without this, a coarse cluster_radius_mm
+                        # splits a single connector (2.54 mm pitch vs a 1.5 mm
+                        # radius) into "components" whose own pads overlap, and
+                        # the check reports 0.00 mm spacing against itself (#14).
+                        if not near:
+                            *_, gap = _bbox_closest_points(
+                                pad_polys[k][0].bounds(), pad_polys[j][0].bounds())
+                            near = gap <= 0.0
+                        if near:
                             visited[j] = True
                             stack.append(j)
 
@@ -434,31 +458,63 @@ def run_component_to_component_spacing(ctx: CheckContext) -> CheckResult:
             violations=[viol],
         )
 
-    # Compute minimum spacing. We do not skip close pairs.
+    # Compute minimum spacing between *pads of different clusters*, not between
+    # the clusters' bounding boxes (#14).
+    #
+    # Two problems with the bbox-pair approach it replaces:
+    #   1. A cluster bbox is a poor stand-in for a component. Interleaved or
+    #      L-shaped placements have overlapping bboxes while the components
+    #      themselves are comfortably apart, and an overlap reports 0.0 mm.
+    #   2. The "touching" epsilon scaled with cluster size
+    #      (relative_epsilon_fraction * bbox extent) and then SNAPPED the gap to
+    #      exactly 0.0. Single-link clustering on a dense board yields very large
+    #      clusters, so the epsilon grew to a millimetre or more and swallowed
+    #      real, healthy gaps -- reporting a hard collision where none existed.
+    #
+    # Pads in different clusters are more than cluster_radius_mm apart by
+    # construction, so a bounded neighbourhood search finds the true minimum;
+    # we only fall back to the coarse cluster-bbox distance when no cross-cluster
+    # pair is near enough to matter.
+    cluster_of: Dict[int, int] = {}
+    for cid, cluster in enumerate(clusters):
+        for idx in cluster:
+            cluster_of[idx] = cid
+
+    cell_p = max(cluster_radius_mm, 1.0)
+    grid_p: Dict[Tuple[int, int], List[int]] = defaultdict(list)
+    for idx, (_poly, cx, cy) in enumerate(pad_polys):
+        grid_p[_cell_key(cx, cy, cell_p)].append(idx)
+
     min_spacing = math.inf
     best_midpoint: Optional[Tuple[float, float]] = None
-    best_pair_is_touching = False
 
-    m = len(cluster_bboxes)
-    for i in range(m):
-        bi = cluster_bboxes[i]
-        size_i = _bbox_size_mm(bi)
-        for j in range(i + 1, m):
-            bj = cluster_bboxes[j]
-            size_j = _bbox_size_mm(bj)
+    for i, (poly_i, cx, cy) in enumerate(pad_polys):
+        ci_key, cj_key = _cell_key(cx, cy, cell_p)
+        bi = poly_i.bounds()
+        for di in (-1, 0, 1):
+            for dj in (-1, 0, 1):
+                for j in grid_p.get((ci_key + di, cj_key + dj), []):
+                    if j <= i or cluster_of.get(i) == cluster_of.get(j):
+                        continue
+                    bj = pad_polys[j][0].bounds()
+                    x1, y1, x2, y2, d = _bbox_closest_points(bi, bj)
+                    if d < min_spacing:
+                        min_spacing = d
+                        best_midpoint = (0.5 * (x1 + x2), 0.5 * (y1 + y2))
 
-            # Epsilon used only to classify "near-zero" gaps as touching.
-            rel_eps = relative_epsilon_fraction * max(size_i, size_j)
-            effective_eps = max(spacing_epsilon_mm, rel_eps)
+    if not math.isfinite(min_spacing):
+        # No cross-cluster pad pair within the search neighbourhood: the
+        # components are far apart, so the coarse cluster-bbox distance is a
+        # perfectly good answer and precision does not matter here.
+        m = len(cluster_bboxes)
+        for i in range(m):
+            for j in range(i + 1, m):
+                x1, y1, x2, y2, d = _bbox_closest_points(cluster_bboxes[i], cluster_bboxes[j])
+                if d < min_spacing:
+                    min_spacing = d
+                    best_midpoint = (0.5 * (x1 + x2), 0.5 * (y1 + y2))
 
-            x1, y1, x2, y2, d = _bbox_closest_points(bi, bj)
-            is_touching = d <= effective_eps
-
-            d_eff = 0.0 if is_touching else d
-            if d_eff < min_spacing:
-                min_spacing = d_eff
-                best_midpoint = (0.5 * (x1 + x2), 0.5 * (y1 + y2))
-                best_pair_is_touching = is_touching
+    best_pair_is_touching = min_spacing <= spacing_epsilon_mm
 
     if not math.isfinite(min_spacing):
         viol = Violation(

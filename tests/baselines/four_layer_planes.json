@@ -27,7 +27,7 @@
     {
       "confidence": "heuristic",
       "id": "component_to_component_spacing",
-      "measured": 2.25,
+      "measured": 8.8,
       "severity": "info",
       "status": "pass",
       "violations": 0

@@ -189,6 +189,9 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
     # This is a heuristic for "that's the via's own annular ring / pad copper".
     assumed_annular_ring_mm = float(raw_cfg.get("assumed_annular_ring_mm", 0.15))
     pad_exclusion_margin_mm = float(raw_cfg.get("pad_exclusion_margin_mm", 0.05))
+    # A copper polygon containing the via that is no bigger than this is the
+    # via's own pad, not a pour it is buried in (#15).
+    own_pad_max_extent_mm = float(raw_cfg.get("own_pad_max_extent_mm", 3.0))
 
     copper_layers = queries.get_copper_layers(ctx.geometry)
 
@@ -370,14 +373,22 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
                         continue
 
                     if inside:
-                        # Via center sits inside this polygon. If the nearest edge
-                        # is within the pad-exclusion radius this is the via's own
-                        # pad / annular ring -> not a clearance defect (the annular
-                        # ring check measures that). Otherwise the via is buried in
-                        # a plane/pour with no antipad around the barrel, which is
-                        # itself a clearance concern -> zero barrel-to-copper
-                        # clearance.
-                        if edge_to_center <= pad_exclusion_r:
+                        # Via centre sits inside this polygon: either its own pad
+                        # (fine -- the annular-ring check measures that) or a
+                        # plane/pour with no antipad around the barrel (a real
+                        # clearance defect).
+                        #
+                        # Size is the reliable discriminator: a via's own pad is a
+                        # small feature, a pour is not. A radius test alone is
+                        # backwards -- a *more generous* annular ring pushes the
+                        # nearest edge further out and so looked MORE like a
+                        # buried via, reporting a spurious 0.00 mm (#15).
+                        poly_extent = max(b.max_x - b.min_x, b.max_y - b.min_y)
+                        own_pad = (
+                            edge_to_center <= pad_exclusion_r
+                            or poly_extent <= own_pad_max_extent_mm
+                        )
+                        if own_pad:
                             continue
                         clearance = 0.0
                     else:

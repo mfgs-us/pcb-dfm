@@ -355,9 +355,9 @@
     {
       "confidence": "heuristic",
       "id": "via_to_copper_clearance",
-      "measured": 0.0,
-      "severity": "error",
-      "status": "fail",
+      "measured": null,
+      "severity": "warning",
+      "status": "warning",
       "violations": 1
     },
     {

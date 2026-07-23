@@ -4,11 +4,13 @@ import math
 from collections import defaultdict
 from dataclasses import dataclass
 from math import floor
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
 from ..geometry import queries
+from ..geometry.gerber_backend import excellon_hits_mm
 from ..geometry.primitives import Bounds
 from ..ingest import GerberFileInfo
 from ..results import CheckResult, MetricResult, Violation, ViolationLocation
@@ -513,81 +515,17 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
 
 
 def _extract_drill_hits_mm(path, via_max_d_mm: float = 0.8, include_component_pth: bool = False) -> List[DrillHit]:
-    if gerber is None:
-        return []
-    try:
-        drill_layer = gerber.read(str(path))
-    except Exception:
-        return []
+    """Via-like drilled holes in mm, via the gerbonara parse backend (#3).
 
-    # Detect units first to avoid incorrect conversion
-    units = _detect_excellon_units(drill_layer)
-
-    # Only convert to inch if the file is in mm and we need inch for internal processing
-    if units == 'mm':
-        try:
-            drill_layer.to_inch()
-        except Exception:
-            # If conversion fails, assume coordinates are already in inch
-            pass
-    elif units == 'inch':
-        # Already in inch, no conversion needed
-        pass
-
+    The previous pcb-tools path sniffed units then multiplied by 25.4, which
+    double-converted mm-native drill files.
+    """
     hits_out: List[DrillHit] = []
-
-    hits = getattr(drill_layer, "hits", None)
-    if hits is None:
-        return hits_out
-
-    for hit in hits:
-        x_in = y_in = d_in = None
-
-        # New-style API
-        try:
-            if hasattr(hit, "x") and hasattr(hit, "y"):
-                x_in = float(hit.x)
-                y_in = float(hit.y)
-            elif hasattr(hit, "position"):
-                px, py = hit.position
-                x_in = float(px)
-                y_in = float(py)
-
-            tool = getattr(hit, "tool", None)
-            if tool is not None and hasattr(tool, "diameter"):
-                d_in = float(tool.diameter)
-        except Exception:
-            pass
-
-        # Old-style (tool, (x, y))
-        if x_in is None or y_in is None or d_in is None:
-            try:
-                tool, (px, py) = hit
-                x_in = float(px)
-                y_in = float(py)
-                d_in = float(getattr(tool, "diameter"))
-            except Exception:
-                continue
-
-        # Convert to mm (always multiply by 25.4 since we're working in inch internally)
-        x_mm = x_in * _INCH_TO_MM
-        y_mm = y_in * _INCH_TO_MM
-        d_mm = d_in * _INCH_TO_MM
-
-        # Filter by diameter for via-like drills only
+    for h in excellon_hits_mm(Path(path)):
+        d_mm = h.diameter_mm
         if d_mm > via_max_d_mm:
             continue
-
-        # Additional filtering for component PTH if disabled
-        if not include_component_pth and d_mm > 0.8:  # Typical component drill threshold
+        if not include_component_pth and d_mm > 0.8:
             continue
-
-        hits_out.append(
-            DrillHit(
-                x_mm=x_mm,
-                y_mm=y_mm,
-                d_mm=d_mm,
-            )
-        )
-
+        hits_out.append(DrillHit(x_mm=h.x_mm, y_mm=h.y_mm, d_mm=d_mm))
     return hits_out

@@ -3,10 +3,12 @@ from __future__ import annotations
 import math
 from collections import defaultdict
 from math import floor
+from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
+from ..geometry.gerber_backend import excellon_hits_mm
 from ..ingest import GerberFileInfo
 from ..results import CheckResult, Violation, ViolationLocation
 
@@ -81,93 +83,11 @@ def _bbox_center_mm(poly) -> Tuple[float, float]:
 
 
 def _extract_drill_hits_mm(path: str) -> List[dict]:
-    """
-    Use gerber.read on a drill file and extract hits as mm.
-
-    Returns list of dicts with keys:
-      - x_mm
-      - y_mm
-      - diameter_mm
-      - plated (bool, default True)
-    """
-    if gerber is None:
-        return []
-
-    try:
-        drill_layer = gerber.read(path)
-    except Exception:
-        return []
-
-    # Normalize to inch if possible
-    try:
-        drill_layer.to_inch()
-    except Exception:
-        pass
-
-    hits_out: List[dict] = []
-
-    hits = getattr(drill_layer, "hits", None)
-    if hits is None:
-        return hits_out
-
-    for hit in hits:
-        x_in = y_in = None
-        d_in = None
-        plated = True
-
-        # Newer style objects: hit.x, hit.y, hit.tool.diameter
-        try:
-            if hasattr(hit, "x") and hasattr(hit, "y"):
-                x_in = float(hit.x)
-                y_in = float(hit.y)
-            elif hasattr(hit, "position"):
-                px, py = hit.position  # type: ignore[attr-defined]
-                x_in = float(px)
-                y_in = float(py)
-
-            tool = getattr(hit, "tool", None)
-            if tool is not None:
-                d_in = getattr(tool, "diameter", None)
-                if d_in is None:
-                    d_in = getattr(tool, "size", None)
-                plated_attr = getattr(tool, "plated", None)
-                if plated_attr is not None:
-                    plated = bool(plated_attr)
-        except Exception:
-            x_in = y_in = d_in = None
-
-        # Older formats: (tool, (x, y))
-        if x_in is None or y_in is None or d_in is None:
-            try:
-                tool, (px, py) = hit  # type: ignore[misc]
-                x_in = float(px)
-                y_in = float(py)
-                d_in = getattr(tool, "diameter", None)
-                if d_in is None:
-                    d_in = getattr(tool, "size", None)
-                plated_attr = getattr(tool, "plated", None)
-                if plated_attr is not None:
-                    plated = bool(plated_attr)
-            except Exception:
-                continue
-
-        try:
-            d_in_float = float(d_in)
-        except Exception:
-            continue
-
-        hits_out.append(
-            {
-                "x_mm": x_in * _INCH_TO_MM,
-                "y_mm": y_in * _INCH_TO_MM,
-                "diameter_mm": d_in_float * _INCH_TO_MM,
-                "plated": plated,
-            }
-        )
-
-    return hits_out
-
-
+    """Drill hits in mm, via the gerbonara parse backend (#3)."""
+    return [
+        {"x_mm": h.x_mm, "y_mm": h.y_mm, "diameter_mm": h.diameter_mm}
+        for h in excellon_hits_mm(Path(path))
+    ]
 @register_check("via_in_pad_thermal_balance")
 def run_via_in_pad_thermal_balance(ctx: CheckContext) -> CheckResult:
     """

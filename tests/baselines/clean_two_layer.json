@@ -339,7 +339,7 @@
     {
       "confidence": "heuristic",
       "id": "via_in_pad_thermal_balance",
-      "measured": 0.0,
+      "measured": 19.635,
       "severity": "info",
       "status": "pass",
       "violations": 1
@@ -355,9 +355,9 @@
     {
       "confidence": "heuristic",
       "id": "via_to_copper_clearance",
-      "measured": null,
-      "severity": "warning",
-      "status": "warning",
+      "measured": 0.0,
+      "severity": "error",
+      "status": "fail",
       "violations": 1
     },
     {

@@ -255,3 +255,40 @@ def test_copper_to_edge_still_flags_real_edge_copper():
     c = _run_board(board)["copper_to_edge_distance"]
     assert c.status in ("warning", "fail")
     assert _measured(c) is not None and _measured(c) < 0.15
+
+
+def test_via_in_pad_ratio_never_exceeds_100_percent():
+    """A via cannot be larger than the pad it sits in, so the area ratio must be
+    <= 100%. Ratios of 156% / 228% on real boards meant the via was matched to a
+    sliver smaller than itself (a trace segment / annular-ring fragment that
+    merely contained the via centre) instead of its actual pad.
+    """
+    from pathlib import Path
+
+    from pcb_dfm.engine.run import run_dfm_on_gerber_zip
+
+    for name in ("pcbtools_full", "diptrace_fd1"):
+        r = run_dfm_on_gerber_zip(Path(f"testdata/{name}.zip"), ruleset_id="default")
+        c = {c.check_id: c for cat in r.categories for c in cat.checks}["via_in_pad_thermal_balance"]
+        v = _measured(c)
+        assert v is None or v <= 100.0 + 1e-6, f"{name}: impossible ratio {v}%"
+
+
+def test_via_in_pad_is_advisory_never_fails():
+    """A via filling most of its landing pad warns; it never hard-fails.
+
+    Without footprint data the check cannot tell a via dropped into a component
+    SMD pad (the real wicking concern) from a via in its own landing pad, and
+    every via has landing copper about its own size -- so the worst ratio tracks
+    the tightest via, not the most via-in-pad. That failed every board with
+    tight vias, so it is advisory.
+    """
+    board = boards.Board(
+        outline=[(0, 0), (20, 0), (20, 14), (0, 14)],
+        pads=[boards.Pad(10, 7, 1.0, 1.0)],       # a 1 mm pad
+        holes=[boards.Hole(10, 7, 0.9)],           # a via nearly filling it
+    )
+    c = _run_board(board)["via_in_pad_thermal_balance"]
+    assert c.status != "fail"
+    v = _measured(c)
+    assert v is None or v <= 100.0 + 1e-6

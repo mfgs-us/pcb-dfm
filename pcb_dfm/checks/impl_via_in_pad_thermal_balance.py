@@ -288,6 +288,19 @@ def run_via_in_pad_thermal_balance(ctx: CheckContext) -> CheckResult:
                     if math.hypot(x_mm - pcx, y_mm - pcy) > max_offset:
                         continue
 
+                    # The via must actually FIT in its pad. A candidate smaller
+                    # than the via is a sliver -- a trace segment or an annular
+                    # ring fragment that merely happens to contain the via
+                    # centre -- not the pad the via sits in. Matching those was
+                    # the bug: the "pick the smallest" rule below then chose the
+                    # sliver over the real pad and reported ratios above 100%
+                    # (a via bigger than its own pad is geometrically impossible),
+                    # e.g. a 0.24 mm^2 via matched to a 0.09 mm^2 sliver = 264%.
+                    if pad_area < via_area:
+                        continue
+
+                    # Among pads that can hold the via, prefer the smallest, so a
+                    # via in a real pad is not matched to an enclosing pour.
                     if best_pad is None or pad_area < best_pad[3]:
                         best_pad = (layer_name, poly, b, pad_area, pcx, pcy, pw, ph)
 
@@ -340,15 +353,21 @@ def run_via_in_pad_thermal_balance(ctx: CheckContext) -> CheckResult:
 
     measured = float(worst_ratio_pct)
 
-    # Status and score in percent space
+    # ADVISORY ONLY -- warns, never hard-fails (matching its severity_default of
+    # "warning"). Without footprint or net data the check cannot tell a via
+    # dropped into a component's SMD pad -- the actual thermal/wicking concern --
+    # from a plain via sitting in its own landing pad or annular ring. Every via
+    # has landing copper roughly its own size, so the worst (highest) ratio
+    # tracks the tightest-ring via, not the most via-in-component-pad, and that
+    # made every board with tight vias fail. A generous pad still passes
+    # (mini_board, 7%); a via filling nearly all of its landing copper still
+    # warns, which is a fair thing to surface for review. A footprint-aware
+    # version (via the design-data adapters) could identify real SMD pads and
+    # promote genuine via-in-pad back to fail.
     if measured <= recommended_max_pct:
         status = "pass"
         severity = ctx.check_def.severity or ctx.check_def.severity_default
         score = 100.0
-    elif measured > absolute_max_pct:
-        status = "fail"
-        severity = "error"
-        score = 0.0
     else:
         status = "warning"
         severity = "warning"

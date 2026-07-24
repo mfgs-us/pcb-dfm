@@ -44,6 +44,30 @@ def get_silkscreen_layers(geom: BoardGeometry) -> List[BoardLayer]:
     return geom.get_layers_by_type("silkscreen")
 
 
+# No real PCB, nor any fab panel, approaches two metres in any dimension (the
+# largest production panels are ~1.2 m). A geometry whose extent exceeds this is
+# corrupt or mis-scaled artwork -- e.g. a Gerber with a 999999999999 coordinate.
+# Several checks build spatial grids sized by the board's extent, so on such
+# input they would allocate billions of cells and hang the run. This is the
+# shared guard those checks consult to decline instead.
+MAX_PLAUSIBLE_EXTENT_MM = 2000.0
+
+
+def geometry_extent_plausible(geom: BoardGeometry) -> bool:
+    """False when the board's overall extent is implausibly large (corrupt data).
+
+    Uses the extent of ALL polygons, not just the outline, so a single stray
+    huge feature on any layer is caught even when the outline itself is sane.
+    """
+    bounds = geom.board_bounds()
+    if bounds is None:
+        return True
+    return (
+        (bounds.max_x - bounds.min_x) <= MAX_PLAUSIBLE_EXTENT_MM
+        and (bounds.max_y - bounds.min_y) <= MAX_PLAUSIBLE_EXTENT_MM
+    )
+
+
 def get_board_bounds(geom: BoardGeometry) -> Optional[Bounds]:
     """
     Compute global board bounds in mm.

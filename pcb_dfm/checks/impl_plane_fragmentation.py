@@ -8,6 +8,7 @@ from typing import List, Tuple
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
 from ..results import CheckResult, Violation, ViolationLocation
+from ._geometry_guard import implausible_extent_result
 
 MAX_REPORTED_FRAGMENTS = 50
 
@@ -62,6 +63,10 @@ def run_plane_fragmentation(ctx: CheckContext) -> CheckResult:
     fragment_max_diag_mm = float(raw_cfg.get("fragment_max_diag_mm", 1.5))
     # "really tiny" fragment threshold for stronger concern (currently not used for scoring)
     tiny_fragment_area_mm2 = float(raw_cfg.get("tiny_fragment_area_mm2", 0.5))
+
+    guard = implausible_extent_result(ctx)
+    if guard is not None:
+        return guard
 
     geom = ctx.geometry
 

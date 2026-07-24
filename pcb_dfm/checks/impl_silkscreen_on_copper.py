@@ -12,6 +12,7 @@ from ..engine.context import CheckContext
 from ..geometry import queries
 from ..geometry.gerber_backend import GERBONARA_AVAILABLE, gerber_polygons_mm
 from ..results import CheckResult, MetricResult, Violation, ViolationLocation
+from ._geometry_guard import implausible_extent_result
 
 
 def _norm_side(v: Optional[str]) -> str:
@@ -169,6 +170,10 @@ def run_silkscreen_on_copper(ctx: CheckContext) -> CheckResult:
       - For each silk bbox, query candidate copper boxes via grid and test bbox intersection.
       - Count overlaps per silk primitive (not per copper hit) to avoid inflation.
     """
+    guard = implausible_extent_result(ctx)
+    if guard is not None:
+        return guard
+
     metric_cfg = ctx.check_def.metric or {}
     units_raw = metric_cfg.get("units", metric_cfg.get("unit", "count"))
     units = "count" if units_raw in (None, "", "count") else units_raw

@@ -10,6 +10,7 @@ from ..engine.context import CheckContext
 from ..geometry import queries
 from ..geometry.gerber_backend import excellon_hits_mm
 from ..results import CheckResult, MetricResult, Violation, ViolationLocation
+from ._geometry_guard import implausible_extent_result
 
 
 @dataclass
@@ -239,6 +240,10 @@ def run_min_annular_ring(ctx: CheckContext) -> CheckResult:
     limits = ctx.check_def.limits or {}
     recommended_min = float(limits.get("recommended_min", 0.1))   # mm
     absolute_min = float(limits.get("absolute_min", 0.075))       # mm
+
+    guard = implausible_extent_result(ctx)
+    if guard is not None:
+        return guard
 
     drills = _collect_drills_from_excellon(ctx)
     copper_layers = queries.get_copper_layers(ctx.geometry)

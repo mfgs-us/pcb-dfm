@@ -7,6 +7,7 @@ from typing import Dict, List, Optional, Tuple
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
 from ..results import CheckResult, MetricResult, Violation, ViolationLocation
+from ._geometry_guard import implausible_extent_result
 
 
 def _compute_board_bounds_mm(ctx: CheckContext) -> Optional[Tuple[float, float, float, float]]:
@@ -92,6 +93,10 @@ def run_copper_density_balance(ctx: CheckContext) -> CheckResult:
     raw_cfg = ctx.check_def.raw or {}
     window_size_mm = float(raw_cfg.get("window_size_mm", 5.0))
     min_window_copper_area_mm2 = float(raw_cfg.get("min_window_copper_area_mm2", 0.2))
+
+    guard = implausible_extent_result(ctx)
+    if guard is not None:
+        return guard
 
     geom = ctx.geometry
 

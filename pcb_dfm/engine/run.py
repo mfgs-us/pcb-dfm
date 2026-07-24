@@ -340,6 +340,12 @@ def aggregate_check_results(
     summary_counts = SummaryCounts()
 
     for result in check_results:
+        # A runner that returns None (rather than a CheckResult) must not crash
+        # aggregation and lose every other check's result. Per-check crashes are
+        # already isolated upstream; this guards the same failure arriving as a
+        # bare None return.
+        if result is None:
+            continue
         cat_id = result.category_id or "other"
         if cat_id not in categories:
             categories[cat_id] = []

@@ -15,6 +15,7 @@ from ..geometry.net_map import get_or_build_net_map
 from ..geometry.primitives import Bounds
 from ..ingest import GerberFileInfo
 from ..results import CheckResult, MetricResult, Violation, ViolationLocation
+from ._geometry_guard import implausible_extent_result
 
 # Reuse the point-in-polygon + point-to-polygon-edge helpers that the annular
 # ring check already uses for correct drill-center-to-polygon-edge geometry.
@@ -188,6 +189,10 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
     # A copper polygon containing the via that is no bigger than this is the
     # via's own pad, not a pour it is buried in (#15).
     own_pad_max_extent_mm = float(raw_cfg.get("own_pad_max_extent_mm", 3.0))
+
+    guard = implausible_extent_result(ctx)
+    if guard is not None:
+        return guard
 
     copper_layers = queries.get_copper_layers(ctx.geometry)
 

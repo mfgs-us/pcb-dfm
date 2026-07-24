@@ -53,14 +53,27 @@ def run_dfm_on_gerber_zip(
         GEOMETRY_SOURCE_GERBER,
         GEOMETRY_SOURCE_KICAD_CLI,
         export_gerber_zip,
+        kicad_cli_path,
         looks_like_kicad_project,
+    )
+    from ..ingest.kicad_native import (
+        GEOMETRY_SOURCE_KICAD_NATIVE,
+        render_to_gerber_zip,
     )
 
     geometry_source = GEOMETRY_SOURCE_GERBER
     if looks_like_kicad_project(gerber_zip):
         source_project = Path(gerber_zip)
-        gerber_zip = export_gerber_zip(source_project)
-        geometry_source = GEOMETRY_SOURCE_KICAD_CLI
+        # Prefer KiCad's own plotter when it is installed: it applies the
+        # project's real plot settings, so the artwork matches what the user
+        # would actually export. The native renderer needs nothing installed but
+        # is our reading of the board file, not KiCad's.
+        if kicad_cli_path() is not None:
+            gerber_zip = export_gerber_zip(source_project)
+            geometry_source = GEOMETRY_SOURCE_KICAD_CLI
+        else:
+            gerber_zip = render_to_gerber_zip(source_project)
+            geometry_source = GEOMETRY_SOURCE_KICAD_NATIVE
         # The board file is also the richest design-data source available, so
         # use it unless the caller supplied something explicitly.
         if design_data is None:
@@ -90,12 +103,15 @@ def run_dfm_on_gerber_zip(
     dfm_result.design.layers = copper_layers
     dfm_result.warnings = warnings
     dfm_result.summary.geometry_source = geometry_source
-    if geometry_source == GEOMETRY_SOURCE_KICAD_CLI:
+    if geometry_source in (GEOMETRY_SOURCE_KICAD_CLI, GEOMETRY_SOURCE_KICAD_NATIVE):
+        how = ("plotted from the KiCad board by kicad-cli"
+               if geometry_source == GEOMETRY_SOURCE_KICAD_CLI
+               else "rendered directly from the KiCad board file")
         dfm_result.warnings = list(dfm_result.warnings) + [
-            "Geometry was plotted from the KiCad board by kicad-cli, not read "
-            "from a supplied fabrication package. This assesses the design; it "
-            "cannot detect export-time faults (wrong plot settings, a missing "
-            "layer, scaling) in the package you send to the fab."
+            f"Geometry was {how}, not read from a supplied fabrication package. "
+            "This assesses the design; it cannot detect export-time faults "
+            "(wrong plot settings, a missing layer, scaling) in the package you "
+            "send to the fab."
         ]
     return dfm_result
 
@@ -127,10 +143,18 @@ def build_geometry_for(gerber_zip: Path):
     the board. Accepts a KiCad board/project too, so ``--html`` works for the
     same inputs the run itself accepts rather than failing on a directory.
     """
-    from ..ingest.kicad_export import export_gerber_zip, looks_like_kicad_project
+    from ..ingest.kicad_export import (
+        export_gerber_zip,
+        kicad_cli_path,
+        looks_like_kicad_project,
+    )
+    from ..ingest.kicad_native import render_to_gerber_zip
 
     if looks_like_kicad_project(gerber_zip):
-        gerber_zip = export_gerber_zip(gerber_zip)
+        gerber_zip = (
+            export_gerber_zip(gerber_zip) if kicad_cli_path() is not None
+            else render_to_gerber_zip(gerber_zip)
+        )
     ingest_result = ingest_gerber_zip(gerber_zip)
     return build_board_geometry(ingest_result)
 

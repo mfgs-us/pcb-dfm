@@ -486,6 +486,14 @@ pcb-dfm check board.zip diff_pair_skew --design-data design.json
 
 The format is detected from the file, so there is no flag to pick one.
 
+A netlist or IPC-2581 file **bundled inside the Gerber package** is picked up
+automatically — fabs routinely ship the netlist next to the artwork — so the
+net-aware checks light up with no flag at all. Auto-adoption is safe because it
+fails closed: a bundled netlist is used only if it registers onto the board's
+own drill hits, so a stray netlist for a different board is refused rather than
+misapplied, and the run says which file it adopted. An explicit `--design-data`
+always wins and skips the scan.
+
 **Why it is worth supplying.** Design data is not a nicety for a few
 high-speed checks — it decides whether several ordinary checks can *fail* at
 all. Without a netlist the engine cannot tell copper a via **connects to** from

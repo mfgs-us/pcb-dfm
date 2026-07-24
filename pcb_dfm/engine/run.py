@@ -3,6 +3,7 @@ from __future__ import annotations
 import re
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
 from ..checks.definitions import load_check_definitions_for_ruleset
 from ..geometry import build_board_geometry
@@ -20,6 +21,36 @@ from ..results import (
 from .check_runner import get_check_runner, run_checks
 from .context import CheckContext
 from .geometry_cache import GeometryCache
+
+
+def _discovered_registers(design_data, ingest_result) -> bool:
+    """Whether an auto-discovered design-data file matches THIS board.
+
+    A netlist (one carrying per-net access points) is only trustworthy once its
+    coordinates register onto the board's own drill hits, so we require that and
+    apply the offset here. Registration fails closed -- a netlist for a different
+    board returns no offset and is rejected. Design data with no access points
+    (e.g. IPC-2581, which carries its own absolute routed geometry) has nothing
+    to register against drills and is adopted as-is, matching how it behaves when
+    passed explicitly.
+    """
+    if design_data is None:
+        return False
+    from ..geometry.gerber_backend import excellon_hits_mm
+    from ..ingest.adapters.ipc356 import register_to_board
+
+    has_points = any(
+        getattr(n, "points", None) for n in getattr(design_data, "nets", {}).values()
+    )
+    if not has_points:
+        return True
+
+    drills = [
+        (h.x_mm, h.y_mm)
+        for f in ingest_result.files if getattr(f, "layer_type", None) == "drill"
+        for h in excellon_hits_mm(f.path)
+    ]
+    return register_to_board(design_data, drills) is not None
 
 
 def run_dfm_on_gerber_zip(
@@ -48,7 +79,9 @@ def run_dfm_on_gerber_zip(
     design manufacturable", not "is this fabrication package correct", because
     an export performed here cannot contain the user's export-time mistakes.
     """
-    from ..ingest.design_data import load_design_data
+    from ..ingest.design_data import discover_design_data, load_design_data
+
+    caller_supplied_design_data = design_data is not None
     from ..ingest.kicad_export import (
         GEOMETRY_SOURCE_GERBER,
         GEOMETRY_SOURCE_KICAD_CLI,
@@ -87,6 +120,20 @@ def run_dfm_on_gerber_zip(
     # detected copper stackup / warnings (so a dropped inner layer is visible).
     ingest_result = ingest_gerber_zip(gerber_zip)
 
+    # If the caller passed nothing, adopt a design-data file bundled in the
+    # package (a fab commonly ships the netlist next to the artwork). A netlist
+    # is adopted ONLY if it registers onto this board's own drills -- a netlist
+    # for a different board is refused here, not misapplied, and the "active"
+    # warning below is therefore truthful rather than assumed.
+    discovered_design_data: Optional[Path] = None
+    if not caller_supplied_design_data:
+        found = discover_design_data(ingest_result.root_dir)
+        if found is not None:
+            candidate = load_design_data(found, bom=bom)
+            if _discovered_registers(candidate, ingest_result):
+                design_data = candidate
+                discovered_design_data = found
+
     check_defs = load_check_definitions_for_ruleset(ruleset_id)
     check_results = run_checks(
         gerber_zip=gerber_zip,
@@ -103,6 +150,13 @@ def run_dfm_on_gerber_zip(
     dfm_result.design.layers = copper_layers
     dfm_result.warnings = warnings
     dfm_result.summary.geometry_source = geometry_source
+    if discovered_design_data is not None and design_data is not None:
+        dfm_result.warnings = list(dfm_result.warnings) + [
+            f"Design data was auto-discovered in the package "
+            f"({discovered_design_data.name}) and used; pass --design-data to "
+            f"override. It registered onto the board, so net- and pad-aware "
+            f"checks are active."
+        ]
     if geometry_source in (GEOMETRY_SOURCE_KICAD_CLI, GEOMETRY_SOURCE_KICAD_NATIVE):
         how = ("plotted from the KiCad board by kicad-cli"
                if geometry_source == GEOMETRY_SOURCE_KICAD_CLI

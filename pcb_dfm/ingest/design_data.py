@@ -9,7 +9,8 @@ Supported sources (see also ``pcb_dfm.ingest.adapters``):
   * a path to ``*.json``          -> parsed then treated as the sidecar shape
   * a path to IPC-2581 XML        -> adapters.ipc2581
   * a KiCad project dir / .kicad_pcb / .kicad_pro -> adapters.kicad
-  * a path to ODB++               -> not yet implemented (planned adapter)
+  * a path to an ODB++ job         -> adapters.odbpp
+  * a path to an IPC-D-356 netlist -> adapters.ipc356
 
 Bare Gerbers carry no connectivity or stackup, so this is how the impedance,
 dielectric-uniformity, and differential-pair checks obtain the data they need.
@@ -79,6 +80,66 @@ def merge_bom(base: DesignData, bom: DesignData) -> DesignData:
             f"{', '.join(sorted(bom_only)[:10])}"
             + (" …" if len(bom_only) > 10 else ""))
     return base
+
+
+# Extensions worth sniffing when a design-data file is BUNDLED inside a Gerber
+# package. Detection is content-based (the extensions overlap between formats),
+# so this only narrows the set of files to open.
+_DESIGN_DATA_EXTS = {".ipc", ".ipc356", ".ipcd356", ".xml", ".cvg", ".ipc2581"}
+
+
+def discover_design_data(root_dir: Union[str, Path]) -> Optional[Path]:
+    """Find a design-data file bundled alongside Gerbers in a package.
+
+    Fabs routinely ship the netlist (usually IPC-D-356) inside the same archive
+    as the artwork, since they consume it for electrical test. When the caller
+    gave no explicit ``--design-data`` we look for one here, so the net-aware and
+    footprint-aware checks light up for the most common real-world input rather
+    than only when a flag is passed.
+
+    Preference order is by richness: IPC-2581 (stackup + nets + routed geometry)
+    over an IPC-D-356 netlist (access points only). Detection is by CONTENT, so
+    a misnamed or unrelated ``.xml`` is not mistaken for design data. Returns the
+    path, or None when nothing usable is bundled.
+
+    Auto-adoption is safe because the downstream registration fails closed: an
+    IPC-D-356 netlist that does not register onto the board's own drill hits is
+    refused rather than applied, so a stray netlist for a different board cannot
+    silently mislabel this one.
+    """
+    root = Path(root_dir)
+    if not root.is_dir():
+        return None
+
+    candidates = [
+        p for p in sorted(root.rglob("*"))
+        if p.is_file() and p.suffix.lower() in _DESIGN_DATA_EXTS
+    ]
+
+    ipc2581: Optional[Path] = None
+    ipc356: Optional[Path] = None
+    for p in candidates:
+        try:
+            if ipc2581 is None and _looks_like_ipc2581_content(p):
+                ipc2581 = p
+            elif ipc356 is None and looks_like_ipc356(p):
+                ipc356 = p
+        except OSError:
+            continue
+
+    return ipc2581 or ipc356
+
+
+def _looks_like_ipc2581_content(path: Path) -> bool:
+    """Content-based IPC-2581 detection, for discovery only.
+
+    The shared ``looks_like_ipc2581`` accepts any ``.xml`` by extension, which is
+    right when a user names a file explicitly but wrong for auto-discovery -- an
+    unrelated ``notes.xml`` sitting in a package must not be adopted as design
+    data. So here we require the format marker to actually be in the file.
+    """
+    head = path.read_text(encoding="utf-8", errors="ignore")[:4096]
+    return "IPC-2581" in head
 
 
 def load_design_data(source: DesignDataLike, *, bom: DesignDataLike = None) -> Optional[DesignData]:

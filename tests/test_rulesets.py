@@ -56,6 +56,38 @@ def test_policy_injected_into_every_check():
 
 
 # --------------------------------------------------------------------------
+# Every shipped profile loads and runs -- the spot-checks above only name a
+# couple, so a broken jlcpcb/pcbway/oshpark profile would slip through.
+# --------------------------------------------------------------------------
+
+def test_all_advertised_fab_profiles_ship():
+    ids = set(list_ruleset_ids())
+    for fab in ("jlcpcb_2layer", "jlcpcb_4layer", "pcbway", "oshpark",
+                "advanced_hdi", "conservative_2layer"):
+        assert fab in ids, f"{fab} profile is missing"
+
+
+@pytest.mark.parametrize("ruleset", list_ruleset_ids())
+def test_every_ruleset_loads_a_unique_non_empty_check_set(ruleset):
+    defs = load_check_definitions_for_ruleset(ruleset)
+    assert len(defs) >= 20, f"{ruleset} loaded only {len(defs)} checks"
+    ids = [d.id for d in defs]
+    assert len(ids) == len(set(ids)), f"{ruleset} has duplicate check ids"
+
+
+def test_unoverridden_checks_inherit_default_limits():
+    """Profiles `extends: default`, so a check a profile does not override must
+    keep default's threshold rather than change or vanish."""
+    default = {d.id: d for d in load_check_definitions_for_ruleset("default")}
+    pcbway = {d.id: d for d in load_check_definitions_for_ruleset("pcbway")}
+    # pcbway overrides the six capability drivers and nothing else, so an
+    # unrelated check must be inherited byte-for-byte.
+    assert "copper_to_edge_distance" in pcbway
+    assert pcbway["copper_to_edge_distance"].limits == default["copper_to_edge_distance"].limits
+
+
+
+# --------------------------------------------------------------------------
 # End-to-end: the SAME board flips verdict across profiles
 # --------------------------------------------------------------------------
 

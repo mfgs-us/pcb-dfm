@@ -335,13 +335,17 @@ MetricResult.dimensionless(
 - ✅ Consistent scoring (pass=100, warning=75, fail=0)
 - ✅ No more "pass + error" contradictions
 
-**Check coverage:** all 30 implemented checks now run without crashing on the
-bundled fixture. The 15 definitions that are not yet implemented (e.g.
-`diff_pair_skew`, `min_slot_width`, `tombstoning_risk`) are reported as
-`not_applicable` rather than aborting the run. Checks that require data absent
-from Gerbers (`backdrill_stub_length`, `impedance_control`,
-`dielectric_thickness_uniformity`) return `not_applicable`/`warning` with an
-explanation until stackup/netlist input is wired in.
+**Check coverage:** all **46** check definitions have an implementation — there
+are no stubs. A check that cannot be computed from the data supplied (e.g.
+`impedance_control` or `dielectric_thickness_uniformity` without a stackup)
+reports `not_applicable` with the reason, rather than guessing or aborting the
+run.
+
+Roughly half the catalogue is labelled `heuristic` in its result, meaning it
+measures a proxy rather than the thing itself — bounding boxes instead of true
+polygon booleans, or shape guesses instead of design intent. Those are honest
+screens, and several are deliberately capped at a warning until design data
+lets them decide; see [Design data](#design-data-stackup--netlist).
 
 ## 3. Quickstart: Run a Single Check from CLI
 
@@ -365,6 +369,44 @@ marker on click. Light/dark aware.
 
 Diagnostic `[DFM TIMING]` lines are written to stderr, so `stdout` stays clean
 for JSON piping.
+
+### Running straight from a KiCad project
+
+Any command that takes a Gerber archive also takes a `.kicad_pcb`, a
+`.kicad_pro`, or a project directory — so you can check a board before exporting
+anything:
+
+```bash
+pcb-dfm run my_project/                 # or my_board.kicad_pcb
+```
+
+Artwork is produced by **`kicad-cli`** when KiCad is installed, since that
+applies the project's own plot settings. Otherwise the board is rendered
+natively, with no KiCad required. Either way zones are filled first, because
+poured copper lives in a `.kicad_pcb` only as `filled_polygon` records written
+at the last refill — a board saved after editing without refilling still holds
+the zone *outline* while the copper is stale or absent. **The native path
+refuses to render such a board** rather than quietly measuring copper that
+differs from what gets fabricated:
+
+```
+cannot render this board faithfully: 1 of 1 copper zone(s) have no poured
+copper in the file -- refill zones in KiCad (Edit > Fill All Zones) and save
+```
+
+Results record where the geometry came from, in `summary.geometry_source`:
+
+| value | meaning |
+|---|---|
+| `gerber` | your own fabrication package was measured |
+| `kicad-cli-export` | artwork plotted from the design by KiCad |
+| `kicad-native` | artwork rendered from the design by this tool |
+
+That distinction is not cosmetic. A run from a design file answers *"is this
+design manufacturable"*, **not** *"is this fabrication package correct"* —
+export-time faults such as wrong plot settings, a missing layer or a scaling
+mistake exist only in the package you actually send, and artwork generated here
+cannot contain them. Such runs carry an explicit warning saying so.
 
 ### GitHub Action (PR-native DFM)
 
@@ -434,11 +476,35 @@ which features belong to which net. Supply it with `--design-data` and those
 checks compute real results instead of reporting `not_applicable`:
 
 ```bash
-pcb-dfm run testdata/mini_board.zip --design-data my_project/          # KiCad project dir
-pcb-dfm run testdata/mini_board.zip --design-data board.ipc2581.xml    # IPC-2581
-pcb-dfm run testdata/mini_board.zip --design-data my_project/ --bom bom.csv   # + BOM identity
-pcb-dfm check testdata/mini_board.zip diff_pair_skew --design-data design.json
+pcb-dfm run board.zip --design-data board.ipc          # IPC-D-356 netlist
+pcb-dfm run board.zip --design-data odbpp_job/         # ODB++ job (dir or zip)
+pcb-dfm run board.zip --design-data my_project/        # KiCad project dir
+pcb-dfm run board.zip --design-data board.ipc2581.xml  # IPC-2581
+pcb-dfm run board.zip --design-data my_project/ --bom bom.csv   # + BOM identity
+pcb-dfm check board.zip diff_pair_skew --design-data design.json
 ```
+
+The format is detected from the file, so there is no flag to pick one.
+
+**Why it is worth supplying.** Design data is not a nicety for a few
+high-speed checks — it decides whether several ordinary checks can *fail* at
+all. Without a netlist the engine cannot tell copper a via **connects to** from
+a foreign net it must clear, and without footprints it cannot tell a component
+pad from a trace stub or a via's own landing ring. Checks that cannot make that
+distinction are deliberately capped at a warning rather than guessing. Supply
+the data and they grade normally:
+
+| check | artwork only | with design data |
+|---|---|---|
+| `via_to_copper_clearance` | warning | fails on a genuine different-net violation |
+| `via_in_pad_thermal_balance` | warning | fails on a via in a real component pad |
+| `solder_mask_expansion` | warning | fails on real mask-on-pad |
+| `silkscreen_over_mask_defined_pads` | warning | fails on ink on a real pad |
+| `component_to_component_spacing` | proximity clustering | true component identity |
+
+On the reference board in `testdata/`, adding its netlist turns two of those
+from `warning` into `pass` (the flagged copper was same-net all along) and
+sharpens the rest.
 
 `--bom <file.csv>` layers a **BOM** onto placement by reference designator,
 adding part identity the layout doesn't carry — manufacturer part number, part
@@ -447,9 +513,25 @@ exports (preamble rows, aliased columns, multi-designator cells like `R1-R4`,
 and `DNP`/`Populate` columns). Placement stays authoritative for geometry; the
 BOM for identity. See `pcb_dfm/ingest/adapters/bom.py`.
 
-Three input formats are supported, all mapped onto one internal `DesignData`
+Five input formats are supported, all mapped onto one internal `DesignData`
 model (`pcb_dfm/ingest/design_model.py`) so checks are format-agnostic:
 
+- **IPC-D-356** (`.ipc` netlist) — the format every CAD tool exports and fabs
+  already consume for electrical test, so it is usually the easiest to obtain.
+  Gives per-net access points, and the reference designator + pin of each, from
+  which components and their pad locations are derived. Coordinates are stated
+  in whatever origin the CAD tool used, frequently the board corner rather than
+  the Gerber origin, so the offset is **derived from the board's own drill hits
+  and verified** — a netlist that does not register is refused rather than
+  applied, since a mis-registered one mislabels every net. See
+  `pcb_dfm/ingest/adapters/ipc356.py`.
+- **ODB++** (job directory or archive) — what fabs actually receive. Layer stack
+  from `matrix/matrix`, net names from `eda/data`, and components with their
+  side, pin locations and per-pin nets from the component layers, so one job
+  supplies what otherwise takes a netlist plus separate placement data. Feature
+  geometry is not parsed: Gerbers stay the geometry-of-record. Verified against
+  a synthetic job built to the documented format, not a vendor export — treat
+  unfamiliar constructs as unsupported. See `pcb_dfm/ingest/adapters/odbpp.py`.
 - **KiCad** — point at a project directory, a `.kicad_pcb`, or a `.kicad_pro`.
   A dependency-free S-expression reader pulls the physical stackup, nets +
   routed segments, net classes (board `net_class` blocks and/or `.kicad_pro`
@@ -464,11 +546,11 @@ model (`pcb_dfm/ingest/design_model.py`) so checks are format-agnostic:
   `pcb_dfm/ingest/adapters/sidecar.py`.
 
 This powers `impedance_control` (microstrip Z0 estimate), `diff_pair_skew`
-(per-net length skew), `dielectric_thickness_uniformity`, and
-`diff_pair_spacing` (intra-pair gap consistency from per-net routing geometry —
-IPC-2581 `<Line>`/`<Arc>` segments, or sidecar net `segments`). Still to come:
-Gerber-only net inference (tagging untagged copper by nearest net),
-`return_path_interruptions`, and an **ODB++** adapter. When no design data is
+(per-net length skew), `dielectric_thickness_uniformity`, `diff_pair_spacing`,
+and `return_path_interruptions`. Net labels are spread from access points
+through physically connected copper — copper that touches is one conductor, and
+a plated through-hole carries a net across layers — so a netlist that names only
+pads and vias still labels the traces between them. When no design data is
 supplied, these checks are honestly `not_applicable`.
 
 1. Place your Gerber archive in the repository root:

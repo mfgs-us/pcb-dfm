@@ -1,0 +1,378 @@
+{
+  "checks": [
+    {
+      "confidence": "heuristic",
+      "id": "acid_trap_angle",
+      "measured": null,
+      "severity": "info",
+      "status": "pass",
+      "violations": 1
+    },
+    {
+      "confidence": "heuristic",
+      "id": "aperture_definition_errors",
+      "measured": 4.0,
+      "severity": "error",
+      "status": "fail",
+      "violations": 5
+    },
+    {
+      "confidence": "high",
+      "id": "backdrill_stub_length",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "heuristic",
+      "id": "component_to_component_spacing",
+      "measured": 0.0483,
+      "severity": "error",
+      "status": "fail",
+      "violations": 1
+    },
+    {
+      "confidence": "heuristic",
+      "id": "copper_density_balance",
+      "measured": 97.5325,
+      "severity": "warning",
+      "status": "warning",
+      "violations": 1
+    },
+    {
+      "confidence": "heuristic",
+      "id": "copper_sliver_width",
+      "measured": 0.2657,
+      "severity": "info",
+      "status": "pass",
+      "violations": 0
+    },
+    {
+      "confidence": "heuristic",
+      "id": "copper_thermal_area",
+      "measured": 100.0,
+      "severity": "info",
+      "status": "pass",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
+      "id": "copper_to_edge_distance",
+      "measured": 0.2616,
+      "severity": "info",
+      "status": "pass",
+      "violations": 0
+    },
+    {
+      "confidence": "heuristic",
+      "id": "crosstalk_estimate",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
+      "id": "dielectric_thickness_uniformity",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
+      "id": "diff_pair_skew",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
+      "id": "diff_pair_spacing",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
+      "id": "drill_aspect_ratio",
+      "measured": 2.6692,
+      "severity": "info",
+      "status": "pass",
+      "violations": 0
+    },
+    {
+      "confidence": "high",
+      "id": "drill_to_drill_spacing",
+      "measured": 1.524,
+      "severity": "info",
+      "status": "pass",
+      "violations": 0
+    },
+    {
+      "confidence": "high",
+      "id": "drill_wander_budget",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
+      "id": "etch_compensation_margin",
+      "measured": 272.5333,
+      "severity": "info",
+      "status": "pass",
+      "violations": 0
+    },
+    {
+      "confidence": "high",
+      "id": "fillet_radius_milling",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "heuristic",
+      "id": "highspeed_stub_length",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
+      "id": "impedance_control",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
+      "id": "layer_registration_margin",
+      "measured": 0.1989,
+      "severity": "info",
+      "status": "pass",
+      "violations": 0
+    },
+    {
+      "confidence": "heuristic",
+      "id": "mask_to_trace_clearance",
+      "measured": 0.0581,
+      "severity": "info",
+      "status": "pass",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
+      "id": "min_annular_ring",
+      "measured": 0.1989,
+      "severity": "info",
+      "status": "pass",
+      "violations": 0
+    },
+    {
+      "confidence": "high",
+      "id": "min_drill_size",
+      "measured": 0.5994,
+      "severity": "info",
+      "status": "pass",
+      "violations": 0
+    },
+    {
+      "confidence": "high",
+      "id": "min_slot_width",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "heuristic",
+      "id": "min_trace_spacing",
+      "measured": 0.2014,
+      "severity": "info",
+      "status": "pass",
+      "violations": 0
+    },
+    {
+      "confidence": "high",
+      "id": "min_trace_width",
+      "measured": 0.2794,
+      "severity": "info",
+      "status": "pass",
+      "violations": 0
+    },
+    {
+      "confidence": "heuristic",
+      "id": "missing_tooling_holes",
+      "measured": 0.0,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "heuristic",
+      "id": "plane_fragmentation",
+      "measured": 0.0,
+      "severity": "info",
+      "status": "pass",
+      "violations": 1
+    },
+    {
+      "confidence": "heuristic",
+      "id": "plating_uniformity",
+      "measured": 0.0,
+      "severity": "info",
+      "status": "pass",
+      "violations": 0
+    },
+    {
+      "confidence": "heuristic",
+      "id": "polarity_marking_consistency",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
+      "id": "return_path_interruptions",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
+      "id": "silkscreen_clearance",
+      "measured": -2.3698,
+      "severity": "error",
+      "status": "fail",
+      "violations": 100
+    },
+    {
+      "confidence": "high",
+      "id": "silkscreen_min_width",
+      "measured": 0.0762,
+      "severity": "error",
+      "status": "fail",
+      "violations": 1
+    },
+    {
+      "confidence": "heuristic",
+      "id": "silkscreen_on_copper",
+      "measured": 200.0,
+      "severity": "error",
+      "status": "warning",
+      "violations": 200
+    },
+    {
+      "confidence": "heuristic",
+      "id": "silkscreen_over_mask_defined_pads",
+      "measured": 2.5975,
+      "severity": "error",
+      "status": "fail",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
+      "id": "solder_mask_expansion",
+      "measured": 0.1007,
+      "severity": "warning",
+      "status": "warning",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
+      "id": "solder_mask_web",
+      "measured": null,
+      "severity": "info",
+      "status": "pass",
+      "violations": 1
+    },
+    {
+      "confidence": "heuristic",
+      "id": "solder_paste_area_coverage",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "heuristic",
+      "id": "tab_routing_mousebites",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
+      "id": "thermal_relief_spoke_width",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "heuristic",
+      "id": "tombstoning_risk",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "heuristic",
+      "id": "unsupported_hole_types",
+      "measured": 0.0,
+      "severity": "info",
+      "status": "pass",
+      "violations": 0
+    },
+    {
+      "confidence": "heuristic",
+      "id": "via_in_pad_thermal_balance",
+      "measured": 0.0,
+      "severity": "info",
+      "status": "pass",
+      "violations": 1
+    },
+    {
+      "confidence": "heuristic",
+      "id": "via_tenting",
+      "measured": 94.1176,
+      "severity": "info",
+      "status": "pass",
+      "violations": 1
+    },
+    {
+      "confidence": "heuristic",
+      "id": "via_to_copper_clearance",
+      "measured": 0.4055,
+      "severity": "info",
+      "status": "pass",
+      "violations": 0
+    },
+    {
+      "confidence": "heuristic",
+      "id": "wave_solder_shadowing",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    }
+  ],
+  "overall": {
+    "score": 0.0,
+    "status": "fail"
+  },
+  "stackup_layers": 2,
+  "warnings": []
+}

@@ -39,6 +39,23 @@ Gerber files are byte-identical to upstream. Some were **renamed** to
 conventional extensions (e.g. `copper_top.gbr` → `board.gtl`) so that layer
 classification happens by extension; no content is modified.
 
+## Regression baselines
+
+Each board here has a committed golden digest under `tests/baselines/corpus/`,
+covering all 46 checks' status and measured value, produced with the board's own
+design data where it ships some. The corpus manifests assert that specific
+checks must not fail; the goldens catch quiet drift in the *numbers* — a value
+moving because a shared helper changed, on artwork no synthetic fixture
+resembles.
+
+They move whenever a check legitimately improves, and that is the point: the
+diff is the review. Several real bugs in this project were found by reading one.
+Regenerate deliberately:
+
+```
+PCBDFM_UPDATE_BASELINES=1 pytest tests/test_golden.py
+```
+
 ## Considered and rejected
 
 Not vendored, on licence grounds — listed so the decision isn't re-litigated:

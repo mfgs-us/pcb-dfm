@@ -15,7 +15,9 @@ must NOT convert again.
 
 from __future__ import annotations
 
+import functools
 import math
+import os
 import warnings
 from dataclasses import dataclass
 from pathlib import Path
@@ -23,6 +25,37 @@ from typing import List, Optional, Tuple
 
 from .excellon_fallback import parse_excellon_mm
 from .primitives import Point2D, Polygon
+
+
+def _cache_by_path_mtime(fn):
+    """Memoize a ``(path) -> list`` parse by the file's path and mtime.
+
+    A single run parses the same Gerber several times over: the geometry build
+    reads each layer, and then trace/edge checks re-read the copper and outline
+    from the file (their centreline/edge form is not in the polygon geometry).
+    On the reference board top_copper was parsed FOUR times. The results depend
+    only on the file, so this returns the first parse to every later caller of
+    the same unchanged file -- transparently, with the same objects.
+
+    Keyed by mtime as well as path so a file edited between runs (temp
+    extraction dirs reuse names) is never served stale. Bounded so a
+    long-running process cannot grow the cache without limit. Callers treat the
+    returned list as read-only (they build their own structures from it), so
+    sharing one list object is safe.
+    """
+    @functools.lru_cache(maxsize=128)
+    def _cached(path_str: str, _mtime: int):
+        return fn(Path(path_str))
+
+    @functools.wraps(fn)
+    def wrapper(path: Path):
+        try:
+            mtime = os.stat(path).st_mtime_ns
+        except OSError:
+            return fn(Path(path))  # uncacheable (missing) -- just run it
+        return _cached(str(path), mtime)
+
+    return wrapper
 
 try:
     from gerbonara import ExcellonFile, GerberFile
@@ -152,6 +185,7 @@ def _object_polygons_mm(obj) -> List[Polygon]:
     return polys
 
 
+@_cache_by_path_mtime
 def gerber_polygons_mm(path: Path) -> List[Polygon]:
     """Parse a Gerber file and return filled outline polygons in mm."""
     if not GERBONARA_AVAILABLE:
@@ -197,6 +231,7 @@ def _aperture_width_mm(aperture) -> float:
         return 0.0
 
 
+@_cache_by_path_mtime
 def gerber_traces_mm(path: Path) -> List[Trace]:
     """Drawn segments (traces) with their aperture width, in mm.
 
@@ -350,6 +385,7 @@ def gerber_aperture_use_bbox_mm(path: Path, code: str):
     return None
 
 
+@_cache_by_path_mtime
 def gerber_flash_polygons_mm(path: Path) -> List[Polygon]:
     """Filled outlines of *flashed* features only (pads), in mm.
 
@@ -374,6 +410,7 @@ def gerber_flash_polygons_mm(path: Path) -> List[Polygon]:
     return polys
 
 
+@_cache_by_path_mtime
 def gerber_edges_mm(path: Path):
     """Outline edges in mm as ``(p_start, p_end, kind, radius, direction)``.
 

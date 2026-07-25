@@ -77,23 +77,28 @@ Not vendored, on licence grounds — listed so the decision isn't re-litigated:
 | OregonStateMarsRover/2011 (PADS) | GPL v2 | reciprocal |
 | tracespace issues #367 / #371 (EasyEDA, Allegro) | none stated | attachments to bug reports, no licence |
 
-Also considered, skipped on **size/speed, not licence** (both would be welcome
-behind a slow marker):
+Also considered, skipped on **size/speed, not licence** (welcome behind a slow
+marker):
 
 - **myriadrf/LimeSDR-QPCIe** (Altium, CC-BY 3.0). 14 copper layers, ~20k
   polygons/layer; times out (>2.5 min) even trimmed to two layers (issue #26).
   The best candidate if a heavyweight, many-layer, slot-bearing board is wanted.
-- **ohguma/analog_gyro_2021** (Fritzing, MIT). A clean licence and it validates
-  fine. It is a *panel* (many copies) that took ~62 s per run — but #26 fixed the
-  O(n²) checks behind that (now ~14 s), so it is a good candidate to add once its
-  baseline is confirmed reproducible in CI.
 
-Also considered, skipped on **cross-platform reproducibility**:
+Also considered, skipped on **cross-platform reproducibility** — the harder
+wall. gerbonara 1.5.0 parses *complex/panelized* boards to subtly
+platform-dependent geometry: the golden digest differs between local (macOS) and
+CI (Linux) despite an identical gerbonara version, so no stable baseline can be
+committed. This is **not** limited to a vendor format — it bites standard
+RS-274X too — and it is not float noise absorbable by rounding (e.g. Fritzing's
+`min_annular_ring` reads 0.352 mm locally vs 0.316 mm on CI, and a Linux baseline
+would simply fail on macOS instead). The existing corpus boards are simple enough
+to parse identically on both platforms; adding a complex board would need its
+baseline generated on the same OS the tests run on.
 
-- **yghdj/lasmo** (Siemens/Mentor, MIT). Validates fine locally and has a
-  non-plated drill (the only board that would exercise `npth_to_copper_clearance`
-  on real artwork). But gerbonara 1.5.0's parse of the Mentor `.gdo`/`.ncd`
-  format yields *platform-dependent* geometry — its golden digest differed
-  between local (macOS) and CI (Linux) despite an identical gerbonara version —
-  so it cannot have a stable committed baseline. Standard RS-274X / Excellon
-  boards do not have this problem.
+- **ohguma/analog_gyro_2021** (Fritzing, MIT, standard RS-274X). Clean licence;
+  #26 fixed the speed (62 s → ~14 s) — but a panel, and platform-divergent as
+  above (issue #30 / PR closed).
+- **yghdj/lasmo** (Siemens/Mentor, MIT). Validates fine locally, and its
+  non-plated drill would exercise `npth_to_copper_clearance` on real artwork —
+  but same platform divergence in gerbonara's parse of the Mentor `.gdo`/`.ncd`
+  files.

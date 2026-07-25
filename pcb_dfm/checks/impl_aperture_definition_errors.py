@@ -51,8 +51,8 @@ def run_aperture_definition_errors(ctx: CheckContext) -> CheckResult:
     What it actually flags, per parsed aperture, is:
       - parse_failed:        the Gerber layer could not be parsed at all
       - no_usable_dimension: no numeric size could be extracted for the aperture
-      - extremely_small:     size <= min_dim_mm (default 0.01 mm)
-      - extremely_large:     size >= max_dim_mm (default 200 mm)
+      - too_small:           smallest dimension < min_dim_mm (default 0.01 mm)
+      - too_large:           largest dimension > max_dim_mm (default 200 mm)
       - macro_no_size / unknown_shape: low-confidence "suspicious" only
 
     "Hard" reasons (parse/no-dimension/too-small/too-large) drive the metric and
@@ -105,7 +105,9 @@ def run_aperture_definition_errors(ctx: CheckContext) -> CheckResult:
     # which reads gerbonara's typed aperture model. Keeping one implementation
     # means the ingest warnings and this check can never disagree, and drops the
     # near-verbatim duplicate that previously lived here.
-    warnings_ = validate_apertures(ctx.ingest.files, max_files=max_files,
+    warnings_ = validate_apertures(ctx.ingest.files,
+                                   min_dim_mm=min_dim_mm, max_dim_mm=max_dim_mm,
+                                   max_files=max_files,
                                    max_individual=max_individual)
 
     suspicious: List[SuspiciousAperture] = [
@@ -133,11 +135,17 @@ def run_aperture_definition_errors(ctx: CheckContext) -> CheckResult:
         if f.format == "gerber" and f.layer_type in ("copper", "mask", "silk", "silkscreen")
     }
 
+    # These must match the reason strings emitted by validate_apertures. They
+    # had drifted ("extremely_small"/"extremely_large" here vs "too_small"/
+    # "too_large" from the validator), so NO size-based violation ever landed in
+    # `hard` -- the check could not fail on any implausibly small or large
+    # aperture, defeating its headline purpose. Kept in lockstep with
+    # aperture_validation.py.
     HARD_REASONS = {
         "parse_failed",
         "no_usable_dimension",
-        "extremely_small",
-        "extremely_large",
+        "too_small",
+        "too_large",
     }
 
     SOFT_REASONS = {

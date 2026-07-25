@@ -305,3 +305,33 @@ def test_silkscreen_min_width_detects_thin_long_line(tmp_path):
     result = run_single_check(z, load_check_definition("silkscreen_min_width"))
     assert result.metric.measured_value == pytest.approx(0.05, abs=0.005)
     assert result.status == "warning"
+
+
+def _one_aperture_board(ap_def: str) -> str:
+    """A one-flash Gerber whose only aperture is `ap_def` (e.g. 'C,0.002')."""
+    return (
+        "%FSLAX46Y46*%\n%MOMM*%\n"
+        f"%ADD10{ap_def}*%\nD10*\n"
+        "X1000000Y1000000D03*\nM02*\n"
+    )
+
+
+def test_aperture_definition_errors_flags_out_of_range_sizes(tmp_path):
+    """Regression: the check must flag implausibly small/large apertures.
+
+    Its HARD_REASONS had drifted from the reason strings the validator emits
+    ("extremely_small" vs "too_small"), so no size-based violation ever counted
+    and the check could not fail on any out-of-range aperture -- its headline
+    purpose. A 0.002 mm aperture (below the 0.01 mm floor) must now be flagged; a
+    normal 0.25 mm aperture must not.
+    """
+    cd = load_check_definition("aperture_definition_errors")
+
+    tiny = run_single_check(
+        make_gerber_zip(tmp_path, {"board.gtl": _one_aperture_board("C,0.002000")}, name="tiny.zip"), cd)
+    assert tiny.status != "pass"
+    assert tiny.metric.measured_value >= 1
+
+    normal = run_single_check(
+        make_gerber_zip(tmp_path, {"board.gtl": _one_aperture_board("C,0.250000")}, name="ok.zip"), cd)
+    assert normal.status == "pass"

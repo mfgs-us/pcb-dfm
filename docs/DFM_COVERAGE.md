@@ -1,6 +1,6 @@
 # DFM Coverage Matrix
 
-This document maps the engine's **47 implemented checks** against the standard
+This document maps the engine's **49 implemented checks** against the standard
 fabrication/assembly DFM rule families that appear on IPC-2221/2222 and on the
 public DFM checklists of volume fabricators (JLCPCB, PCBWay, Sierra, OSH Park).
 
@@ -46,7 +46,7 @@ Legend:
 | Via tenting / plugging | ✅ | `via_tenting` |
 | Backdrill residual stub | ✅ | `backdrill_stub_length` |
 | Drill wander / registration budget | 🟡 | `drill_wander_budget` |
-| **NPTH (non-plated hole) to copper clearance** | ❌ | — see Gap 1 |
+| NPTH (non-plated hole) to copper clearance | ✅ | `npth_to_copper_clearance` |
 
 ## 3. Solder mask
 
@@ -83,7 +83,7 @@ Legend:
 | Controlled impedance | 🔬 | `impedance_control` |
 | Dielectric thickness uniformity | 🔬 | `dielectric_thickness_uniformity` |
 | Layer-to-layer registration margin | 🟡 | `layer_registration_margin` |
-| **Stackup symmetry / warpage balance** | ❌ | — see Gap 2 |
+| Stackup symmetry / warpage balance | 🔬 | `stackup_symmetry` |
 
 ## 7. High-speed signal integrity
 
@@ -124,31 +124,38 @@ Legend:
 
 ---
 
-## Remaining gaps
+## Recently closed gaps
 
-### Gap 1 — NPTH-to-copper clearance *(clearest remaining)*
+Both gaps this analysis originally surfaced are now implemented:
+
+### NPTH-to-copper clearance — `npth_to_copper_clearance`
 
 `via_to_copper_clearance` intentionally filters to **plated** drills
 (`f.is_plated is True`), because a plated via's antipad clearance is a different
-electrical rule than a mounting-hole keep-out. A **non-plated** hole
-(mounting hole, tooling hole, unplated slot) that sits too close to copper is a
-distinct hard-reject / reliability concern: the drill can nick the copper, and
-there is no barrel to protect the annulus. No current check covers it. This is
-the next check to implement — the geometry (drill centers + copper polygons) is
-already ingested; it is essentially `via_to_copper_clearance` with the plated
-filter inverted and a keep-out-oriented threshold.
+electrical rule than a mounting-hole keep-out. The companion check covers the
+**non-plated** holes it excludes (mounting/tooling holes, unplated slots): a
+bare drilled wall has no barrel to bond copper and a looser drill tolerance, so
+copper up to or into the hole can be nicked/lifted or short to a standoff. It
+measures hole-edge-to-copper-edge clearance on every layer, excludes a small
+pad-sized feature as the hole's own intentional grounding ring (the same
+own-ring discriminator as the via check, #15), and hard-fails only the
+unambiguous case — a bare hole drilled into a larger copper region within the
+absolute limit. NPTH layers are recognised by filename token
+(`npth`/`nonplated`/`np_`); a combined plated drill file reports
+`not_applicable`.
 
-### Gap 2 — Stackup symmetry / warpage balance *(speculative, needs stackup data)*
+### Stackup symmetry / warpage — `stackup_symmetry`
 
-Fabricators reject or re-quote asymmetric stackups (unbalanced copper
-distribution across the neutral axis, dielectric asymmetry) because they warp on
-reflow. `copper_density_balance` screens *in-plane* balance on a single layer;
-nothing screens *through-thickness* symmetry. This needs a real stackup sidecar
-to be meaningful (layer order, copper weights, prepreg thicknesses), so it would
-ship as a 🔬 data-gated check. Lower priority than Gap 1 until stackup ingest is
-richer.
+Fabricators reject or re-quote asymmetric stackups because they warp on reflow.
+`copper_density_balance` screens *in-plane* balance on a single layer; this
+check screens *through-thickness* construction symmetry. It pairs each layer at
+position *k* from the top with the layer at position *k* from the bottom and
+reports the largest thickness mismatch across the mid-plane (a kind mismatch is
+a hard fail). It is 🔬 data-gated — it needs an ordered stackup from IPC-2581,
+KiCad, or a sidecar `stackup.layers` list — and reports `not_applicable` from
+bare Gerbers.
 
-### Deliberately out of scope
+## Deliberately out of scope
 
 - **Netlist/DRC-vs-schematic** — this engine screens *manufacturability* of the
   artwork as delivered, not electrical correctness against a schematic. Shorts

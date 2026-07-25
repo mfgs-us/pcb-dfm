@@ -1,0 +1,24 @@
+{
+  "id": "stackup_symmetry",
+  "category_id": "fabrication_stackup",
+  "name": "Stackup symmetry (warpage balance)",
+  "description": "A layer stackup that is not symmetric about the board mid-plane warps on reflow. Fabs reject or re-quote asymmetric builds. Requires a design-data stackup (ordered layers with thicknesses); not evaluable from bare Gerbers.",
+  "what_it_measures": "Maximum thickness mismatch between layers mirrored about the board mid-plane (0 when the stackup is symmetric).",
+  "metric": {
+    "kind": "distance",
+    "units": "um",
+    "preferred_direction": "minimize",
+    "target": { "max": 20.0 },
+    "limits": { "max": 50.0 },
+    "scale_min": 0.0,
+    "scale_max": 100.0
+  },
+  "severity_default": "warning",
+  "applies_to": ["stackup", "core", "prepreg", "copper"],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 1.0
+  }
+}

@@ -1,0 +1,24 @@
+{
+  "id": "npth_to_copper_clearance",
+  "category_id": "drill_via_integrity",
+  "name": "NPTH to copper clearance",
+  "description": "Ensure non-plated (mounting/tooling) holes keep clear of copper. A bare drilled wall has no barrel to bond copper, and the looser NPTH drill tolerance can nick or lift adjacent copper.",
+  "what_it_measures": "Smallest distance from a non-plated hole edge to the nearest copper feature on any layer.",
+  "metric": {
+    "kind": "distance",
+    "units": "um",
+    "preferred_direction": "maximize",
+    "target": { "min": 250.0 },
+    "limits": { "min": 150.0 },
+    "scale_min": 0.0,
+    "scale_max": 500.0
+  },
+  "severity_default": "error",
+  "applies_to": ["npth", "mounting_hole", "trace", "plane"],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 1.0
+  }
+}

@@ -68,6 +68,11 @@ GUIDANCE: Dict[str, Remediation] = {
     "via_tenting": Remediation(
         "Tent or plug the via per the fab's capability.",
         "Solder wicking / exposed via → assembly defects."),
+    "npth_to_copper_clearance": Remediation(
+        "Pull copper back from non-plated (mounting/tooling) holes to the fab's "
+        "keep-out (typically ≥ 0.25 mm).",
+        "The bare drilled wall can nick/lift adjacent copper or short to a "
+        "standoff — no plated barrel protects it."),
     "via_in_pad_thermal_balance": Remediation(
         "Fill and cap via-in-pad, or add thermal relief.",
         "Solder voiding / opens under the component."),
@@ -114,6 +119,11 @@ GUIDANCE: Dict[str, Remediation] = {
     "dielectric_thickness_uniformity": Remediation(
         "Even out dielectric thicknesses or choose a symmetric stackup.",
         "Impedance drift and board warp."),
+    "stackup_symmetry": Remediation(
+        "Mirror the layer construction (copper weights and dielectric "
+        "thicknesses) about the board mid-plane.",
+        "An unbalanced stackup warps on reflow → fab reject/re-quote and "
+        "assembly coplanarity problems."),
 
     # --- mechanical / outline / thermal -----------------------------------
     "board_outline_continuity": Remediation(

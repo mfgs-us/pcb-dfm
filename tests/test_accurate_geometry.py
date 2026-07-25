@@ -27,17 +27,26 @@ def _rect(x0, y0, x1, y1) -> Polygon:
 
 # --- copper_to_edge_distance / solder_mask_web share this primitive ----------
 
-def test_min_distance_between_polygons_catches_interior_cutout():
+def test_copper_to_edge_measures_interior_cutout_wall():
     """Copper 0.10 mm from the wall of an interior cutout must measure 0.10 mm.
 
-    A board-bbox method sees only the outer rectangle and would report the
-    (much larger) distance to the perimeter, silently passing this violation.
+    copper_to_edge_distance now measures each copper polygon against the
+    outline's individual segments (spatially indexed, so a 1000-vertex panel
+    boundary no longer costs O(n) per copper feature). An interior cutout is one
+    such contour, so copper near its wall is still caught exactly -- a board-bbox
+    method that saw only the outer rectangle would report the (much larger)
+    perimeter distance and silently pass.
     """
-    from pcb_dfm.checks.impl_copper_to_edge_distance import _min_distance_between_polygons
+    from pcb_dfm.checks.impl_copper_to_edge_distance import _min_dist_polygon_to_segments
 
-    cutout = _rect(5.0, 5.0, 9.0, 9.0)          # interior slot wall at x=5
     copper = _rect(4.4, 6.0, 4.9, 8.0)          # copper right edge at x=4.9
-    d = _min_distance_between_polygons(copper, cutout)
+    # Interior cutout with its wall at x=5, expressed as its four boundary
+    # segments (the form the check indexes and queries).
+    cutout_segments = [
+        (5.0, 5.0, 9.0, 5.0), (9.0, 5.0, 9.0, 9.0),
+        (9.0, 9.0, 5.0, 9.0), (5.0, 9.0, 5.0, 5.0),
+    ]
+    d = _min_dist_polygon_to_segments(copper.vertices, cutout_segments)
     assert math.isclose(d, 0.10, abs_tol=1e-6), d
 
 

@@ -40,6 +40,28 @@ from typing import List, Optional, Union
 GEOMETRY_SOURCE_KICAD_NATIVE = "kicad-native"
 
 
+class KiCadParseError(ValueError):
+    """The native reader could not parse a ``.kicad_pcb``.
+
+    gerbonara's KiCad s-expr mapper is strict and version-fragile -- it raises
+    on tokens it does not model (``title_block``, ``host``, empty yes/no atoms),
+    which several real KiCad 5/6/7 files carry. We convert its raw
+    ``MappingError``/``KeyError`` into this actionable error rather than letting a
+    confusing library traceback escape.
+    """
+
+
+def _kicad_file_version(path: Path) -> Optional[str]:
+    """Best-effort ``(version NNNN)`` from the head of a .kicad_pcb, else None."""
+    try:
+        head = path.read_text(errors="replace")[:400]
+    except OSError:
+        return None
+    import re
+    m = re.search(r"\(version\s+(\d+)\)", head)
+    return m.group(1) if m else None
+
+
 @dataclass
 class ZoneFillState:
     """Whether a board's copper pours are actually present in the file."""
@@ -80,7 +102,19 @@ def _load_board(source: Union[str, Path]):
         if not sibling.is_file():
             raise ValueError(f"no .kicad_pcb beside project file: {path}")
         path = sibling
-    return Board.open(str(path)), path
+    try:
+        return Board.open(str(path)), path
+    except KiCadParseError:
+        raise
+    except Exception as exc:
+        version = _kicad_file_version(path)
+        vtxt = f" (file version {version})" if version else ""
+        raise KiCadParseError(
+            f"could not parse KiCad board {path.name}{vtxt}: "
+            f"{type(exc).__name__}. The built-in native reader does not handle "
+            f"every KiCad version. Install 'kicad-cli' for robust KiCad support, "
+            f"or export Gerbers and analyze those instead."
+        ) from exc
 
 
 def zone_fill_state(source: Union[str, Path]) -> ZoneFillState:

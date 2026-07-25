@@ -198,3 +198,26 @@ def test_the_layers_a_board_needs_all_come_through(tmp_path):
     kinds = {f.layer_type for f in files}
     for needed in ("copper", "mask", "silkscreen", "drill", "outline"):
         assert needed in kinds, f"{needed} missing from the rendered package"
+
+
+def test_unparseable_kicad_board_raises_actionable_error(tmp_path):
+    """A .kicad_pcb the native reader can't parse must raise an actionable
+    KiCadParseError -- naming the file version and pointing at kicad-cli / Gerber
+    export -- rather than leaking a raw gerbonara MappingError/KeyError traceback.
+
+    gerbonara's KiCad s-expr mapper is strict and version-fragile (it rejects
+    tokens it does not model on several real KiCad 5/6/7 boards); this is the
+    graceful failure for that case.
+    """
+    from pcb_dfm.ingest.kicad_native import KiCadParseError, _load_board
+
+    p = tmp_path / "broken.kicad_pcb"
+    p.write_text(
+        "(kicad_pcb (version 20211014) (generator pcbnew) "
+        "(title_block (foo)) (unknown_thing (a b)))"
+    )
+    with pytest.raises(KiCadParseError) as ei:
+        _load_board(p)
+    msg = str(ei.value)
+    assert "20211014" in msg          # names the file version
+    assert "kicad-cli" in msg         # actionable guidance

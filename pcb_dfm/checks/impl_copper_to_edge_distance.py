@@ -9,12 +9,39 @@ from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
 from ..geometry import queries
 from ..geometry.gerber_backend import outline_contours_mm
+from ..geometry.polygon_index import PolygonIndex
 from ..geometry.primitives import Bounds, Point2D, Polygon
 from ..results import CheckResult, MetricResult, Violation, ViolationLocation
-from .impl_min_annular_ring import _point_in_polygon
-from .impl_solder_mask_expansion import _min_distance_between_polygons
+from .impl_min_annular_ring import _min_distance_to_polygon_edges, _point_in_polygon
+from .impl_solder_mask_expansion import _distance_point_to_segment
 
 MAX_REPORTED_VIOLATIONS = 100
+
+
+def _min_dist_polygon_to_segments(verts, segments) -> float:
+    """Exact minimum distance from a polygon (``verts``) to a set of line
+    segments, each ``(x1, y1, x2, y2)``.
+
+    Mirrors ``_min_distance_between_polygons`` restricted to the given segments:
+    every polygon vertex against each segment, plus each segment's endpoints
+    against the polygon's edges. Used so a copper polygon is measured only
+    against the *nearby* slice of the (possibly 1000+ vertex) board outline.
+    """
+    best = math.inf
+    for v in verts:
+        vx, vy = v.x, v.y
+        for (x1, y1, x2, y2) in segments:
+            dd = _distance_point_to_segment(vx, vy, x1, y1, x2, y2)
+            if dd < best:
+                best = dd
+    for (x1, y1, x2, y2) in segments:
+        d1 = _min_distance_to_polygon_edges(x1, y1, verts)
+        if d1 < best:
+            best = d1
+        d2 = _min_distance_to_polygon_edges(x2, y2, verts)
+        if d2 < best:
+            best = d2
+    return best
 
 
 def _poly_area(poly: Polygon) -> float:
@@ -26,14 +53,6 @@ def _poly_area(poly: Polygon) -> float:
         x2, y2 = v[(i + 1) % n].x, v[(i + 1) % n].y
         s += x1 * y2 - x2 * y1
     return abs(s) * 0.5
-
-
-def _bbox_gap(a: Bounds, b: Bounds) -> float:
-    """Straight-line gap between two bounding boxes (0 if they overlap). A valid
-    lower bound on the true polygon-to-polygon distance, used to prune."""
-    dx = max(0.0, a.min_x - b.max_x, b.min_x - a.max_x)
-    dy = max(0.0, a.min_y - b.max_y, b.min_y - a.max_y)
-    return math.hypot(dx, dy)
 
 
 @register_check("copper_to_edge_distance")
@@ -130,6 +149,26 @@ def run_copper_to_edge_distance(ctx: CheckContext) -> CheckResult:
     # copper only.
     cutoff = max(2.0, recommended_min * 5.0)
 
+    # Flatten the outline contours into individual segments and spatially index
+    # them. Each copper polygon is then measured only against the nearby slice of
+    # the boundary, not the whole (possibly 1000+ vertex, panelized) outline.
+    # This preserves the exact distance for the near-edge copper that sets both
+    # the minimum and the violations -- far copper cannot be either -- while
+    # dropping the O(copper x total_outline_verts) cost that made a panelized
+    # board take minutes.
+    edge_segments: List[tuple[float, float, float, float]] = []
+    seg_bounds: List[Bounds] = []
+    for op in edge_polys:
+        vs = op.vertices
+        n = len(vs)
+        for i in range(n):
+            a = vs[i]
+            b = vs[(i + 1) % n]
+            edge_segments.append((a.x, a.y, b.x, b.y))
+            seg_bounds.append(Bounds(min(a.x, b.x), min(a.y, b.y),
+                                     max(a.x, b.x), max(a.y, b.y)))
+    seg_index = PolygonIndex.from_bounds(list(enumerate(seg_bounds)))
+
     for layer in copper_layers:
         for poly in layer.polygons:
             pb = poly.bounds()
@@ -155,14 +194,21 @@ def run_copper_to_edge_distance(ctx: CheckContext) -> CheckResult:
             # behaviour is never looser than before.
             exact_thr = min(cutoff, max(recommended_min, min_dist if min_dist is not None else cutoff))
 
-            d = math.inf
-            for op in edge_polys:
-                gap = _bbox_gap(pb, op.bounds())
-                # exact distance when close; the bbox gap (a lower bound) is
-                # a fine stand-in for far contours that can't be the minimum
-                dd = _min_distance_between_polygons(poly, op) if gap <= exact_thr else gap
-                if dd < d:
-                    d = dd
+            # Query only outline segments whose bbox is within exact_thr of this
+            # copper's bbox; compute the exact distance to that local slice.
+            q = Bounds(pb.min_x - exact_thr, pb.min_y - exact_thr,
+                       pb.max_x + exact_thr, pb.max_y + exact_thr)
+            near_ids = seg_index.query_bbox(q)
+            if near_ids:
+                d = _min_dist_polygon_to_segments(
+                    poly.vertices, [edge_segments[i] for i in near_ids]
+                )
+            else:
+                # No outline segment within exact_thr: this copper is farther
+                # than the threshold from every edge, so it can be neither the
+                # running minimum (exact_thr >= min_dist) nor an offender
+                # (exact_thr >= recommended_min). Its exact value is irrelevant.
+                d = exact_thr
 
             if min_dist is None or d < min_dist:
                 min_dist = d

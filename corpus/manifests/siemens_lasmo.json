@@ -1,0 +1,22 @@
+{
+  "name": "siemens_lasmo",
+  "board": "testdata/siemens_lasmo.zip",
+  "ruleset": "default",
+  "description": "Real 2-layer board exported from Siemens/Mentor (lasmo): both copper layers, both masks, both paste layers, a board outline, and BOTH a plated and a NON-plated drill file. No silkscreen layer.",
+  "source": "yghdj/lasmo (MIT), via gerbonara tests/resources/siemens-2 (Mentor Gerber '.gdo' / Excellon '.ncd' output)",
+  "notes": "First Mentor/Siemens board and first NPTH-bearing board in the corpus. Files renamed by function to conventional extensions (EtchLayerTop.gdo -> board.gtl, ThruHoleNonPlated.ncd -> board-NPTH.drl, ...); content byte-identical. Its non-plated drill layer ACTIVATES npth_to_copper_clearance (which is not_applicable on every prior corpus board) -- exercising that check on real artwork for the first time; it passes here. aperture_definition_errors also fails on this board, exercising the reason-string fix on real data. Having no silk layer, the silkscreen checks are not_applicable. Failing checks (aperture_definition_errors, min_annular_ring, layer_registration_margin, min_trace_spacing) are not individually ground-truthed, so the overall verdict is not pinned.",
+  "expect": {
+    "min_checks_run": 45,
+    "no_crashes": true,
+    "status": {
+      "impedance_control": "not_applicable",
+      "diff_pair_spacing": "not_applicable",
+      "diff_pair_skew": "not_applicable",
+      "return_path_interruptions": "not_applicable",
+      "crosstalk_estimate": "not_applicable",
+      "highspeed_stub_length": "not_applicable",
+      "backdrill_stub_length": "not_applicable",
+      "silkscreen_clearance": "not_applicable"
+    }
+  }
+}

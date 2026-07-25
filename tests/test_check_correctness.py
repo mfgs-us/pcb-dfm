@@ -335,3 +335,49 @@ def test_aperture_definition_errors_flags_out_of_range_sizes(tmp_path):
     normal = run_single_check(
         make_gerber_zip(tmp_path, {"board.gtl": _one_aperture_board("C,0.250000")}, name="ok.zip"), cd)
     assert normal.status == "pass"
+
+
+def test_mask_to_trace_clearance_catches_small_opening(tmp_path):
+    """Regression: a small-but-real mask opening near a trace must be measured.
+
+    The mask candidate area floor was 0.02 mm^2, which excluded a 0.14 mm
+    pad/via opening (0.0196 mm^2) -- a legitimate fine-pitch feature -- so its
+    ~0.01 mm encroachment on a neighbouring trace passed silently as
+    not_applicable. Lowered to 0.005 mm^2; the violation must now be caught.
+    """
+    # Trace centreline y=1.0, width 0.2 -> copper edge at y=1.1. Mask opening
+    # centred at y=1.18 -> ~0.01 mm clearance (below the 0.025 mm absolute min).
+    trace = (
+        "%FSLAX46Y46*%\n%MOMM*%\n%ADD10C,0.200000*%\nD10*\n"
+        "X1000000Y1000000D02*\nX9000000Y1000000D01*\nM02*\n"
+    )
+    opening = (
+        "%FSLAX46Y46*%\n%MOMM*%\n%ADD11R,0.140000X0.140000*%\nD11*\n"
+        "X5000000Y1180000D03*\nM02*\n"
+    )
+    z = make_gerber_zip(tmp_path, {"board.gtl": trace, "board.gts": opening})
+    result = run_single_check(z, load_check_definition("mask_to_trace_clearance"))
+    assert result.status == "fail"
+    assert result.metric.measured_value == pytest.approx(0.01, abs=0.005)
+
+
+def test_solder_mask_expansion_checks_elongated_pads(tmp_path):
+    """Regression: an elongated pad's mask expansion must be evaluated.
+
+    The pad "is this a pad" aspect ceiling was 4.0, which dropped ordinary
+    elongated pads (SOIC/connector, aspect > 4) so their mask expansion was never
+    checked. A 3.0x0.25 mm pad (aspect 12) with a 4.0x1.25 mm opening (0.5 mm of
+    over-expansion, far above the ~0.1 mm max) must now be flagged.
+    """
+    pad = (
+        "%FSLAX46Y46*%\n%MOMM*%\n%ADD11R,3.000000X0.250000*%\nD11*\n"
+        "X5000000Y5000000D03*\nM02*\n"
+    )
+    mask = (
+        "%FSLAX46Y46*%\n%MOMM*%\n%ADD12R,4.000000X1.250000*%\nD12*\n"
+        "X5000000Y5000000D03*\nM02*\n"
+    )
+    z = make_gerber_zip(tmp_path, {"board.gtl": pad, "board.gts": mask, "board.gko": _outline_rect(12.0, 12.0)})
+    result = run_single_check(z, load_check_definition("solder_mask_expansion"))
+    assert result.status != "pass"
+    assert result.metric.measured_value == pytest.approx(0.5, abs=0.05)

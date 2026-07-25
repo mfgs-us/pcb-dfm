@@ -13,7 +13,6 @@ deliberately *not* vendored, even where they would be useful.
 | `pcbtools_full.zip` | same design, complete 8-file export | Apache-2.0 | [curtacircuitos/pcb-tools](https://github.com/curtacircuitos/pcb-tools) `gerber/tests/resources` |
 | `eagle_gyw.zip` | GYW Electro Curriculum board (Autodesk Eagle) | MIT, © 2019 Ganz Youth Workshop | [GanzYouthWorkshop/GYW-Electro-Curriculum](https://github.com/GanzYouthWorkshop/GYW-Electro-Curriculum), via gerbonara `tests/resources/eagle-newer` |
 | `diptrace_fd1.zip` | FD1 project mainboard (DipTrace) | BSD 3-clause, © 2014 Przemysław Węgrzyn | [codepainters/FD1](https://github.com/codepainters/FD1), via gerbonara `tests/resources/diptrace` |
-| `siemens_lasmo.zip` | lasmo board (Siemens/Mentor) | MIT | [yghdj/lasmo](https://github.com/yghdj/lasmo), via gerbonara `tests/resources/siemens-2` |
 | `rf_protoboard.kicad_pcb` | RF prototype board (KiCad 7) | BSD 3-clause | [maelh/radio-frequency-prototype-boards](https://github.com/maelh/radio-frequency-prototype-boards) `RF_ProtoBoard` |
 | `mini_board.zip` | synthetic | this project | — |
 
@@ -40,12 +39,6 @@ location of `U4-8`.
 Gerber files are byte-identical to upstream. Some were **renamed** to
 conventional extensions (e.g. `copper_top.gbr` → `board.gtl`) so that layer
 classification happens by extension; no content is modified.
-
-**`siemens_lasmo.zip`** is Mentor/Siemens output: `EtchLayerTop.gdo` →
-`board.gtl`, `ThruHoleNonPlated.ncd` → `board-NPTH.drl`, etc. — renamed by
-function, content byte-identical. It is the first NPTH-bearing board, so it is
-the first that exercises `npth_to_copper_clearance` on real artwork (rather than
-reporting `not_applicable`). It carries no silkscreen layer.
 
 **`rf_protoboard.kicad_pcb`** is different in kind: a native KiCad source file,
 not Gerbers. With no `kicad-cli` installed the engine renders it with gerbonara,
@@ -91,6 +84,16 @@ behind a slow marker):
   polygons/layer; times out (>2.5 min) even trimmed to two layers (issue #26).
   The best candidate if a heavyweight, many-layer, slot-bearing board is wanted.
 - **ohguma/analog_gyro_2021** (Fritzing, MIT). A clean licence and it validates
-  fine, but it is a *panel* (many copies) and takes ~62 s per run — which, run in
-  both the golden and corpus suites, is ~2 min of CI for one board. Same root
-  cause as #26.
+  fine. It is a *panel* (many copies) that took ~62 s per run — but #26 fixed the
+  O(n²) checks behind that (now ~14 s), so it is a good candidate to add once its
+  baseline is confirmed reproducible in CI.
+
+Also considered, skipped on **cross-platform reproducibility**:
+
+- **yghdj/lasmo** (Siemens/Mentor, MIT). Validates fine locally and has a
+  non-plated drill (the only board that would exercise `npth_to_copper_clearance`
+  on real artwork). But gerbonara 1.5.0's parse of the Mentor `.gdo`/`.ncd`
+  format yields *platform-dependent* geometry — its golden digest differed
+  between local (macOS) and CI (Linux) despite an identical gerbonara version —
+  so it cannot have a stable committed baseline. Standard RS-274X / Excellon
+  boards do not have this problem.

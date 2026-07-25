@@ -1,0 +1,21 @@
+{
+  "name": "fritzing_analoggyro",
+  "board": "testdata/fritzing_analoggyro.zip",
+  "ruleset": "default",
+  "description": "Real 2-layer panelized board exported from Fritzing (analog gyro breakout): both copper layers, both masks, both silks, a board outline and a drill file.",
+  "source": "ohguma/analog_gyro_2021 (MIT), via gerbonara tests/resources/fritzing",
+  "notes": "First Fritzing board in the corpus (a fourth CAD dialect after Eagle, DipTrace, pcb-tools). Files renamed from 'combined.*' to conventional extensions; content byte-identical. Added after #26 fixed the O(n^2) checks that made this panel slow (62 s -> ~14 s). On this board copper_sliver_width and min_trace_spacing fail; the min_trace_spacing reading of 0.026 mm was verified to sit among six distinct clustered copper features (a genuinely tight region), not a single-polygon artifact. Neither failing check is ground-truthed to a specific defect, so the overall verdict is intentionally not pinned -- only confident invariants are asserted.",
+  "expect": {
+    "min_checks_run": 45,
+    "no_crashes": true,
+    "status": {
+      "impedance_control": "not_applicable",
+      "diff_pair_spacing": "not_applicable",
+      "diff_pair_skew": "not_applicable",
+      "return_path_interruptions": "not_applicable",
+      "crosstalk_estimate": "not_applicable",
+      "highspeed_stub_length": "not_applicable",
+      "backdrill_stub_length": "not_applicable"
+    }
+  }
+}

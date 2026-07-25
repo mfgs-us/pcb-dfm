@@ -13,6 +13,7 @@ deliberately *not* vendored, even where they would be useful.
 | `pcbtools_full.zip` | same design, complete 8-file export | Apache-2.0 | [curtacircuitos/pcb-tools](https://github.com/curtacircuitos/pcb-tools) `gerber/tests/resources` |
 | `eagle_gyw.zip` | GYW Electro Curriculum board (Autodesk Eagle) | MIT, © 2019 Ganz Youth Workshop | [GanzYouthWorkshop/GYW-Electro-Curriculum](https://github.com/GanzYouthWorkshop/GYW-Electro-Curriculum), via gerbonara `tests/resources/eagle-newer` |
 | `diptrace_fd1.zip` | FD1 project mainboard (DipTrace) | BSD 3-clause, © 2014 Przemysław Węgrzyn | [codepainters/FD1](https://github.com/codepainters/FD1), via gerbonara `tests/resources/diptrace` |
+| `fritzing_analoggyro.zip` | analog gyro breakout (Fritzing) | MIT, © ohguma | [ohguma/analog_gyro_2021](https://github.com/ohguma/analog_gyro_2021), via gerbonara `tests/resources/fritzing` |
 | `rf_protoboard.kicad_pcb` | RF prototype board (KiCad 7) | BSD 3-clause | [maelh/radio-frequency-prototype-boards](https://github.com/maelh/radio-frequency-prototype-boards) `RF_ProtoBoard` |
 | `mini_board.zip` | synthetic | this project | — |
 
@@ -83,10 +84,6 @@ behind a slow marker):
 - **myriadrf/LimeSDR-QPCIe** (Altium, CC-BY 3.0). 14 copper layers, ~20k
   polygons/layer; times out (>2.5 min) even trimmed to two layers (issue #26).
   The best candidate if a heavyweight, many-layer, slot-bearing board is wanted.
-- **ohguma/analog_gyro_2021** (Fritzing, MIT). A clean licence and it validates
-  fine. It is a *panel* (many copies) that took ~62 s per run — but #26 fixed the
-  O(n²) checks behind that (now ~14 s), so it is a good candidate to add once its
-  baseline is confirmed reproducible in CI.
 
 Also considered, skipped on **cross-platform reproducibility**:
 

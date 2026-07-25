@@ -61,7 +61,7 @@ Legend:
 
 | Fab rule | Status | Check |
 |---|---|---|
-| Minimum legend line width / text | ✅ | `silkscreen_min_width` |
+| Minimum legend line width / text | 🟡 | `silkscreen_min_width` |
 | Legend clearance from pads/holes | ✅ | `silkscreen_clearance` |
 | Legend over exposed copper | ✅ | `silkscreen_on_copper` |
 | Legend over mask-defined pads | ✅ | `silkscreen_over_mask_defined_pads` |

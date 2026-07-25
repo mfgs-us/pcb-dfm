@@ -280,3 +280,28 @@ def test_solder_mask_web_catches_thin_web_between_large_openings(tmp_path):
     # Detected (not the old measured=None pass) and flagged as an advisory warning.
     assert result.metric.measured_value == pytest.approx(0.04, abs=0.005)
     assert result.status == "warning"
+
+
+def test_silkscreen_min_width_detects_thin_long_line(tmp_path):
+    """Regression: a too-thin silk line must not be dropped by an aspect cutoff.
+
+    A too-thin silk stroke is inherently long-and-thin (high aspect). The check
+    used to skip any feature with aspect > 30, so a 4 mm x 0.05 mm line (aspect
+    80) was dropped and the board passed with measured=None. It must now be
+    measured. The outcome is an advisory warning (silk width is a legibility, not
+    a functional, concern) -- the point is that the thin line is DETECTED.
+    """
+    # A 4 mm silk line drawn with a 0.05 mm round aperture (below the 0.08 mm
+    # absolute minimum), well within the board.
+    silk = (
+        "%FSLAX46Y46*%\n%MOMM*%\n%ADD20C,0.050000*%\nD20*\n"
+        "X2000000Y6000000D02*\nX6000000Y6000000D01*\nM02*\n"
+    )
+    files = {
+        "board.gto": silk,
+        "board.gko": _outline_rect(12.0, 12.0),
+    }
+    z = make_gerber_zip(tmp_path, files)
+    result = run_single_check(z, load_check_definition("silkscreen_min_width"))
+    assert result.metric.measured_value == pytest.approx(0.05, abs=0.005)
+    assert result.status == "warning"

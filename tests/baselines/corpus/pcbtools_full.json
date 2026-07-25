@@ -275,9 +275,9 @@
     {
       "confidence": "high",
       "id": "silkscreen_min_width",
-      "measured": 0.0762,
-      "severity": "error",
-      "status": "fail",
+      "measured": 0.0102,
+      "severity": "warning",
+      "status": "warning",
       "violations": 1
     },
     {

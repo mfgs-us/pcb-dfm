@@ -275,10 +275,10 @@
     {
       "confidence": "high",
       "id": "silkscreen_min_width",
-      "measured": 0.127,
-      "severity": "info",
-      "status": "pass",
-      "violations": 0
+      "measured": 0.0508,
+      "severity": "warning",
+      "status": "warning",
+      "violations": 1
     },
     {
       "confidence": "heuristic",

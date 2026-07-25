@@ -52,7 +52,6 @@ def run_silkscreen_min_width(ctx: CheckContext) -> CheckResult:
     raw_cfg = getattr(ctx.check_def, "raw", None) or {}
     min_feature_area_mm2 = float(raw_cfg.get("min_feature_area_mm2", 0.01))
     min_feature_length_mm = float(raw_cfg.get("min_feature_length_mm", 0.2))
-    max_aspect_ratio = float(raw_cfg.get("max_aspect_ratio", 30.0))
 
     geom = ctx.geometry
 
@@ -83,10 +82,14 @@ def run_silkscreen_min_width(ctx: CheckContext) -> CheckResult:
             if long_dim < min_feature_length_mm:
                 continue
 
-            aspect = long_dim / short_dim if short_dim > 0.0 else 1.0
-            if aspect > max_aspect_ratio:
-                continue
-
+            # No aspect-ratio cutoff. A too-thin silk line is, by definition, a
+            # long thin (high-aspect) feature -- the exact thing this check must
+            # catch -- so an aspect cap silently dropped real sub-minimum lines
+            # (a 4 mm x 0.02 mm stroke has aspect 200) and passed the board. The
+            # bbox short dimension is a safe width estimate here: for an
+            # axis-aligned feature it is the exact stroke width, and for a
+            # rotated one it OVER-estimates (the box is larger than the stroke),
+            # so it can never flag a feature as thinner than it truly is.
             if short_dim < min_width:
                 min_width = short_dim
                 cx = 0.5 * (b.min_x + b.max_x)
@@ -129,22 +132,26 @@ def run_silkscreen_min_width(ctx: CheckContext) -> CheckResult:
         status = "pass"
         severity = ctx.check_def.severity or ctx.check_def.severity_default
         score = 100.0
-    elif measured < absolute_min:
-        status = "fail"
-        severity = "error"
-        score = 0.0
     else:
+        # ADVISORY, not a hard fail. Silkscreen width is a legibility concern,
+        # not a functional one -- a too-thin legend prints faintly but the board
+        # still works, which is why this check's declared severity is "info".
+        # Thin silk (e.g. 2 mil / 0.05 mm) is common and often accepted on real
+        # boards, so a sub-minimum width is surfaced for review rather than
+        # hard-failing the board. (Detection is the point: the previous
+        # aspect-ratio cutoff dropped thin lines entirely, so they passed
+        # silently -- now they are measured and flagged.)
         status = "warning"
         severity = "warning"
-        span = max(1e-6, recommended_min - absolute_min)
-        frac = (measured - absolute_min) / span
-        score = max(0.0, min(100.0, 60.0 + 40.0 * max(0.0, frac)))
+        # Linear from 0 (hairline) to 100 (at the recommended width).
+        score = max(0.0, min(100.0, 100.0 * measured / recommended_min))
 
     margin_to_limit = float(measured - absolute_min)
 
     msg = (
         f"Minimum silkscreen feature width is {measured:.3f} mm "
-        f"(recommended >= {recommended_min:.3f} mm, absolute >= {absolute_min:.3f} mm)."
+        f"(recommended >= {recommended_min:.3f} mm, absolute >= {absolute_min:.3f} mm). "
+        f"Thin legend prints faintly; thicken for legibility."
     )
 
     violations: List[Violation] = []

@@ -43,7 +43,7 @@ def _na(ctx: CheckContext, msg: str) -> CheckResult:
         score=None,
         metric=MetricResult(kind="distance", units="um", measured_value=None),
         violations=[Violation(severity="info", message=msg, location=None)],
-    )
+    ).finalize()
 
 
 @register_check("stackup_symmetry")
@@ -56,16 +56,26 @@ def run_stackup_symmetry(ctx: CheckContext) -> CheckResult:
     stackup = dd.stackup if dd is not None else None
     layers = list(stackup.layers) if stackup is not None else []
 
-    # Need a real ordered build with at least one mirror pair (3+ layers). A
-    # sidecar that only carried scalar er/thickness synthesizes an unordered
-    # copper-then-dielectric list, which is not a physical stack -- guard against
-    # scoring that as if it were symmetric.
-    if len(layers) < 3:
+    # Need a real ordered PHYSICAL build to assess symmetry. Two guards:
+    #  - at least 3 layers (one mirror pair plus a centre), and
+    #  - at least 2 copper layers.
+    # The second is what rejects the flat sidecar synthesis. A sidecar that
+    # carries only scalar er/thickness (for the impedance / dielectric checks)
+    # is turned into `[copper, dielectric, dielectric, ...]` -- one copper on top
+    # then every dielectric entry -- which is NOT a physical stack. It has
+    # exactly one copper layer, whereas any real build has >= 2, so this cleanly
+    # separates it from an ordered `stackup.layers` list (or an IPC-2581/KiCad
+    # stackup) without rejecting legitimate multi-dielectric-between-copper
+    # builds. Without this, that synthesized list pairs its lone copper against a
+    # dielectric and reports a spurious structural-asymmetry FAIL.
+    copper_count = sum(1 for ly in layers if ly.kind == "copper")
+    if len(layers) < 3 or copper_count < 2:
         return _na(
             ctx,
-            "Stackup symmetry needs an ordered layer stackup (>= 3 layers with "
-            "thicknesses) from a design-data source (IPC-2581, KiCad, or a sidecar "
-            "'stackup.layers' list). Not evaluable from Gerbers alone.",
+            "Stackup symmetry needs an ordered physical layer stackup (>= 3 "
+            "layers, >= 2 copper) from a design-data source (IPC-2581, KiCad, or "
+            "a sidecar 'stackup.layers' list). Not evaluable from Gerbers or from "
+            "a scalar-only stackup sidecar.",
         )
 
     n = len(layers)

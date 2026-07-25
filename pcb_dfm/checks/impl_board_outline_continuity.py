@@ -112,9 +112,19 @@ def run_board_outline_continuity(ctx: CheckContext) -> CheckResult:
     gap, loc = _smallest_closing_gap(open_endpoints)
     gap = 0.0 if gap is inf else gap
 
-    # A gap within the fab's join tolerance may be auto-closed; a larger one is a
-    # definite reject.
-    status = "warning" if 0.0 < gap <= limit_max else "fail"
+    # The "almost closed -> warning" leniency only applies to a SINGLE clean
+    # break: exactly two dangling ends, i.e. one open chain whose two ends nearly
+    # meet and which a fab may auto-close. With more than two dangling ends the
+    # profile is broken in several places (or a stray dimension line sits
+    # alongside a genuinely open outline), and `_smallest_closing_gap` would take
+    # the min over ALL ends -- so two coincidentally-close stray ends could mask a
+    # large real outline gap and downgrade a hard reject to a warning. Anything
+    # but a single clean break is a fail.
+    single_clean_break = len(open_endpoints) == 2
+    if single_clean_break and 0.0 < gap <= limit_max:
+        status = "warning"
+    else:
+        status = "fail"
     severity = "warning" if status == "warning" else "error"
 
     where = f" (nearest gap ~{gap:.2f} mm)" if gap > 0.0 else ""

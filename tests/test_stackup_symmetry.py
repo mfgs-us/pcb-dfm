@@ -93,6 +93,20 @@ def test_too_few_layers_is_not_applicable(tmp_path):
     assert r.status == "not_applicable"
 
 
+def test_scalar_only_sidecar_is_not_applicable(tmp_path):
+    """A sidecar that carries only scalar er/thickness (for the impedance /
+    dielectric checks) synthesizes a flat [copper, dielectric, dielectric, ...]
+    list -- one copper on top, then every dielectric entry. That is not a
+    physical stack, and must NOT be scored as a structurally asymmetric fail.
+    Regression for the >= 2 copper guard.
+    """
+    dd = load_design_data({
+        "stackup": {"copper_thickness_mm": 0.035, "dielectric_layers_mm": [0.10, 0.20, 0.20, 0.10]},
+    })
+    r = run_single_check(GERBER, load_check_definition("stackup_symmetry"), design_data=dd)
+    assert r.status == "not_applicable"
+
+
 def test_units_are_microns(tmp_path):
     r = _run(_SYM)
     assert r.metric.units == "um"

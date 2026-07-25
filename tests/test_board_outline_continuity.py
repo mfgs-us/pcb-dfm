@@ -112,3 +112,19 @@ def test_closed_plus_stray_line_still_passes(tmp_path):
 def test_no_outline_layer_is_not_applicable(tmp_path):
     r = _run(tmp_path, None)
     assert r.status == "not_applicable"
+
+
+# A genuinely open outline (missing left edge -> 10 mm gap) alongside a stray
+# dimension line whose own two ends sit 0.02 mm apart. The smallest gap over ALL
+# dangling ends is the 0.02 mm stray pair, which must NOT downgrade the hard
+# reject to a warning: with more than one clean break (4 dangling ends) the
+# result is a fail regardless of the coincidental stray proximity.
+_OPEN_PLUS_CLOSE_STRAY = _outline(
+    _seg(0, 0, 10, 0), _seg(10, 0, 10, 10), _seg(10, 10, 0, 10),
+    _seg(20, 20, 25, 20), _seg(25, 20.02, 30, 20.02),
+)
+
+
+def test_open_outline_not_masked_by_close_stray_endpoints(tmp_path):
+    r = _run(tmp_path, _OPEN_PLUS_CLOSE_STRAY)
+    assert r.status == "fail"

@@ -307,10 +307,10 @@
     {
       "confidence": "high",
       "id": "solder_mask_web",
-      "measured": null,
+      "measured": 0.2559,
       "severity": "info",
       "status": "pass",
-      "violations": 1
+      "violations": 0
     },
     {
       "confidence": "heuristic",

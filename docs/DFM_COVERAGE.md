@@ -54,7 +54,7 @@ Legend:
 |---|---|---|
 | Mask-to-trace/pad clearance (sliver) | ✅ | `mask_to_trace_clearance` |
 | Mask expansion over pads | ✅ | `solder_mask_expansion` |
-| Mask web / dam between openings | ✅ | `solder_mask_web` |
+| Mask web / dam between openings | 🟡 | `solder_mask_web` |
 | Mask-defined vs copper-defined pad consistency | ✅ | `silkscreen_over_mask_defined_pads` |
 
 ## 4. Silkscreen / legend

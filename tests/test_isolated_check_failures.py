@@ -215,9 +215,10 @@ def test_min_trace_spacing_isolated(tmp_path):
 
 
 def test_solder_mask_web_isolated(tmp_path):
-    # Two small (0.4 mm) mask openings 0.44 mm apart -> ~0.04 mm web between
-    # them, below the absolute minimum. Small openings keep their centres inside
-    # one grid-cell block so the web is actually paired and measured.
+    # Two 0.4 mm mask openings 0.44 mm apart -> ~0.04 mm web between them.
+    # solder_mask_web is advisory (a thin web needs adjacent-net data to be a
+    # confirmed bridging defect), so the edit trips it to a *warning*, and it
+    # must still be surgical: nothing else newly warns or fails.
     def mutate(f):
         _replace_in(
             f, "board.gts", "M02*",
@@ -225,8 +226,17 @@ def test_solder_mask_web_isolated(tmp_path):
             "X8000000Y3000000D03*\nX8440000Y3000000D03*\nM02*",
         )
 
-    _assert_isolated_failure(_status_map(BASE), _mutated_map(tmp_path, mutate),
-                             "solder_mask_web")
+    baseline = _status_map(BASE)
+    mutated = _mutated_map(tmp_path, mutate)
+    assert baseline.get("solder_mask_web") == "pass"
+    assert mutated.get("solder_mask_web") == "warning"
+    newly_flagged = {
+        cid for cid, st in mutated.items()
+        if st in ("warning", "fail") and baseline.get(cid) not in ("warning", "fail")
+    }
+    assert newly_flagged == {"solder_mask_web"}, (
+        f"edit was not isolated; newly-flagged: {sorted(newly_flagged)}"
+    )
 
 
 def test_silkscreen_clearance_isolated(tmp_path):

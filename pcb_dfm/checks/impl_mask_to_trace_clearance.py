@@ -7,6 +7,8 @@ from typing import List, Optional
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
 from ..geometry.gerber_backend import gerber_traces_mm
+from ..geometry.polygon_index import PolygonIndex
+from ..geometry.primitives import Bounds
 from ..results import CheckResult, MetricResult, Violation, ViolationLocation
 from .impl_min_annular_ring import _point_in_polygon
 from .impl_min_trace_spacing import (
@@ -298,27 +300,46 @@ def run_mask_to_trace_clearance(ctx: CheckContext) -> CheckResult:
         group_of = [groups.find(i) for i in range(len(segs))]
         seg_bounds = [_seg_bounds(sg) for sg in segs]
 
+        # Index the segment bboxes so each opening only tests nearby segments,
+        # not all of them. The two passes below were O(openings * segments) --
+        # 1.4 M bbox comparisons on a real board, this check's dominant cost.
+        seg_index = PolygonIndex.from_bounds([
+            (i, Bounds(b.min_x, b.min_y, b.max_x, b.max_y))
+            for i, b in enumerate(seg_bounds)
+        ])
+
         for opening in openings:
+            ob = opening.bounds
+            ob_bounds = Bounds(ob.min_x, ob.min_y, ob.max_x, ob.max_y)
+
             # Pass 1: which conductors does this opening sit on? Those are its
             # own pad and that pad's routing -- not neighbors. Overlap requires
-            # the bounding boxes to overlap, so that is an exact cheap filter.
+            # the bounding boxes to overlap, so only segments whose bbox meets
+            # the opening's can qualify -- exactly what the index returns.
             owning: set = set()
-            for i, sg in enumerate(segs):
+            for i in seg_index.query_bbox(ob_bounds):
                 if _bbox_gap(opening.bounds, seg_bounds[i]) > 0.0:
                     continue
-                if _opening_to_segment_clearance(opening.poly, sg) <= 0.0:
+                if _opening_to_segment_clearance(opening.poly, segs[i]) <= 0.0:
                     owning.add(group_of[i])
 
             # Pass 2: nearest copper belonging to any OTHER conductor.
             #
             # The bbox gap is a valid lower bound on the true clearance (every
-            # point of a shape lies inside its bbox), so skipping pairs whose
-            # bbox gap already exceeds the best clearance found is exact -- it
-            # can never discard the true minimum. A fixed search radius is not:
-            # it silently drops boards whose nearest neighbouring copper is
-            # farther than the radius, reporting "not applicable" for a board
-            # that has a perfectly good, if generous, clearance.
-            for i, sg in enumerate(segs):
+            # point of a shape lies inside its bbox), so a segment whose bbox gap
+            # already exceeds the best clearance found cannot improve it. That
+            # means only segments within min_clearance of the opening matter, so
+            # query the opening bbox inflated by min_clearance; until the first
+            # clearance is found (min still infinite) every segment is a
+            # candidate, matching the exhaustive original.
+            if math.isfinite(min_clearance):
+                r = min_clearance
+                query = Bounds(ob.min_x - r, ob.min_y - r, ob.max_x + r, ob.max_y + r)
+                candidates = seg_index.query_bbox(query)
+            else:
+                candidates = range(len(segs))
+            for i in candidates:
+                sg = segs[i]
                 if group_of[i] in owning:
                     continue
                 if _bbox_gap(opening.bounds, seg_bounds[i]) >= min_clearance:

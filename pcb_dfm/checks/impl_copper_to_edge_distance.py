@@ -144,12 +144,23 @@ def run_copper_to_edge_distance(ctx: CheckContext) -> CheckResult:
             ):
                 continue
 
+            # Exact polygon-to-polygon distance is only needed for copper that
+            # could either be the new global minimum or an offender (within the
+            # recommended clearance). The bbox gap is a lower bound on the true
+            # distance, so any copper whose gap already exceeds that threshold
+            # cannot be either and is left at its (cheap) bbox-gap estimate. As
+            # the running minimum shrinks the threshold tightens, so most of a
+            # board's interior copper never pays for the exact O(verts^2) test --
+            # it was the check's dominant cost. Capped at the original cutoff so
+            # behaviour is never looser than before.
+            exact_thr = min(cutoff, max(recommended_min, min_dist if min_dist is not None else cutoff))
+
             d = math.inf
             for op in edge_polys:
                 gap = _bbox_gap(pb, op.bounds())
                 # exact distance when close; the bbox gap (a lower bound) is
                 # a fine stand-in for far contours that can't be the minimum
-                dd = _min_distance_between_polygons(poly, op) if gap <= cutoff else gap
+                dd = _min_distance_between_polygons(poly, op) if gap <= exact_thr else gap
                 if dd < d:
                     d = dd
 

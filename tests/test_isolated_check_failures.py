@@ -61,6 +61,20 @@ def _status_map(zip_path: Path, design_data=None) -> Dict[str, str]:
     return {c.check_id: c.status for cat in res.categories for c in cat.checks}
 
 
+def _replace_in(files: Dict[str, bytes], name: str, old: str, new: str, count: int = 1) -> None:
+    """Edit a text layer in the in-memory package (latin-1 preserves Gerber bytes)."""
+    text = files[name].decode("latin-1")
+    assert old in text, f"{old!r} not found in {name}"
+    files[name] = text.replace(old, new, count).encode("latin-1")
+
+
+def _mutated_map(tmp_path: Path, mutate) -> Dict[str, str]:
+    """Run the full suite on mini_board after applying an in-place file edit."""
+    files = _base_files()
+    mutate(files)
+    return _status_map(_write_zip(tmp_path, files))
+
+
 def _assert_isolated_failure(
     baseline: Dict[str, str], mutated: Dict[str, str], target: str
 ) -> None:
@@ -131,3 +145,142 @@ def test_stackup_symmetry_isolated(tmp_path):
     baseline = _status_map(BASE, design_data=dd_symmetric)
     mutated = _status_map(BASE, design_data=dd_asymmetric)
     _assert_isolated_failure(baseline, mutated, "stackup_symmetry")
+
+
+# ==========================================================================
+# Further checks -- minimal geometry edits to mini_board, each isolated.
+#
+# On a minimal board some checks are physically inseparable (a sub-minimum
+# trace IS a copper sliver AND sits at the etch floor; a sub-minimum drill has
+# an unavoidably high aspect ratio) and cannot be tripped alone -- those are
+# intentionally not covered here rather than asserted with a contrived board.
+# ==========================================================================
+
+
+def test_copper_to_edge_distance_isolated(tmp_path):
+    # Flash a 0.5 mm round pad centred at x=0.15 mm -> its copper spills over the
+    # board edge at x=0. Far from other copper, so nothing else is disturbed.
+    def mutate(f):
+        _replace_in(f, "board.gtl", "M02*", "D12*\nX150000Y6000000D03*\nM02*")
+
+    _assert_isolated_failure(_status_map(BASE), _mutated_map(tmp_path, mutate),
+                             "copper_to_edge_distance")
+
+
+def test_min_annular_ring_isolated(tmp_path):
+    # Enlarge the plated drill under the 1 mm pad at (3,8) from 0.3 -> 0.95 mm,
+    # leaving a 0.025 mm ring. Still a large hole (min_drill/aspect unaffected)
+    # and away from its neighbour, so only the annular ring collapses.
+    def mutate(f):
+        _replace_in(f, "board.drl", "T1C0.300", "T1C0.950")
+
+    _assert_isolated_failure(_status_map(BASE), _mutated_map(tmp_path, mutate),
+                             "min_annular_ring")
+
+
+def test_drill_to_drill_spacing_isolated(tmp_path):
+    # Add a second hole 0.15 mm from the standalone 0.8 mm hole at (9,3).
+    def mutate(f):
+        _replace_in(f, "board.drl", "X9.0Y3.0", "X9.0Y3.0\nX9.15Y3.0")
+
+    _assert_isolated_failure(_status_map(BASE), _mutated_map(tmp_path, mutate),
+                             "drill_to_drill_spacing")
+
+
+def test_min_slot_width_isolated(tmp_path):
+    # Add a 0.5 mm-wide routed slot (G85) in empty board space -- below the
+    # minimum routing tool.
+    def mutate(f):
+        _replace_in(f, "board.drl", "T2C0.800", "T2C0.800\nT3C0.500")
+        _replace_in(f, "board.drl", "T0\nM30", "T3\nX14.0Y3.0G85X16.0Y3.0\nT0\nM30")
+
+    _assert_isolated_failure(_status_map(BASE), _mutated_map(tmp_path, mutate),
+                             "min_slot_width")
+
+
+def test_min_trace_spacing_isolated(tmp_path):
+    # Two parallel 0.25 mm traces in an empty region (y~11) with a 0.05 mm gap.
+    # Kept clear of the existing trace so they read as two distinct conductors
+    # rather than merging into one.
+    def mutate(f):
+        extra = (
+            "D10*\n"
+            "X2000000Y11000000D02*\nX7000000Y11000000D01*\n"
+            "X2000000Y11300000D02*\nX7000000Y11300000D01*\n"
+        )
+        _replace_in(f, "board.gtl", "M02*", extra + "M02*")
+
+    _assert_isolated_failure(_status_map(BASE), _mutated_map(tmp_path, mutate),
+                             "min_trace_spacing")
+
+
+def test_solder_mask_web_isolated(tmp_path):
+    # Two small (0.4 mm) mask openings 0.44 mm apart -> ~0.04 mm web between
+    # them, below the absolute minimum. Small openings keep their centres inside
+    # one grid-cell block so the web is actually paired and measured.
+    def mutate(f):
+        _replace_in(
+            f, "board.gts", "M02*",
+            "%ADD30R,0.400000X0.400000*%\nD30*\n"
+            "X8000000Y3000000D03*\nX8440000Y3000000D03*\nM02*",
+        )
+
+    _assert_isolated_failure(_status_map(BASE), _mutated_map(tmp_path, mutate),
+                             "solder_mask_web")
+
+
+def test_silkscreen_clearance_isolated(tmp_path):
+    # Redraw the silk line straight across the exposed pad at (3,8): the legend
+    # now sits hard against copper. (This trips silkscreen_clearance to fail;
+    # silkscreen_on_copper only warns, so the failure is still isolated.)
+    def mutate(f):
+        _replace_in(
+            f, "board.gto",
+            "X2000000Y10000000D02*\nX6000000Y10000000D01*",
+            "X2000000Y8000000D02*\nX4000000Y8000000D01*",
+        )
+
+    _assert_isolated_failure(_status_map(BASE), _mutated_map(tmp_path, mutate),
+                             "silkscreen_clearance")
+
+
+# ==========================================================================
+# Data-gated checks -- the "edit" is to the design-data sidecar, compared
+# against a clean baseline sidecar so that merely *supplying* design data
+# (which activates several checks at once) is not what trips the target.
+# ==========================================================================
+
+
+def test_dielectric_thickness_uniformity_isolated(tmp_path):
+    def cu(t: float) -> dict:
+        return {"kind": "copper", "thickness_mm": t}
+
+    def di(t: float) -> dict:
+        return {"kind": "dielectric", "thickness_mm": t}
+
+    # Both stackups are mirror-symmetric (so stackup_symmetry stays pass); only
+    # the dielectric uniformity differs. Uniform 0.20 mm cores vs a symmetric but
+    # non-uniform 0.10 / 0.30 / 0.10 set -> large deviation from the mean.
+    uniform = [cu(.035), di(.20), cu(.035), di(.20), cu(.035), di(.20), cu(.035)]
+    nonuniform = [cu(.035), di(.10), cu(.035), di(.30), cu(.035), di(.10), cu(.035)]
+
+    baseline = _status_map(BASE, design_data=load_design_data({"stackup": {"layers": uniform}}))
+    mutated = _status_map(BASE, design_data=load_design_data({"stackup": {"layers": nonuniform}}))
+    _assert_isolated_failure(baseline, mutated, "dielectric_thickness_uniformity")
+
+
+def test_diff_pair_skew_isolated(tmp_path):
+    def payload(len_p: float, len_n: float) -> dict:
+        return {
+            "nets": {
+                "CLK_P": {"routed_length_mm": len_p},
+                "CLK_N": {"routed_length_mm": len_n},
+            },
+            "diff_pairs": [{"positive": "CLK_P", "negative": "CLK_N"}],
+        }
+
+    # Matched lengths pass; a 1.5 mm length mismatch on the same pair fails skew
+    # and nothing else (no routed geometry, so diff_pair_spacing stays N/A).
+    baseline = _status_map(BASE, design_data=load_design_data(payload(20.0, 20.0)))
+    mutated = _status_map(BASE, design_data=load_design_data(payload(20.0, 21.5)))
+    _assert_isolated_failure(baseline, mutated, "diff_pair_skew")

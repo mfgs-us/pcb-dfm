@@ -299,7 +299,7 @@
     {
       "confidence": "high",
       "id": "solder_mask_expansion",
-      "measured": -1.016,
+      "measured": -2.4625,
       "severity": "warning",
       "status": "warning",
       "violations": 2

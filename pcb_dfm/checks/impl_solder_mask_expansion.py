@@ -300,7 +300,12 @@ def run_solder_mask_expansion(ctx: CheckContext) -> CheckResult:
     # about it (a trace's opening is for the pad at its end, not the trace). The
     # earlier 10:1 let 6:1-9:1 traces through, which drove mask-on-pad false
     # positives on every real board even after the through-opening guard (#19).
-    pad_max_aspect_ratio = float(raw_cfg.get("pad_max_aspect_ratio", 4.0))
+    # "Is this a pad (vs a trace)?" ceiling. Was 4.0, which dropped ordinary
+    # elongated pads (SOIC, connectors, crystals) so their mask expansion was
+    # never checked. Raised to 15.0 -- a realistic pad ceiling that still excludes
+    # trace-like shapes. (Extreme card-edge fingers > 15:1 still need design-data
+    # pad info to cover; see is_component_pad, used above when a pad_map exists.)
+    pad_max_aspect_ratio = float(raw_cfg.get("pad_max_aspect_ratio", 15.0))
     mask_min_area_mm2 = float(raw_cfg.get("mask_min_area_mm2", 0.02))
     mask_search_inflate_mm = float(raw_cfg.get("mask_search_inflate_mm", 0.05))
 

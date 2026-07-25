@@ -223,7 +223,12 @@ def run_mask_to_trace_clearance(ctx: CheckContext) -> CheckResult:
     absolute_min = _resolve_limit(ctx.check_def, "absolute_min", 0.025)       # mm
 
     raw_cfg = getattr(ctx.check_def, "raw", None) or {}
-    mask_min_area_mm2 = float(raw_cfg.get("mask_min_area_mm2", 0.02))
+    # Drop only true mask specks/tessellation residue, not small-but-real
+    # openings. This was 0.02 mm^2, which excluded a 0.14 mm pad/via opening
+    # (0.0196 mm^2) -- a legitimate fine-pitch feature -- so its encroachment on
+    # a neighbouring trace passed silently. 0.005 mm^2 (~0.07 mm square) still
+    # ignores specks but keeps real small openings in scope.
+    mask_min_area_mm2 = float(raw_cfg.get("mask_min_area_mm2", 0.005))
 
     geom = ctx.geometry
 

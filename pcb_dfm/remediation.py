@@ -68,6 +68,11 @@ GUIDANCE: Dict[str, Remediation] = {
     "via_tenting": Remediation(
         "Tent or plug the via per the fab's capability.",
         "Solder wicking / exposed via → assembly defects."),
+    "npth_to_copper_clearance": Remediation(
+        "Pull copper back from non-plated (mounting/tooling) holes to the fab's "
+        "keep-out (typically ≥ 0.25 mm).",
+        "The bare drilled wall can nick/lift adjacent copper or short to a "
+        "standoff — no plated barrel protects it."),
     "via_in_pad_thermal_balance": Remediation(
         "Fill and cap via-in-pad, or add thermal relief.",
         "Solder voiding / opens under the component."),
@@ -114,8 +119,18 @@ GUIDANCE: Dict[str, Remediation] = {
     "dielectric_thickness_uniformity": Remediation(
         "Even out dielectric thicknesses or choose a symmetric stackup.",
         "Impedance drift and board warp."),
+    "stackup_symmetry": Remediation(
+        "Mirror the layer construction (copper weights and dielectric "
+        "thicknesses) about the board mid-plane.",
+        "An unbalanced stackup warps on reflow → fab reject/re-quote and "
+        "assembly coplanarity problems."),
 
     # --- mechanical / outline / thermal -----------------------------------
+    "board_outline_continuity": Remediation(
+        "Join the board outline into a single closed loop (close the gap between "
+        "the dangling endpoints on the outline/Edge.Cuts layer).",
+        "An open profile has no determinable board boundary → the fab cannot rout "
+        "the board (hard reject)."),
     "fillet_radius_milling": Remediation(
         "Add internal corner radii ≥ the router bit radius.",
         "Sharp inside corners cannot be milled as drawn."),

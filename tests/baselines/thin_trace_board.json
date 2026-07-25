@@ -25,6 +25,14 @@
       "violations": 1
     },
     {
+      "confidence": "high",
+      "id": "board_outline_continuity",
+      "measured": 0.0,
+      "severity": "info",
+      "status": "pass",
+      "violations": 1
+    },
+    {
       "confidence": "heuristic",
       "id": "component_to_component_spacing",
       "measured": null,
@@ -217,6 +225,14 @@
       "violations": 1
     },
     {
+      "confidence": "high",
+      "id": "npth_to_copper_clearance",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
       "confidence": "heuristic",
       "id": "plane_fragmentation",
       "measured": 0.0,
@@ -299,6 +315,14 @@
     {
       "confidence": "heuristic",
       "id": "solder_paste_area_coverage",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
+      "id": "stackup_symmetry",
       "measured": null,
       "severity": "info",
       "status": "not_applicable",

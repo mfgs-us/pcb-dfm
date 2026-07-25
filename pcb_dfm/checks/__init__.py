@@ -58,6 +58,7 @@ def _ensure_impls_loaded() -> None:
         impl_acid_trap_angle,  # noqa: F401
         impl_aperture_definition_errors,  # noqa: F401
         impl_backdrill_stub_length,  # noqa: F401
+        impl_board_outline_continuity,  # noqa: F401
         impl_component_to_component_spacing,  # noqa: F401
         impl_copper_density_balance,  # noqa: F401
         impl_copper_sliver_width,  # noqa: F401
@@ -82,6 +83,7 @@ def _ensure_impls_loaded() -> None:
         impl_min_trace_spacing,  # noqa: F401
         impl_min_trace_width,  # noqa: F401
         impl_missing_tooling_holes,  # noqa: F401
+        impl_npth_to_copper_clearance,  # noqa: F401
         impl_plane_fragmentation,  # noqa: F401
         impl_plating_uniformity,  # noqa: F401
         impl_polarity_marking_consistency,  # noqa: F401
@@ -93,6 +95,7 @@ def _ensure_impls_loaded() -> None:
         impl_solder_mask_expansion,  # noqa: F401
         impl_solder_mask_web,  # noqa: F401
         impl_solder_paste_area_coverage,  # noqa: F401
+        impl_stackup_symmetry,  # noqa: F401
         impl_tab_routing_mousebites,  # noqa: F401
         impl_thermal_relief_spoke_width,  # noqa: F401
         impl_tombstoning_risk,  # noqa: F401

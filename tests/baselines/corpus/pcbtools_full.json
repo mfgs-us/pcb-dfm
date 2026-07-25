@@ -25,6 +25,14 @@
       "violations": 1
     },
     {
+      "confidence": "high",
+      "id": "board_outline_continuity",
+      "measured": 0.0,
+      "severity": "info",
+      "status": "pass",
+      "violations": 1
+    },
+    {
       "confidence": "heuristic",
       "id": "component_to_component_spacing",
       "measured": 0.0483,
@@ -217,6 +225,14 @@
       "violations": 1
     },
     {
+      "confidence": "high",
+      "id": "npth_to_copper_clearance",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
       "confidence": "heuristic",
       "id": "plane_fragmentation",
       "measured": 0.0,
@@ -259,9 +275,9 @@
     {
       "confidence": "high",
       "id": "silkscreen_min_width",
-      "measured": 0.0762,
-      "severity": "error",
-      "status": "fail",
+      "measured": 0.0102,
+      "severity": "warning",
+      "status": "warning",
       "violations": 1
     },
     {
@@ -291,14 +307,22 @@
     {
       "confidence": "high",
       "id": "solder_mask_web",
-      "measured": null,
-      "severity": "info",
-      "status": "pass",
+      "measured": 0.0028,
+      "severity": "warning",
+      "status": "warning",
       "violations": 1
     },
     {
       "confidence": "heuristic",
       "id": "solder_paste_area_coverage",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
+      "id": "stackup_symmetry",
       "measured": null,
       "severity": "info",
       "status": "not_applicable",

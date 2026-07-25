@@ -47,7 +47,33 @@ def _stackup_from_dict(d: Dict[str, Any]) -> Stackup:
     each entry in ``dielectric_layers_mm`` becomes its own dielectric layer, so
     the Stackup's representative er/thickness properties reproduce the values
     the sidecar provided.
+
+    An explicit ordered ``layers`` list wins when present: each entry is
+    ``{"kind": "copper"|"dielectric", "thickness_mm": float, "er"?: float}`` in
+    physical top-to-bottom order. This is the only form that preserves the
+    interleaved stack order that symmetry/registration checks need; the flat
+    fields above cannot express it.
     """
+    ordered = d.get("layers")
+    if isinstance(ordered, list) and ordered:
+        layers = []
+        for i, ly in enumerate(ordered):
+            if not isinstance(ly, dict):
+                continue
+            kind = ly.get("kind")
+            if kind not in ("copper", "dielectric"):
+                continue
+            th = ly.get("thickness_mm")
+            er_v = ly.get("er")
+            layers.append(StackupLayer(
+                name=ly.get("name", f"{kind}_{i + 1}"),
+                kind=kind,
+                thickness_mm=float(th) if isinstance(th, (int, float)) else None,
+                er=float(er_v) if isinstance(er_v, (int, float)) else None,
+            ))
+        if layers:
+            return Stackup(layers=layers)
+
     layers = []
     t_cu = d.get("copper_thickness_mm")
     if isinstance(t_cu, (int, float)):

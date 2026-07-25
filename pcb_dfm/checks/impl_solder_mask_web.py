@@ -36,6 +36,13 @@ def run_solder_mask_web(ctx: CheckContext) -> CheckResult:
     """
     Minimum mask web width between adjacent mask openings.
 
+    Openings are paired by true bounding box within the recommended web, so the
+    web is measured regardless of pad size (the previous centroid-block pairing
+    silently missed webs between any pads more than ~0.75 mm pitch). A
+    sub-minimum web is reported as an ADVISORY warning, not a hard fail: whether
+    a thin web is a bridging defect or acceptable fine-pitch/same-net relief
+    needs adjacent-net data the Gerbers lack (see the status block below).
+
     Internal geometry in mm. Metric reported in mm.
     """
     metric_cfg = ctx.check_def.metric or {}
@@ -130,36 +137,30 @@ def run_solder_mask_web(ctx: CheckContext) -> CheckResult:
             violations=[viol],
         )
 
-    cell = max(recommended_min, 0.25)  # mm
-
-    # Spatial index over opening centroids. Indexing each opening as a
-    # degenerate (point) bbox at its centroid, with this cell size, exactly
-    # reproduces the previous centroid-cell grid: a candidate for opening i is
-    # any opening whose centroid falls in the 3x3 block of cells around i's
-    # centroid cell (ring=1). Only the candidate *pair* set is produced here;
-    # the web width for each pair is measured below as the true edge-to-edge
-    # polygon distance (a bbox lower bound prunes pairs that can't win).
-    index = PolygonIndex.from_bounds(
-        [(idx, Bounds(o.cx, o.cy, o.cx, o.cy)) for idx, o in enumerate(openings)],
-        cell_size=cell,
-    )
+    # Spatial index over each opening's TRUE bounding box (not its centroid).
+    # The previous index stored each opening as a degenerate point at its
+    # centroid and paired opening i only with openings whose centroid fell in a
+    # fixed ~0.75 mm cell block around it. That silently missed thin webs between
+    # openings larger than the block: two ordinary 1 mm pads have centroids
+    # ~1 mm apart, so no matter how narrow the mask web between their *edges*,
+    # the pair was never formed and the web never measured -- a solder-bridging
+    # escape on exactly the boards it matters for.
+    #
+    # Indexing by bounding box and querying neighbours within `recommended_min`
+    # makes the candidate set depend on edge proximity, not opening size. This
+    # never misses a sub-threshold web: the true edge-to-edge distance is always
+    # >= the bbox distance, so any pair whose web is below the threshold has
+    # bboxes within the threshold and is therefore returned by the query.
+    opening_bounds = [
+        Bounds(o.min_x, o.min_y, o.max_x, o.max_y) for o in openings
+    ]
+    index = PolygonIndex.from_bounds(list(enumerate(opening_bounds)))
 
     min_spacing = math.inf
     min_loc: Optional[ViolationLocation] = None
 
-    class _B:
-        __slots__ = ("min_x", "max_x", "min_y", "max_y")
-
-        def __init__(self, min_x, max_x, min_y, max_y):
-            self.min_x = min_x
-            self.max_x = max_x
-            self.min_y = min_y
-            self.max_y = max_y
-
     for i, oi in enumerate(openings):
-        ci, cj = index.cell_of(oi.cx, oi.cy)
-
-        for j in index.items_in_cell_block(ci, cj, ring=1):
+        for j in index.nearby(opening_bounds[i], recommended_min):
             if j <= i:
                 continue
             oj = openings[j]
@@ -167,12 +168,9 @@ def run_solder_mask_web(ctx: CheckContext) -> CheckResult:
             if oi.side and oj.side and str(oi.side).lower() != str(oj.side).lower():
                 continue
 
-            bi = _B(oi.min_x, oi.max_x, oi.min_y, oi.max_y)
-            bj = _B(oj.min_x, oj.max_x, oj.min_y, oj.max_y)
-
             # bbox distance is a valid lower bound; skip the exact computation
             # when it can't beat the current best.
-            if _bbox_distance_mm(bi, bj) >= min_spacing:
+            if _bbox_distance_mm(opening_bounds[i], opening_bounds[j]) >= min_spacing:
                 continue
             # TRUE edge-to-edge web width between the two opening polygons
             # (bbox gap under-measured rotated/diagonal openings).
@@ -222,22 +220,28 @@ def run_solder_mask_web(ctx: CheckContext) -> CheckResult:
         status = "pass"
         severity = ctx.check_def.severity or ctx.check_def.severity_default
         score = 100.0
-    elif measured < absolute_min:
-        status = "fail"
-        severity = "error"
-        score = 0.0
     else:
+        # ADVISORY, not a hard fail. A sub-minimum mask web is a real geometric
+        # condition, but whether it is a bridging DEFECT depends on whether the
+        # two adjacent openings sit on DIFFERENT nets -- data bare Gerbers do not
+        # carry. Fine-pitch parts routinely have thin or ganged webs that are
+        # perfectly acceptable, so hard-failing on web width alone is a false-
+        # positive generator on real boards. Mirroring via_to_copper_clearance,
+        # we surface a thin web as a warning for review; a net-aware upgrade can
+        # promote confirmed different-net adjacency to a fail (the capability
+        # this advisory downgrade holds in trust, not a permanent concession).
         status = "warning"
         severity = "warning"
-        span = max(1e-6, recommended_min - absolute_min)
-        frac = (measured - absolute_min) / span
-        score = max(0.0, min(100.0, 60.0 + 40.0 * max(0.0, frac)))
+        # Linear from 0 (touching) to 100 (at the recommended web), so a
+        # near-zero web scores near zero even though it is "only" a warning.
+        score = max(0.0, min(100.0, 100.0 * measured / recommended_min))
 
     margin_to_limit = float(measured - absolute_min)
 
     msg = (
         f"Minimum solder mask web width is {measured:.3f} mm "
-        f"(recommended >= {recommended_min:.3f} mm, absolute >= {absolute_min:.3f} mm)."
+        f"(recommended >= {recommended_min:.3f} mm, absolute >= {absolute_min:.3f} mm). "
+        f"Verify adjacent openings are same-net or increase the web."
     )
 
     violations: List[Violation] = []

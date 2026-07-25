@@ -25,6 +25,14 @@
       "violations": 1
     },
     {
+      "confidence": "high",
+      "id": "board_outline_continuity",
+      "measured": 0.0,
+      "severity": "info",
+      "status": "pass",
+      "violations": 1
+    },
+    {
       "confidence": "heuristic",
       "id": "component_to_component_spacing",
       "measured": null,

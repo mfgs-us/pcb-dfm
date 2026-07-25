@@ -58,6 +58,7 @@ def _ensure_impls_loaded() -> None:
         impl_acid_trap_angle,  # noqa: F401
         impl_aperture_definition_errors,  # noqa: F401
         impl_backdrill_stub_length,  # noqa: F401
+        impl_board_outline_continuity,  # noqa: F401
         impl_component_to_component_spacing,  # noqa: F401
         impl_copper_density_balance,  # noqa: F401
         impl_copper_sliver_width,  # noqa: F401

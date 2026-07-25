@@ -116,6 +116,11 @@ GUIDANCE: Dict[str, Remediation] = {
         "Impedance drift and board warp."),
 
     # --- mechanical / outline / thermal -----------------------------------
+    "board_outline_continuity": Remediation(
+        "Join the board outline into a single closed loop (close the gap between "
+        "the dangling endpoints on the outline/Edge.Cuts layer).",
+        "An open profile has no determinable board boundary → the fab cannot rout "
+        "the board (hard reject)."),
     "fillet_radius_milling": Remediation(
         "Add internal corner radii ≥ the router bit radius.",
         "Sharp inside corners cannot be milled as drawn."),

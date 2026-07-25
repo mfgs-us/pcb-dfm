@@ -553,6 +553,36 @@ def outline_contours_mm(path: Path, tol: float = 1e-3) -> List[List[Tuple[float,
     return contours
 
 
+def outline_open_endpoints_mm(path: Path, tol: float = 1e-3) -> List[Tuple[float, float]]:
+    """Endpoints where the outline does not connect -- the gaps in an open profile.
+
+    Each outline segment contributes two endpoints; a point where an odd number
+    of segment ends meet (in practice, exactly one) is a dangling end: the
+    outline is not closed there. A properly closed loop has every point met by an
+    even number of ends. Returned in mm, deduplicated to the chaining tolerance.
+
+    Used with :func:`outline_contours_mm` to tell an outline that fails to close
+    (a real, unroutable defect) from one that closes fine but also carries stray
+    dimension lines (which have dangling ends of their own and are harmless).
+    """
+    segs = _outline_line_segments_mm(path)
+    if not segs:
+        return []
+
+    def key(p: Tuple[float, float]) -> Tuple[int, int]:
+        return (round(p[0] / tol), round(p[1] / tol))
+
+    degree: dict = {}
+    coord: dict = {}
+    for a, b in segs:
+        for p in (a, b):
+            k = key(p)
+            degree[k] = degree.get(k, 0) + 1
+            coord.setdefault(k, p)
+
+    return [coord[k] for k, d in degree.items() if d % 2 == 1]
+
+
 # --------------------------------------------------------------------------- #
 # Excellon (drills / slots)
 # --------------------------------------------------------------------------- #

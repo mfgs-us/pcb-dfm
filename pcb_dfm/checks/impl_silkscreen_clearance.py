@@ -7,6 +7,8 @@ from typing import List, Optional, Tuple
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
 from ..geometry import queries
+from ..geometry.polygon_index import PolygonIndex
+from ..geometry.primitives import Bounds
 from ..results import CheckResult, MetricResult, Violation, ViolationLocation
 from .impl_drill_to_drill_spacing import _collect_drills
 from .impl_silkscreen_on_copper import _cached_silk_bboxes
@@ -112,6 +114,21 @@ def run_silkscreen_clearance(ctx: CheckContext) -> CheckResult:
     drills = _collect_drills(ctx)
     holes = [(h.x_mm, h.y_mm, 0.5 * h.diameter_mm) for h in drills if h.diameter_mm > 0.0]
 
+    # Index holes so each silk feature is tested only against nearby holes rather
+    # than every hole on the board (the O(silk x holes) loop that made a dense
+    # board take minutes). A hole farther than this cutoff from a silk feature
+    # clears it by well over the recommended minimum, so it can be neither the
+    # global minimum nor a violation -- exactly the near-feature-only argument
+    # used in copper_to_edge_distance.
+    hole_cutoff = max(2.0, rec * 20.0)
+    hole_index = (
+        PolygonIndex.from_bounds(
+            [(i, Bounds(hx - r, hy - r, hx + r, hy + r))
+             for i, (hx, hy, r) in enumerate(holes)]
+        )
+        if holes else None
+    )
+
     min_clear: Optional[float] = None
     # Graded separately: silk running off the board edge is trimmed at
     # fabrication (cosmetic), while silk over a drilled hole is smeared by the
@@ -131,15 +148,17 @@ def run_silkscreen_clearance(ctx: CheckContext) -> CheckResult:
         clr = edge_clr
         kind = "board edge"
 
-        for hx, hy, r in holes:
-            # bbox gap to hole centre is a cheap lower bound on hole clearance;
-            # only refine when it could beat the running best for this feature.
-            gap = _hole_clearance(bb, hx, hy, r)
-            if gap < clr:
-                clr = gap
-                kind = "drilled hole"
-            if min_hole_clear is None or gap < min_hole_clear:
-                min_hole_clear = gap
+        if hole_index is not None:
+            q = Bounds(min_x - hole_cutoff, min_y - hole_cutoff,
+                       max_x + hole_cutoff, max_y + hole_cutoff)
+            for hid in hole_index.query_bbox(q):
+                hx, hy, r = holes[hid]
+                gap = _hole_clearance(bb, hx, hy, r)
+                if gap < clr:
+                    clr = gap
+                    kind = "drilled hole"
+                if min_hole_clear is None or gap < min_hole_clear:
+                    min_hole_clear = gap
 
         if min_edge_clear is None or edge_clr < min_edge_clear:
             min_edge_clear = edge_clr

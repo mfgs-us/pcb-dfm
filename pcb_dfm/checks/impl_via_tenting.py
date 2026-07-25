@@ -4,6 +4,8 @@ from typing import List, Optional
 
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
+from ..geometry.polygon_index import PolygonIndex
+from ..geometry.primitives import Bounds
 from ..results import CheckResult, MetricResult, Violation, ViolationLocation
 
 
@@ -140,9 +142,22 @@ def run_via_tenting(ctx: CheckContext) -> CheckResult:
     exposed_count = 0
     first_exposed_loc: Optional[ViolationLocation] = None
 
+    # Index mask openings by their tolerance-inflated bbox, so each via queries
+    # only the openings that could actually cover it instead of scanning every
+    # opening on the board (the O(vias x masks) loop that made a dense board slow).
+    # A query at the via centre returns exactly the openings whose inflated bbox
+    # contains it -- the same set `contains()` would accept -- so the result is
+    # unchanged.
+    tol = mask_center_tolerance_mm
+    mask_index = PolygonIndex.from_bounds(
+        [(i, Bounds(m.min_x - tol, m.min_y - tol, m.max_x + tol, m.max_y + tol))
+         for i, m in enumerate(masks)]
+    )
+
     for v in vias:
         has_opening = False
-        for m in masks:
+        for mid in mask_index.query_bbox(Bounds(v.cx, v.cy, v.cx, v.cy)):
+            m = masks[mid]
             if v.side and m.side and str(v.side).lower() != str(m.side).lower():
                 continue
             if m.contains(v.cx, v.cy, mask_center_tolerance_mm):

@@ -23,6 +23,7 @@ from ..engine.context import CheckContext
 from ..geometry.gerber_backend import GERBONARA_AVAILABLE, excellon_hits_mm
 from ..results import CheckResult, ViolationLocation
 from ._design_advisory import advisory, count_metric, is_assembly_body, na
+from ._design_data_geo import copper_lookup
 
 _MOUNTING_MIN_DIA_MM = 2.0   # smaller NPTH are connector pegs / slots, not mounts
 _KEEPOUT_MARGIN_MM = 2.5     # screw-head / standoff annulus beyond the hole edge
@@ -59,6 +60,17 @@ def run_mounting_hole_keepout(ctx: CheckContext) -> CheckResult:
 
     # Flatten pads to (ref, x, y) once.
     pads = [(c.ref, p.x_mm, p.y_mm) for c in comps for p in c.pads]
+
+    # A registered component pad sits on copper; one floating in empty space
+    # means the placement is not aligned to this artwork, and "intrusion" would
+    # be a false positive. Judge only against pads that land on copper, and bail
+    # out when the placement clearly does not register.
+    on_copper = copper_lookup(ctx.geometry)
+    on_cu = [(ref, x, y) for (ref, x, y) in pads if on_copper(x, y)]
+    if len(on_cu) < max(1, int(0.3 * len(pads))):
+        return na(ctx, "Component placement does not register to the copper "
+                       "artwork; cannot evaluate mounting-hole keep-out.")
+    pads = on_cu
 
     intrusions: List[Tuple[str, float, float]] = []
     for (hx, hy, r) in holes:

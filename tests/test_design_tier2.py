@@ -58,9 +58,13 @@ def test_test_point_exposed_net_passes(tmp_path):
 
 
 def test_test_point_covered_net_warns(tmp_path):
-    # Mask opening only at (5,5); net B's only access point is at (9,9) -> no
-    # exposed copper there -> untestable.
-    z = _zip(tmp_path, {"board.gtl": _flash(5, 5, 1, 1), "board.gts": _flash(5, 5, 1.2, 1.2)})
+    # Copper at BOTH (5,5) and (9,9) so both access points are registered; the
+    # mask opening is only at (5,5), so net B's pad at (9,9) is tented (on copper,
+    # not exposed) -> untestable. (B must be on copper, else it reads as a
+    # mis-registered netlist and is skipped.)
+    copper = (_HDR + "%ADD11R,1.000000X1.000000*%\nD11*\n"
+              "X5000000Y5000000D03*\nX9000000Y9000000D03*\nM02*\n")
+    z = _zip(tmp_path, {"board.gtl": copper, "board.gts": _flash(5, 5, 1.2, 1.2)})
     dd = DesignData()
     dd.nets["A"] = Net(name="A", points=[NetPoint(x_mm=5.0, y_mm=5.0)])
     dd.nets["B"] = Net(name="B", points=[NetPoint(x_mm=9.0, y_mm=9.0)])

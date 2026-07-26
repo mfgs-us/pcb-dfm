@@ -36,7 +36,13 @@ def run_unconnected_pads(ctx: CheckContext) -> CheckResult:
     if not any(c.pads for c in dd.components):
         return na(ctx, "Components carry no pad geometry; cannot resolve pads to nets.")
 
-    idx = build_pad_net_index(dd)
+    # A loose match tolerance for the *connectivity* question. The default 50 um
+    # index would call a fully-connected leg "floating" when its net access point
+    # is only slightly offset from the pad (different-source placement vs netlist).
+    # A genuinely floating leg has NO access point anywhere near it, so loosening
+    # the tolerance removes that false positive without missing real defects.
+    # (0.3 mm stays well below two-terminal pad spacing, so no cross-matching.)
+    idx = build_pad_net_index(dd, tol_mm=0.3)
 
     flagged: List[Tuple[str, Optional[Tuple[float, float]]]] = []
     for comp in dd.components:

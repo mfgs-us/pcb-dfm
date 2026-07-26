@@ -98,6 +98,14 @@
     },
     {
       "confidence": "high",
+      "id": "decoupling_proximity",
+      "measured": 6.4529,
+      "severity": "warning",
+      "status": "warning",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
       "id": "dielectric_thickness_uniformity",
       "measured": null,
       "severity": "info",
@@ -298,6 +306,14 @@
     },
     {
       "confidence": "high",
+      "id": "power_feed_robustness",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
       "id": "reference_designator_coverage",
       "measured": 0.0,
       "severity": "info",
@@ -422,6 +438,14 @@
       "measured": null,
       "severity": "info",
       "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
+      "id": "unconnected_pads",
+      "measured": 0.0,
+      "severity": "info",
+      "status": "pass",
       "violations": 1
     },
     {

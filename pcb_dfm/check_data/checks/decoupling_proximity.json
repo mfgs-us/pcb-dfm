@@ -1,0 +1,11 @@
+{
+  "id": "decoupling_proximity",
+  "category_id": "design_advisory",
+  "name": "Decoupling-cap proximity",
+  "description": "Advisory (needs netlist + placement): a decoupling capacitor placed far from the IC power pin it serves is the classic design-review miss. Heuristic -- caps identified by value/refdes, association by shared power net. Not_applicable without net + component placement data.",
+  "what_it_measures": "Distance from the farthest decoupling cap to its nearest served IC power pin.",
+  "metric": { "kind": "distance", "units": "mm", "preferred_direction": "minimize", "target": { "max": 3.0 }, "limits": { "max": 5.0 }, "scale_min": 0.0, "scale_max": 10.0 },
+  "severity_default": "info",
+  "applies_to": ["power", "assembly"],
+  "scoring": { "enabled": true, "strategy": "binary", "pass_threshold": 100, "weight": 0.2 }
+}

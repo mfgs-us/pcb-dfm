@@ -218,6 +218,15 @@ GUIDANCE: Dict[str, Remediation] = {
     "teardrop_presence": Remediation(
         "Add teardrops where thin traces meet small-annular vias.",
         "Drill wander breaks out of a thin annular ring without the teardrop's extra copper."),
+    "unconnected_pads": Remediation(
+        "Route (or intentionally no-connect) each pad that resolves to no net.",
+        "An unrouted / disconnected pin is a functional defect that survives to the fab."),
+    "power_feed_robustness": Remediation(
+        "Stitch redundant vias at power/ground layer transitions.",
+        "A single layer-transition via is a current and reliability single-point-of-failure."),
+    "decoupling_proximity": Remediation(
+        "Move decoupling caps right up to the IC power pin they serve.",
+        "Loop inductance to a distant bypass cap negates its decoupling."),
 }
 
 

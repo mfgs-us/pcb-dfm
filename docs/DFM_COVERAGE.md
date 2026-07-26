@@ -156,7 +156,7 @@ a hard fail). It is 🔬 data-gated — it needs an ordered stackup from IPC-258
 KiCad, or a sidecar `stackup.layers` list — and reports `not_applicable` from
 bare Gerbers.
 
-## Design advisory tier (7 checks)
+## Design advisory tier (12 checks)
 
 A separate `design_advisory` category: objective **layout-quality** checks, not
 fab hard-rejects. They read only the artwork (no schematic), are conservative to
@@ -175,12 +175,16 @@ acute-copper-angle concern is the DFM check `acid_trap_angle`).
 | `teardrop_presence` | thin-annular vias that want a teardrop (breakout risk) |
 | `test_point_coverage` | *(needs netlist)* nets with no probe-accessible test point |
 | `antenna_keepout` | *(needs a designated region)* copper inside an antenna/RF keep-out |
+| `unconnected_pads` | *(needs netlist)* component pads that resolve to no net |
+| `power_feed_robustness` | *(needs via topology)* power/ground nets crossing layers on a single via |
+| `decoupling_proximity` | *(needs netlist + placement)* decoupling cap far from its served IC power pin |
 
-Two of these are the first **design-data-gated** (Tier 2) checks -- they run
-only when a netlist / keep-out region is supplied, and are `not_applicable`
-otherwise. Further Tier-2 checks (decoupling proximity, power-feed robustness,
-floating pads) are tracked as issues #36-#40 — they need a
-netlist/BOM/placement to avoid guessing, and would be gated behind that data.
+The last five are **design-data-gated** (Tier 2) checks -- they run only when a
+netlist / placement / keep-out region is supplied, and are `not_applicable`
+otherwise. They build on the ingest enablers (E2 pad↔net resolver, E3 net
+classifier, E4 component classifier, E5 keep-out regions, E6 mask/copper
+geometry bridge). Remaining Tier-2 work: KiCad net+via extraction (#34, which
+would activate `power_feed_robustness` on KiCad boards).
 
 ## Deliberately out of scope
 

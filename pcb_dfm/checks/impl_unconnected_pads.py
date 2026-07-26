@@ -1,15 +1,21 @@
-"""Design advisory: a component pad on no net is almost always an error.
+"""Design advisory: a two-terminal part with one leg floating is non-functional.
 
-A pad that resolves to no net is an unrouted / disconnected pin -- the classic
-"forgot to route it" or "ratsnest still showing" miss. Intentional no-net pads
-(mounting holes, fiducials, test points, antenna elements) and do-not-populate
-parts are excluded. Needs a netlist + component pad geometry; otherwise
-not_applicable.
+Flagging *every* net-less pad is a false-positive machine on real boards -- a
+module or connector legitimately has dozens of intentionally-unconnected pins
+(unused GPIO, castellated duplicates, mechanical pads), and without a schematic
+we cannot tell an unused pin from a forgotten one.
+
+The one net-less case that IS unambiguous without schematic intent: a
+**two-terminal passive** (R / C / L / D / LED / ferrite / fuse) with exactly two
+pads, one of which is on a net and the other on none. A resistor with a floating
+leg does nothing -- that is a real defect, not a design choice. Everything else
+(ICs, connectors, fully-net-less mechanical parts, DNP) is deliberately left
+alone. Needs a netlist + component pad geometry; otherwise not_applicable.
 """
 
 from __future__ import annotations
 
-from typing import Dict, List, Optional, Tuple
+from typing import List, Optional, Tuple
 
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
@@ -17,8 +23,9 @@ from ..ingest.design_intel import build_pad_net_index, classify_component
 from ..results import CheckResult, ViolationLocation
 from ._design_advisory import advisory, count_metric, na
 
-# Classes whose pads are legitimately net-less (mechanical / intentional).
-_NO_NET_OK = {"mounting", "fiducial", "testpoint", "antenna"}
+# Two-terminal parts: both terminals must connect or the part is dead.
+_TWO_TERMINAL = {"resistor", "capacitor", "inductor", "diode", "led",
+                 "ferrite", "fuse"}
 
 
 @register_check("unconnected_pads")
@@ -30,42 +37,34 @@ def run_unconnected_pads(ctx: CheckContext) -> CheckResult:
         return na(ctx, "Components carry no pad geometry; cannot resolve pads to nets.")
 
     idx = build_pad_net_index(dd)
-    by_ref: Dict[str, object] = {c.ref: c for c in dd.components}
 
-    flagged: List[Tuple[str, str, Optional[Tuple[float, float]]]] = []
-    for (ref, pad_name) in idx.unmatched_pads:
-        comp = by_ref.get(ref)
-        if comp is None:
-            continue
+    flagged: List[Tuple[str, Optional[Tuple[float, float]]]] = []
+    for comp in dd.components:
         if getattr(comp, "dnp", False):
-            continue  # do-not-populate: an open pad is expected
+            continue
         cls, _ = classify_component(comp)
-        if cls in _NO_NET_OK:
+        if cls not in _TWO_TERMINAL:
             continue
-        # A single-pad part with no class is almost always mechanical -- skip it
-        # rather than risk a false positive on a mounting pad the BOM didn't tag.
-        if cls is None and len(getattr(comp, "pads", [])) <= 1:
-            continue
-        loc = None
-        for p in comp.pads:
-            if p.name == pad_name:
-                loc = (p.x_mm, p.y_mm)
-                break
-        flagged.append((ref, pad_name, loc))
+        pads = comp.pads
+        if len(pads) != 2:
+            continue  # only the clean two-terminal case is unambiguous
+        netted = [p for p in pads if (comp.ref, p.name) in idx.pad_net]
+        floating = [p for p in pads if (comp.ref, p.name) not in idx.pad_net]
+        # Exactly one leg connected, one floating -> the part is dead.
+        if len(netted) == 1 and len(floating) == 1:
+            p = floating[0]
+            flagged.append((comp.ref, (p.x_mm, p.y_mm)))
 
     count = len(flagged)
     if count == 0:
         return advisory(ctx, False, count_metric(0),
-                        "Every component pad resolves to a net.")
-    ref, pad_name, loc = flagged[0]
-    vloc = None
-    if loc is not None:
-        vloc = ViolationLocation(layer="Copper", x_mm=loc[0], y_mm=loc[1],
-                                 notes=f"Pad {ref}.{pad_name} is on no net.")
+                        "No two-terminal part has a floating leg.")
+    ref, loc = flagged[0]
+    vloc = ViolationLocation(layer="Copper", x_mm=loc[0], y_mm=loc[1],
+                             notes=f"{ref} has one terminal on no net.") if loc else None
     return advisory(
         ctx, True, count_metric(count),
-        f"{count} component pad(s) resolve to no net (e.g. {ref}.{pad_name}) -- likely "
-        f"unrouted or disconnected pins. Verify the ratsnest is fully routed "
-        f"(mounting/fiducial/test-point/DNP pads are already excluded).",
+        f"{count} two-terminal part(s) have one leg on a net and the other floating "
+        f"(e.g. {ref}) -- the part is electrically dead. Connect the open terminal.",
         vloc,
     )

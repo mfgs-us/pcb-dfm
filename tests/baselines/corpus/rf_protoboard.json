@@ -51,7 +51,7 @@
     {
       "confidence": "heuristic",
       "id": "component_to_component_spacing",
-      "measured": 0.737,
+      "measured": 3.1496,
       "severity": "info",
       "status": "pass",
       "violations": 0
@@ -371,9 +371,9 @@
     {
       "confidence": "high",
       "id": "solder_mask_expansion",
-      "measured": 0.0,
-      "severity": "warning",
-      "status": "warning",
+      "measured": 0.3777,
+      "severity": "error",
+      "status": "fail",
       "violations": 1
     },
     {
@@ -419,9 +419,9 @@
     {
       "confidence": "high",
       "id": "test_point_coverage",
-      "measured": null,
+      "measured": 0.0,
       "severity": "info",
-      "status": "not_applicable",
+      "status": "pass",
       "violations": 1
     },
     {
@@ -443,9 +443,9 @@
     {
       "confidence": "high",
       "id": "unconnected_pads",
-      "measured": 1464.0,
-      "severity": "warning",
-      "status": "warning",
+      "measured": 0.0,
+      "severity": "info",
+      "status": "pass",
       "violations": 1
     },
     {
@@ -490,8 +490,8 @@
     }
   ],
   "overall": {
-    "score": 75.0,
-    "status": "warning"
+    "score": 0.0,
+    "status": "fail"
   },
   "stackup_layers": 2,
   "warnings": [

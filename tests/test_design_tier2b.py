@@ -50,31 +50,40 @@ def _comp(ref, pads, value=None):
                      pads=[Pad(name=n, x_mm=x, y_mm=y) for (n, x, y) in pads])
 
 
-# ---- unconnected_pads (#37) ----------------------------------------------
+# ---- unconnected_pads (#37): a two-terminal part with a floating leg ------
 def test_unconnected_na_without_netlist(tmp_path):
-    dd = DesignData(components=[_comp("U1", [("1", 1, 1)])])
+    dd = DesignData(components=[_comp("R1", [("1", 1, 1), ("2", 2, 2)])])
     assert _run(_zip(tmp_path), "unconnected_pads", dd).status == "not_applicable"
 
 
-def test_unconnected_all_matched_passes(tmp_path):
-    dd = DesignData(components=[_comp("U1", [("1", 1, 1), ("2", 2, 2)])])
+def test_unconnected_both_legs_connected_passes(tmp_path):
+    dd = DesignData(components=[_comp("R1", [("1", 1, 1), ("2", 2, 2)])])
     dd.nets["N1"] = Net(name="N1", points=[NetPoint(x_mm=1, y_mm=1)])
     dd.nets["N2"] = Net(name="N2", points=[NetPoint(x_mm=2, y_mm=2)])
     assert _run(_zip(tmp_path), "unconnected_pads", dd).status == "pass"
 
 
-def test_unconnected_floating_pin_warns(tmp_path):
-    # U1.2 sits on no net access point -> unconnected.
-    dd = DesignData(components=[_comp("U1", [("1", 1, 1), ("2", 2, 2)])])
+def test_unconnected_floating_leg_warns(tmp_path):
+    # R1.2 sits on no net access point -> the resistor has a floating leg.
+    dd = DesignData(components=[_comp("R1", [("1", 1, 1), ("2", 2, 2)])])
     dd.nets["N1"] = Net(name="N1", points=[NetPoint(x_mm=1, y_mm=1)])
     r = _run(_zip(tmp_path), "unconnected_pads", dd)
     assert r.status == "warning"
     assert r.metric.measured_value == 1
 
 
-def test_unconnected_mounting_pad_excluded(tmp_path):
-    # A mounting-hole pad with no net must NOT be flagged.
-    dd = DesignData(components=[_comp("MH1", [("1", 9, 9)])])
+def test_unconnected_ic_unused_pin_not_flagged(tmp_path):
+    # An IC with a net-less pin is an intentional no-connect -> must NOT flag.
+    dd = DesignData(components=[_comp("U1", [("1", 1, 1), ("2", 2, 2), ("3", 3, 3)])])
+    dd.nets["N1"] = Net(name="N1", points=[NetPoint(x_mm=1, y_mm=1)])
+    dd.nets["N2"] = Net(name="N2", points=[NetPoint(x_mm=2, y_mm=2)])
+    # U1.3 is net-less but an IC -> not our concern.
+    assert _run(_zip(tmp_path), "unconnected_pads", dd).status == "pass"
+
+
+def test_unconnected_fully_floating_part_not_flagged(tmp_path):
+    # A resistor with BOTH legs net-less is mechanical / unplaced -> not flagged.
+    dd = DesignData(components=[_comp("R9", [("1", 8, 8), ("2", 9, 9)])])
     dd.nets["N1"] = Net(name="N1", points=[NetPoint(x_mm=1, y_mm=1)])
     assert _run(_zip(tmp_path), "unconnected_pads", dd).status == "pass"
 

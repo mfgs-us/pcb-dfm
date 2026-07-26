@@ -1,9 +1,9 @@
 {
   "id": "unconnected_pads",
   "category_id": "design_advisory",
-  "name": "Unconnected pads",
-  "description": "Advisory (needs a netlist): a component pad that resolves to no net is almost always an error (an unrouted or disconnected pin). Excludes intentional no-net pads (mounting holes, fiducials, test points). Not_applicable without a netlist + placement.",
-  "what_it_measures": "Count of component pads that resolve to no net (excluding mounting/fiducial/test-point parts).",
+  "name": "Unconnected pads (floating two-terminal leg)",
+  "description": "Advisory (needs a netlist): a two-terminal passive (R/C/L/D/LED/ferrite/fuse) with one leg on a net and the other on none is electrically dead. Only this unambiguous case is flagged -- net-less pads on ICs/connectors are intentional no-connects and are ignored. Not_applicable without a netlist + placement.",
+  "what_it_measures": "Count of two-terminal parts with exactly one connected and one floating terminal.",
   "metric": { "kind": "count", "units": "count", "preferred_direction": "minimize", "target": { "max": 0 }, "limits": { "max": 0 }, "scale_min": 0, "scale_max": 10 },
   "severity_default": "info",
   "applies_to": ["assembly", "net"],

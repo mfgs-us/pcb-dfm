@@ -89,6 +89,14 @@
       "violations": 1
     },
     {
+      "confidence": "high",
+      "id": "courtyard_overlap",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
       "confidence": "heuristic",
       "id": "crosstalk_estimate",
       "measured": null,
@@ -171,6 +179,14 @@
     {
       "confidence": "high",
       "id": "fillet_radius_milling",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
+      "id": "fine_pitch_fiducials",
       "measured": null,
       "severity": "info",
       "status": "not_applicable",
@@ -266,6 +282,14 @@
     },
     {
       "confidence": "high",
+      "id": "mounting_hole_keepout",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
       "id": "npth_to_copper_clearance",
       "measured": null,
       "severity": "info",
@@ -307,6 +331,14 @@
     {
       "confidence": "high",
       "id": "power_feed_robustness",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
+      "id": "power_ground_trace_width",
       "measured": null,
       "severity": "info",
       "status": "not_applicable",

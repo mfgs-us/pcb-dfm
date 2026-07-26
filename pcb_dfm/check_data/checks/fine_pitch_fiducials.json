@@ -1,0 +1,11 @@
+{
+  "id": "fine_pitch_fiducials",
+  "category_id": "design_advisory",
+  "name": "Fine-pitch local fiducials",
+  "description": "Advisory (needs placement + fiducials): a fine-pitch part (<= 0.5 mm pitch, >= 5 pads: BGA / fine QFN / connector) needs a local fiducial pair so automated placement can correct local error the global fiducials cannot. Flags fine-pitch parts with fewer than 2 fiducials within 40 mm. Not_applicable without placement and at least one fiducial.",
+  "what_it_measures": "Count of fine-pitch parts lacking a local fiducial pair (< 2 within 40 mm).",
+  "metric": { "kind": "count", "units": "count", "preferred_direction": "minimize", "target": { "max": 0 }, "limits": { "max": 0 }, "scale_min": 0, "scale_max": 5 },
+  "severity_default": "info",
+  "applies_to": ["assembly"],
+  "scoring": { "enabled": true, "strategy": "binary", "pass_threshold": 100, "weight": 0.2 }
+}

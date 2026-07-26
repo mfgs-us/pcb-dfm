@@ -227,6 +227,18 @@ GUIDANCE: Dict[str, Remediation] = {
     "decoupling_proximity": Remediation(
         "Move decoupling caps right up to the IC power pin they serve.",
         "Loop inductance to a distant bypass cap negates its decoupling."),
+    "mounting_hole_keepout": Remediation(
+        "Move components out of the mounting hole's screw-head / standoff keep-out.",
+        "A part under the mounting hardware collides with it at assembly."),
+    "fine_pitch_fiducials": Remediation(
+        "Add a local fiducial pair near each fine-pitch / BGA part.",
+        "Global fiducials alone cannot correct local placement error at fine pitch."),
+    "power_ground_trace_width": Remediation(
+        "Widen power/ground rails to at least the signal trace width.",
+        "A rail narrower than the signals it feeds is a current and IR-drop bottleneck."),
+    "courtyard_overlap": Remediation(
+        "Space same-side components so their courtyards no longer overlap.",
+        "Overlapping courtyards are too close to place, inspect, or rework."),
 }
 
 

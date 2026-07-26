@@ -335,18 +335,20 @@ MetricResult.dimensionless(
 - ✅ Consistent scoring (pass=100, warning=75, fail=0)
 - ✅ No more "pass + error" contradictions
 
-**Check coverage:** all **61** check definitions have an implementation — there
+**Check coverage:** all **65** check definitions have an implementation — there
 are no stubs. A check that cannot be computed from the data supplied (e.g.
 `impedance_control` or `dielectric_thickness_uniformity` without a stackup)
 reports `not_applicable` with the reason, rather than guessing or aborting the
 run.
 
-Twelve of those form a distinct **`design_advisory`** tier — objective
+Sixteen of those form a distinct **`design_advisory`** tier — objective
 layout-quality checks (refdes coverage, fiducials, edge keep-outs, teardrops on
-breakout-risk vias, floating copper, outline corners, clipped silk), plus five
-**design-data-gated** checks that run only when a netlist / placement / keep-out
-is supplied (test-point coverage, antenna keep-out, unconnected pads, power-feed
-robustness, decoupling proximity) and are `not_applicable` otherwise. They are
+breakout-risk vias, floating copper, outline corners, clipped silk), plus nine
+**design-data-gated** checks that run only when a netlist / placement / courtyard
+/ keep-out is supplied (test-point coverage, antenna keep-out, unconnected pads,
+power-feed robustness, decoupling proximity, mounting-hole keep-out, fine-pitch
+fiducials, power/ground trace adequacy, courtyard overlap) and are
+`not_applicable` otherwise. They are
 advisory by contract: they flag what a design reviewer would note, never a fab
 hard-reject, and deliberately encode no folklore (e.g. no "avoid right-angle
 traces" — a myth; the real concern, acute copper angles, is `acid_trap_angle`).

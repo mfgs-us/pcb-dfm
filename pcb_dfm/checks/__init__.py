@@ -56,6 +56,7 @@ def _ensure_impls_loaded() -> None:
     # Mechanical outline
     from . import (
         impl_acid_trap_angle,  # noqa: F401
+        impl_antenna_keepout,  # noqa: F401
         impl_aperture_definition_errors,  # noqa: F401
         impl_backdrill_stub_length,  # noqa: F401
         impl_board_outline_continuity,  # noqa: F401
@@ -104,6 +105,7 @@ def _ensure_impls_loaded() -> None:
         impl_stackup_symmetry,  # noqa: F401
         impl_tab_routing_mousebites,  # noqa: F401
         impl_teardrop_presence,  # noqa: F401
+        impl_test_point_coverage,  # noqa: F401
         impl_thermal_relief_spoke_width,  # noqa: F401
         impl_tombstoning_risk,  # noqa: F401
         impl_unsupported_hole_types,  # noqa: F401

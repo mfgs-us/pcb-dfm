@@ -1,0 +1,11 @@
+{
+  "id": "test_point_coverage",
+  "category_id": "design_advisory",
+  "name": "Test-point coverage per net",
+  "description": "Advisory (needs a netlist): every net should have at least one probe-accessible point so ICT / flying-probe can verify it. Flags nets whose access points are all mask-covered (no exposed copper to probe). Not_applicable without a netlist or a solder-mask layer.",
+  "what_it_measures": "Count of nets with no solder-mask-exposed access point (untestable by probe).",
+  "metric": { "kind": "count", "units": "count", "preferred_direction": "minimize", "target": { "max": 0 }, "limits": { "max": 0 }, "scale_min": 0, "scale_max": 10 },
+  "severity_default": "info",
+  "applies_to": ["assembly", "test"],
+  "scoring": { "enabled": true, "strategy": "binary", "pass_threshold": 100, "weight": 0.2 }
+}

@@ -1,6 +1,6 @@
 # DFM Coverage Matrix
 
-This document maps the engine's **56 implemented checks** (49 DFM + 7
+This document maps the engine's **58 implemented checks** (49 DFM + 9
 `design_advisory`; the advisory tier is summarised at the end) against the standard
 fabrication/assembly DFM rule families that appear on IPC-2221/2222 and on the
 public DFM checklists of volume fabricators (JLCPCB, PCBWay, Sierra, OSH Park).
@@ -173,9 +173,13 @@ acute-copper-angle concern is the DFM check `acid_trap_angle`).
 | `reference_designator_coverage` | inferred components with no nearby refdes |
 | `component_edge_clearance` | component pads too close to the board edge |
 | `teardrop_presence` | thin-annular vias that want a teardrop (breakout risk) |
+| `test_point_coverage` | *(needs netlist)* nets with no probe-accessible test point |
+| `antenna_keepout` | *(needs a designated region)* copper inside an antenna/RF keep-out |
 
-Intent-dependent design checks (decoupling-cap proximity, power-net current
-capacity, RF/antenna keep-out) are deliberately **not** here yet — they need a
+Two of these are the first **design-data-gated** (Tier 2) checks -- they run
+only when a netlist / keep-out region is supplied, and are `not_applicable`
+otherwise. Further Tier-2 checks (decoupling proximity, power-feed robustness,
+floating pads) are tracked as issues #36-#40 — they need a
 netlist/BOM/placement to avoid guessing, and would be gated behind that data.
 
 ## Deliberately out of scope

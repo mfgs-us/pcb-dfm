@@ -209,6 +209,12 @@ GUIDANCE: Dict[str, Remediation] = {
     "component_edge_clearance": Remediation(
         "Move edge-hugging components inward from the board edge.",
         "Depaneling stress and handling damage to parts at the edge."),
+    "test_point_coverage": Remediation(
+        "Add a test point (or expose a via) on each untestable net.",
+        "ICT / flying-probe can't verify a net with no probe-accessible point."),
+    "antenna_keepout": Remediation(
+        "Clear copper out of the antenna/RF keep-out region (pour, traces, plane).",
+        "Copper under/near the antenna detunes it and cuts wireless range."),
     "teardrop_presence": Remediation(
         "Add teardrops where thin traces meet small-annular vias.",
         "Drill wander breaks out of a thin annular ring without the teardrop's extra copper."),

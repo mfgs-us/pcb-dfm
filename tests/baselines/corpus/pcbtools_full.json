@@ -33,6 +33,14 @@
       "violations": 1
     },
     {
+      "confidence": "high",
+      "id": "component_edge_clearance",
+      "measured": 0.2616,
+      "severity": "warning",
+      "status": "warning",
+      "violations": 1
+    },
+    {
       "confidence": "heuristic",
       "id": "component_to_component_spacing",
       "measured": 0.0483,
@@ -138,10 +146,26 @@
     },
     {
       "confidence": "high",
+      "id": "fiducial_coverage",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
       "id": "fillet_radius_milling",
       "measured": null,
       "severity": "info",
       "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
+      "id": "floating_copper",
+      "measured": 0.0,
+      "severity": "info",
+      "status": "pass",
       "violations": 1
     },
     {
@@ -233,6 +257,14 @@
       "violations": 1
     },
     {
+      "confidence": "high",
+      "id": "outline_sharp_corners",
+      "measured": 0.0,
+      "severity": "info",
+      "status": "pass",
+      "violations": 1
+    },
+    {
       "confidence": "heuristic",
       "id": "plane_fragmentation",
       "measured": 0.0,
@@ -258,6 +290,14 @@
     },
     {
       "confidence": "high",
+      "id": "reference_designator_coverage",
+      "measured": 0.0,
+      "severity": "info",
+      "status": "pass",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
       "id": "return_path_interruptions",
       "measured": null,
       "severity": "info",
@@ -276,6 +316,14 @@
       "confidence": "high",
       "id": "silkscreen_min_width",
       "measured": 0.0102,
+      "severity": "warning",
+      "status": "warning",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
+      "id": "silkscreen_off_board",
+      "measured": 4.0,
       "severity": "warning",
       "status": "warning",
       "violations": 1
@@ -331,6 +379,14 @@
     {
       "confidence": "heuristic",
       "id": "tab_routing_mousebites",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
+      "id": "teardrop_presence",
       "measured": null,
       "severity": "info",
       "status": "not_applicable",

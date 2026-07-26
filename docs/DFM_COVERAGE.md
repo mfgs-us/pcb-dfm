@@ -1,6 +1,7 @@
 # DFM Coverage Matrix
 
-This document maps the engine's **49 implemented checks** against the standard
+This document maps the engine's **56 implemented checks** (49 DFM + 7
+`design_advisory`; the advisory tier is summarised at the end) against the standard
 fabrication/assembly DFM rule families that appear on IPC-2221/2222 and on the
 public DFM checklists of volume fabricators (JLCPCB, PCBWay, Sierra, OSH Park).
 
@@ -154,6 +155,28 @@ reports the largest thickness mismatch across the mid-plane (a kind mismatch is
 a hard fail). It is 🔬 data-gated — it needs an ordered stackup from IPC-2581,
 KiCad, or a sidecar `stackup.layers` list — and reports `not_applicable` from
 bare Gerbers.
+
+## Design advisory tier (7 checks)
+
+A separate `design_advisory` category: objective **layout-quality** checks, not
+fab hard-rejects. They read only the artwork (no schematic), are conservative to
+avoid false positives, and always warn/inform — never fail. They encode no
+folklore (notably **not** "avoid right-angle traces", which is a myth; the real
+acute-copper-angle concern is the DFM check `acid_trap_angle`).
+
+| Check | Flags |
+|---|---|
+| `outline_sharp_corners` | acute spikes on the outer board edge (handling/depanel) |
+| `floating_copper` | large isolated copper with no drilled connection |
+| `silkscreen_off_board` | on-board silk clipped by the outline (trimmed legend) |
+| `fiducial_coverage` | SMT board with < 3 global fiducials (placement alignment) |
+| `reference_designator_coverage` | inferred components with no nearby refdes |
+| `component_edge_clearance` | component pads too close to the board edge |
+| `teardrop_presence` | thin-annular vias that want a teardrop (breakout risk) |
+
+Intent-dependent design checks (decoupling-cap proximity, power-net current
+capacity, RF/antenna keep-out) are deliberately **not** here yet — they need a
+netlist/BOM/placement to avoid guessing, and would be gated behind that data.
 
 ## Deliberately out of scope
 

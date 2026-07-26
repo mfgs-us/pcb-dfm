@@ -1,0 +1,11 @@
+{
+  "id": "component_edge_clearance",
+  "category_id": "design_advisory",
+  "name": "Component-to-edge clearance",
+  "description": "Advisory: component pads (and thus their bodies, which extend beyond the pads) placed too close to the board edge risk depaneling stress and handling damage. A larger keep-back than bare copper (copper_to_edge_distance) is expected for parts.",
+  "what_it_measures": "Smallest distance from a component pad to the board outline.",
+  "metric": { "kind": "distance", "units": "mm", "preferred_direction": "maximize", "target": { "min": 0.5 }, "limits": { "min": 0.3 }, "scale_min": 0.0, "scale_max": 1.0 },
+  "severity_default": "info",
+  "applies_to": ["assembly", "board_outline"],
+  "scoring": { "enabled": true, "strategy": "binary", "pass_threshold": 100, "weight": 0.2 }
+}

@@ -59,6 +59,7 @@ def _ensure_impls_loaded() -> None:
         impl_aperture_definition_errors,  # noqa: F401
         impl_backdrill_stub_length,  # noqa: F401
         impl_board_outline_continuity,  # noqa: F401
+        impl_component_edge_clearance,  # noqa: F401
         impl_component_to_component_spacing,  # noqa: F401
         impl_copper_density_balance,  # noqa: F401
         impl_copper_sliver_width,  # noqa: F401
@@ -72,7 +73,9 @@ def _ensure_impls_loaded() -> None:
         impl_drill_to_drill_spacing,  # noqa: F401
         impl_drill_wander_budget,  # noqa: F401
         impl_etch_compensation_margin,  # noqa: F401
+        impl_fiducial_coverage,  # noqa: F401
         impl_fillet_radius_milling,  # noqa: F401
+        impl_floating_copper,  # noqa: F401
         impl_highspeed_stub_length,  # noqa: F401
         impl_impedance_control,  # noqa: F401
         impl_layer_registration_margin,  # noqa: F401
@@ -84,12 +87,15 @@ def _ensure_impls_loaded() -> None:
         impl_min_trace_width,  # noqa: F401
         impl_missing_tooling_holes,  # noqa: F401
         impl_npth_to_copper_clearance,  # noqa: F401
+        impl_outline_sharp_corners,  # noqa: F401
         impl_plane_fragmentation,  # noqa: F401
         impl_plating_uniformity,  # noqa: F401
         impl_polarity_marking_consistency,  # noqa: F401
+        impl_reference_designator_coverage,  # noqa: F401
         impl_return_path_interruptions,  # noqa: F401
         impl_silkscreen_clearance,  # noqa: F401
         impl_silkscreen_min_width,  # noqa: F401
+        impl_silkscreen_off_board,  # noqa: F401
         impl_silkscreen_on_copper,  # noqa: F401
         impl_silkscreen_over_mask_defined_pads,  # noqa: F401
         impl_solder_mask_expansion,  # noqa: F401
@@ -97,6 +103,7 @@ def _ensure_impls_loaded() -> None:
         impl_solder_paste_area_coverage,  # noqa: F401
         impl_stackup_symmetry,  # noqa: F401
         impl_tab_routing_mousebites,  # noqa: F401
+        impl_teardrop_presence,  # noqa: F401
         impl_thermal_relief_spoke_width,  # noqa: F401
         impl_tombstoning_risk,  # noqa: F401
         impl_unsupported_hole_types,  # noqa: F401

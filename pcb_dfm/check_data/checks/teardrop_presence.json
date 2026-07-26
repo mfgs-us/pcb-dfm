@@ -1,0 +1,11 @@
+{
+  "id": "teardrop_presence",
+  "category_id": "design_advisory",
+  "name": "Teardrops on breakout-risk junctions",
+  "description": "Advisory: a teardrop (fillet) where a thin trace meets a small-annular via/pad relieves drill-breakout and mechanical stress. Flags only the junctions where a teardrop would materially help (thin trace into a small-ring hole with no widening) -- not the absence of teardrops in general.",
+  "what_it_measures": "Count of thin-trace-to-small-annular-hole junctions with no teardrop widening.",
+  "metric": { "kind": "count", "units": "count", "preferred_direction": "minimize", "target": { "max": 0 }, "limits": { "max": 0 }, "scale_min": 0, "scale_max": 20 },
+  "severity_default": "info",
+  "applies_to": ["copper", "drill_via_integrity"],
+  "scoring": { "enabled": true, "strategy": "binary", "pass_threshold": 100, "weight": 0.2 }
+}

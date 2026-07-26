@@ -6,6 +6,7 @@ import math
 import pathlib
 
 from pcb_dfm.ingest.design_data import load_design_data
+from pcb_dfm.ingest.design_intel import build_pad_net_index
 
 # A minimal but realistic KiCad 6/7-style board: 2-copper stackup, four nets,
 # a net class, a routed diff pair, and two placed footprints.
@@ -98,7 +99,8 @@ def test_pads_parsed_with_absolute_positions(tmp_path):
     d1 = comps["D1"]
     assert len(d1.pads) == 2
     p1 = d1.pin1()
-    assert p1 is not None and p1.x_mm == 99.25 and p1.y_mm == 50.0   # 100 + (-0.75)
+    # x = 100 + (-0.75); y is flipped into the Gerber frame (KiCad Y-down -> Y-up)
+    assert p1 is not None and p1.x_mm == 99.25 and p1.y_mm == -50.0
     assert not p1.through_hole
     assert comps["J1"].pads[0].through_hole is True
 
@@ -114,8 +116,9 @@ def test_pad_positions_rotate_with_footprint(tmp_path):
         encoding="utf-8",
     )
     p1 = {c.ref: c for c in load_design_data(d).components}["D1"].pin1()
-    # (-0.75, 0) rotated 90° -> (0, -0.75); abs = (100, 49.25)
-    assert abs(p1.x_mm - 100.0) < 1e-9 and abs(p1.y_mm - 49.25) < 1e-9
+    # (-0.75, 0) rotated 90° -> (0, -0.75); abs (100, 49.25) in KiCad frame,
+    # then Y flipped into the Gerber frame -> (100, -49.25)
+    assert abs(p1.x_mm - 100.0) < 1e-9 and abs(p1.y_mm - -49.25) < 1e-9
 
 
 def test_vias_parsed_onto_net(tmp_path):
@@ -145,7 +148,8 @@ def test_components_placement(tmp_path):
     assert set(comps) == {"R1", "C1"}
     r1 = comps["R1"]
     assert r1.value == "10k" and r1.side == "top"
-    assert r1.x_mm == 100.0 and r1.y_mm == 50.0 and r1.rotation_deg == 90.0
+    # Y flipped into the Gerber frame (KiCad Y-down -> Y-up)
+    assert r1.x_mm == 100.0 and r1.y_mm == -50.0 and r1.rotation_deg == 90.0
     assert comps["C1"].side == "bottom"
 
 
@@ -165,3 +169,64 @@ def test_project_netclass_patterns(tmp_path):
     assert dd.net("DDR_A0").net_class == "DDR"
     assert dd.net("DDR_A1").net_class == "DDR"
     assert dd.net("SPI_CLK").net_class is None
+
+
+# --------------------------------------------------------------------------- #
+# KiCad 10.99 (file version 20260623) format (#34)
+#   - no (net N "name") table; net refs are name-only: (net "/SIG")
+#   - footprint placement via (transform (translate X Y) (rotate R))
+# --------------------------------------------------------------------------- #
+
+_NEW_FORMAT = """(kicad_pcb
+  (version 20260623)
+  (generator "pcbnew")
+  (generator_version "10.99")
+  (footprint "R_0402"
+    (layer "F.Cu")
+    (transform (translate 10 10) (rotate 0) (scale 1 1))
+    (property "Reference" "R1" (at 0 0 0))
+    (property "Value" "10k" (at 0 0 0))
+    (pad "1" smd rect (at -0.5 0) (size 0.5 0.5) (layers "F.Cu") (net "/SIG"))
+    (pad "2" smd rect (at 0.5 0) (size 0.5 0.5) (layers "F.Cu"))
+  )
+  (segment (start 10 10) (end 20 10) (width 0.2) (layer "F.Cu") (net "/SIG"))
+  (via (at 15 10) (size 0.6) (drill 0.3) (layers "F.Cu" "B.Cu") (net "/SIG"))
+)
+"""
+
+
+def _new_board(tmp_path):
+    d = tmp_path / "new"
+    d.mkdir()
+    (d / "new.kicad_pcb").write_text(_NEW_FORMAT, encoding="utf-8")
+    return d
+
+
+def test_new_format_name_only_nets(tmp_path):
+    """No numbered net table -> nets are discovered from name-only references."""
+    dd = load_design_data(_new_board(tmp_path))
+    assert dd is not None and dd.source == "kicad"
+    assert "/SIG" in dd.nets
+    net = dd.nets["/SIG"]
+    assert net.features and net.vias          # routed segment + via resolved
+    assert net.vias[0].to_layer == "B.Cu"
+
+
+def test_new_format_transform_placement(tmp_path):
+    """Footprint placement comes from (transform (translate ...))."""
+    dd = load_design_data(_new_board(tmp_path))
+    r1 = {c.ref: c for c in dd.components}["R1"]
+    # Y flipped into the Gerber frame (translate Y 10 -> -10)
+    assert r1.x_mm == 10.0 and r1.y_mm == -10.0
+    assert len(r1.pads) == 2
+    # pad 1 at footprint-relative (-0.5, 0) -> absolute (9.5, 10) -> flipped (9.5, -10)
+    p1 = next(p for p in r1.pads if p.name == "1")
+    assert abs(p1.x_mm - 9.5) < 1e-9 and abs(p1.y_mm - -10.0) < 1e-9
+
+
+def test_new_format_pad_net_points_seeded(tmp_path):
+    """A pad's (net ...) seeds an access point so pads resolve to nets."""
+    dd = load_design_data(_new_board(tmp_path))
+    idx = build_pad_net_index(dd)
+    assert idx.pad_net.get(("R1", "1")) == "/SIG"   # netted leg
+    assert ("R1", "2") not in idx.pad_net           # floating leg

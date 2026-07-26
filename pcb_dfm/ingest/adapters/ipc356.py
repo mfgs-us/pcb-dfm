@@ -186,6 +186,26 @@ def register_to_board(
     if not through or not board_points:
         return None
 
+    def _matched(dx: float, dy: float) -> int:
+        return sum(
+            1 for p in through
+            if any(abs(p.x_mm + dx - bx) <= tolerance_mm
+                   and abs(p.y_mm + dy - by) <= tolerance_mm
+                   for (bx, by) in board_points)
+        )
+
+    decisive = max(3, int(0.6 * len(through)))
+
+    # If the netlist already sits in the board's frame -- always true for a
+    # native-CAD board whose artwork is rendered from the same file, and true for
+    # a correctly-origined netlist -- the identity offset already registers it.
+    # Take it and stop: hunting for a "better" offset lets a repetitive/symmetric
+    # drill pattern vote in a spurious whole-board shift (e.g. a full board-height
+    # translation), which would silently displace every pad from the artwork it
+    # identifies. Aligned data must be left exactly as-is.
+    if _matched(0.0, 0.0) >= decisive:
+        return (0.0, 0.0)
+
     # Vote on candidate offsets, quantised so near-identical pairings agree.
     q = max(0.01, tolerance_mm / 2.0)
     votes: Dict[Tuple[float, float], int] = {}
@@ -210,15 +230,10 @@ def register_to_board(
         dx = sum(r[0] for r in residuals) / len(residuals)
         dy = sum(r[1] for r in residuals) / len(residuals)
 
-    matched = sum(
-        1 for p in through
-        if any(abs(p.x_mm + dx - bx) <= tolerance_mm and abs(p.y_mm + dy - by) <= tolerance_mm
-               for (bx, by) in board_points)
-    )
     # Require a decisive majority: a netlist for a *different* board can still
     # produce a few coincidental pairings, and a partly-wrong origin is worse
     # than none.
-    if matched < max(3, int(0.6 * len(through))):
+    if _matched(dx, dy) < decisive:
         return None
 
     if dx or dy:

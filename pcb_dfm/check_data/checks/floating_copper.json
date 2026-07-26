@@ -1,0 +1,11 @@
+{
+  "id": "floating_copper",
+  "category_id": "design_advisory",
+  "name": "Floating copper islands",
+  "description": "Advisory: large isolated copper regions with no drilled connection are often unintended (a routing error) and act as antennas / EMI coupling. Small isolated copper (thieving, fiducials) is ignored.",
+  "what_it_measures": "Count of large copper regions carrying no drilled hole (via or pad) and thus no connection.",
+  "metric": { "kind": "count", "units": "count", "preferred_direction": "minimize", "target": { "max": 0 }, "limits": { "max": 0 }, "scale_min": 0, "scale_max": 5 },
+  "severity_default": "info",
+  "applies_to": ["copper", "plane"],
+  "scoring": { "enabled": true, "strategy": "binary", "pass_threshold": 100, "weight": 0.2 }
+}

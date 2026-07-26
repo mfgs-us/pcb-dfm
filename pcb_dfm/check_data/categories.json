@@ -50,6 +50,11 @@
       "id": "yield_prediction",
       "name": "Yield prediction",
       "description": "Quantitative estimates of etch margin, drill wander tolerance, and plating thickness uniformity."
+    },
+    {
+      "id": "design_advisory",
+      "name": "Design advisory",
+      "description": "Objective layout-quality and design-review checks derived from the artwork -- refdes coverage, fiducials, edge keep-outs, teardrops, floating copper, outline corners. These are ADVISORY: they flag things a design reviewer would note, never fab hard-rejects, and never encode folklore or design opinions."
     }
   ]
 }

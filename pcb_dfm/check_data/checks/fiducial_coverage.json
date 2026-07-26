@@ -1,0 +1,11 @@
+{
+  "id": "fiducial_coverage",
+  "category_id": "design_advisory",
+  "name": "Fiducial coverage",
+  "description": "Advisory: automated pick-and-place needs global fiducials (>= 3, non-collinear) to align the board. Flags boards that carry SMD assembly but too few fiducial-like features. Heuristic (fiducials inferred from geometry, not a fab hard rule).",
+  "what_it_measures": "Count of global fiducial-like features detected (isolated round copper dots with an oversized mask opening).",
+  "metric": { "kind": "count", "units": "count", "preferred_direction": "maximize", "target": { "min": 3 }, "limits": { "min": 3 }, "scale_min": 0, "scale_max": 3 },
+  "severity_default": "info",
+  "applies_to": ["copper", "assembly"],
+  "scoring": { "enabled": true, "strategy": "binary", "pass_threshold": 100, "weight": 0.2 }
+}

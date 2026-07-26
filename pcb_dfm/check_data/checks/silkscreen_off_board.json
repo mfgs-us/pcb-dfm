@@ -1,0 +1,11 @@
+{
+  "id": "silkscreen_off_board",
+  "category_id": "design_advisory",
+  "name": "Silkscreen clipped by board edge",
+  "description": "Advisory: silkscreen that straddles the board outline gets trimmed at depaneling, leaving reference designators or marks partly missing / illegible. Silk entirely off-board (fab documentation) is ignored.",
+  "what_it_measures": "Count of on-board silkscreen features whose geometry crosses the board outline.",
+  "metric": { "kind": "count", "units": "count", "preferred_direction": "minimize", "target": { "max": 0 }, "limits": { "max": 0 }, "scale_min": 0, "scale_max": 10 },
+  "severity_default": "info",
+  "applies_to": ["silkscreen"],
+  "scoring": { "enabled": true, "strategy": "binary", "pass_threshold": 100, "weight": 0.2 }
+}

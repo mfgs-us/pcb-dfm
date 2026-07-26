@@ -189,6 +189,29 @@ GUIDANCE: Dict[str, Remediation] = {
         "Remove the dangling branch / route the high-speed net point-to-point "
         "(or back-drill the offending via).",
         "Stub reflections degrade the signal / close the eye."),
+
+    # --- design advisory (objective layout-quality; advisory, never a fab reject) ----
+    "outline_sharp_corners": Remediation(
+        "Chamfer or round acute outer board corners.",
+        "Sharp outer spikes snag in handling and chip at the point."),
+    "floating_copper": Remediation(
+        "Delete the isolated copper, or connect/ground it if intentional.",
+        "Unconnected copper floats → antenna / EMI coupling, or signals a routing error."),
+    "silkscreen_off_board": Remediation(
+        "Pull silkscreen inside the board-edge keep-out.",
+        "Silk crossing the outline is trimmed at depanel → missing/illegible legend."),
+    "fiducial_coverage": Remediation(
+        "Add ≥ 3 non-collinear global fiducials (and local fiducials at fine-pitch parts).",
+        "Pick-and-place can't optically align the board → placement offset."),
+    "reference_designator_coverage": Remediation(
+        "Add a silkscreen reference designator near every component.",
+        "Assembly / rework can't identify unlabeled parts."),
+    "component_edge_clearance": Remediation(
+        "Move edge-hugging components inward from the board edge.",
+        "Depaneling stress and handling damage to parts at the edge."),
+    "teardrop_presence": Remediation(
+        "Add teardrops where thin traces meet small-annular vias.",
+        "Drill wander breaks out of a thin annular ring without the teardrop's extra copper."),
 }
 
 

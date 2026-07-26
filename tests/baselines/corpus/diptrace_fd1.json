@@ -33,6 +33,14 @@
       "violations": 1
     },
     {
+      "confidence": "high",
+      "id": "component_edge_clearance",
+      "measured": 0.0394,
+      "severity": "warning",
+      "status": "warning",
+      "violations": 1
+    },
+    {
       "confidence": "heuristic",
       "id": "component_to_component_spacing",
       "measured": 0.0991,
@@ -138,10 +146,26 @@
     },
     {
       "confidence": "high",
+      "id": "fiducial_coverage",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
       "id": "fillet_radius_milling",
       "measured": null,
       "severity": "info",
       "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
+      "id": "floating_copper",
+      "measured": 1.0,
+      "severity": "warning",
+      "status": "warning",
       "violations": 1
     },
     {
@@ -233,6 +257,14 @@
       "violations": 1
     },
     {
+      "confidence": "high",
+      "id": "outline_sharp_corners",
+      "measured": 0.0,
+      "severity": "info",
+      "status": "pass",
+      "violations": 1
+    },
+    {
       "confidence": "heuristic",
       "id": "plane_fragmentation",
       "measured": 0.0,
@@ -258,6 +290,14 @@
     },
     {
       "confidence": "high",
+      "id": "reference_designator_coverage",
+      "measured": 9.0,
+      "severity": "warning",
+      "status": "warning",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
       "id": "return_path_interruptions",
       "measured": null,
       "severity": "info",
@@ -279,6 +319,14 @@
       "severity": "info",
       "status": "pass",
       "violations": 0
+    },
+    {
+      "confidence": "high",
+      "id": "silkscreen_off_board",
+      "measured": 7.0,
+      "severity": "warning",
+      "status": "warning",
+      "violations": 1
     },
     {
       "confidence": "heuristic",
@@ -334,6 +382,14 @@
       "measured": null,
       "severity": "info",
       "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
+      "id": "teardrop_presence",
+      "measured": 25.0,
+      "severity": "warning",
+      "status": "warning",
       "violations": 1
     },
     {

@@ -1,0 +1,11 @@
+{
+  "id": "reference_designator_coverage",
+  "category_id": "design_advisory",
+  "name": "Reference designator coverage",
+  "description": "Advisory: every component should carry a nearby silkscreen reference designator so assembly and rework can identify it. Flags inferred component pad clusters that have no silkscreen label near them. Heuristic (components inferred by clustering pads).",
+  "what_it_measures": "Count of inferred component pad-clusters with no silkscreen feature within the label search radius.",
+  "metric": { "kind": "count", "units": "count", "preferred_direction": "minimize", "target": { "max": 0 }, "limits": { "max": 0 }, "scale_min": 0, "scale_max": 20 },
+  "severity_default": "info",
+  "applies_to": ["silkscreen", "assembly"],
+  "scoring": { "enabled": true, "strategy": "binary", "pass_threshold": 100, "weight": 0.2 }
+}

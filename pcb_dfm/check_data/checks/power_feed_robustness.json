@@ -1,0 +1,11 @@
+{
+  "id": "power_feed_robustness",
+  "category_id": "design_advisory",
+  "name": "Power-feed robustness (single-via SPOF)",
+  "description": "Advisory (needs via-bearing design data): a power or ground net that crosses layers through a single via is a current + reliability single-point-of-failure. Not_applicable without net via data (e.g. from a KiCad board; IPC-D-356 carries no vias).",
+  "what_it_measures": "Count of power/ground nets that span multiple layers through exactly one via.",
+  "metric": { "kind": "count", "units": "count", "preferred_direction": "minimize", "target": { "max": 0 }, "limits": { "max": 0 }, "scale_min": 0, "scale_max": 5 },
+  "severity_default": "info",
+  "applies_to": ["power", "net"],
+  "scoring": { "enabled": true, "strategy": "binary", "pass_threshold": 100, "weight": 0.2 }
+}

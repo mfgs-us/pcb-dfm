@@ -67,6 +67,7 @@ def _ensure_impls_loaded() -> None:
         impl_copper_thermal_area,  # noqa: F401
         impl_copper_to_edge_distance,  # noqa: F401
         impl_crosstalk_estimate,  # noqa: F401
+        impl_decoupling_proximity,  # noqa: F401
         impl_dielectric_thickness_uniformity,  # noqa: F401
         impl_diff_pair_skew,  # noqa: F401
         impl_diff_pair_spacing,  # noqa: F401
@@ -92,6 +93,7 @@ def _ensure_impls_loaded() -> None:
         impl_plane_fragmentation,  # noqa: F401
         impl_plating_uniformity,  # noqa: F401
         impl_polarity_marking_consistency,  # noqa: F401
+        impl_power_feed_robustness,  # noqa: F401
         impl_reference_designator_coverage,  # noqa: F401
         impl_return_path_interruptions,  # noqa: F401
         impl_silkscreen_clearance,  # noqa: F401
@@ -108,6 +110,7 @@ def _ensure_impls_loaded() -> None:
         impl_test_point_coverage,  # noqa: F401
         impl_thermal_relief_spoke_width,  # noqa: F401
         impl_tombstoning_risk,  # noqa: F401
+        impl_unconnected_pads,  # noqa: F401
         impl_unsupported_hole_types,  # noqa: F401
         impl_via_in_pad_thermal_balance,  # noqa: F401
         impl_via_tenting,  # noqa: F401

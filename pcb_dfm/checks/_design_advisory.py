@@ -60,6 +60,12 @@ def count_metric(count: int, target_max: float = 0.0) -> MetricResult:
                         measured_value=float(count), target=float(target_max))
 
 
+def dist_metric(value: Optional[float], target_max: float) -> MetricResult:
+    return MetricResult(kind="distance", units="mm",
+                        measured_value=(float(value) if value is not None else None),
+                        target=float(target_max))
+
+
 def _poly_area(verts: List[Tuple[float, float]]) -> float:
     s = 0.0
     n = len(verts)

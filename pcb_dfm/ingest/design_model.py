@@ -209,6 +209,9 @@ class Component:
     height_mm: Optional[float] = None       # body height, when the BOM carries it
     placed: bool = True                     # False = in the BOM but not laid out
     pads: List["Pad"] = field(default_factory=list)  # absolute pad geometry (#6)
+    # Absolute courtyard bounds (min_x, min_y, max_x, max_y) when the source
+    # carries a courtyard layer; used for assembly-collision (overlap) checks.
+    courtyard: Optional[Tuple[float, float, float, float]] = None
 
     def pin1(self) -> Optional["Pad"]:
         """The pin-1 pad, if identifiable."""

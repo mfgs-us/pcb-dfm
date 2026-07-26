@@ -1,0 +1,11 @@
+{
+  "id": "courtyard_overlap",
+  "category_id": "design_advisory",
+  "name": "Courtyard overlap",
+  "description": "Advisory (needs courtyard geometry): two same-side component courtyards that overlap are too close to place, inspect, or rework -- a design-for-assembly collision. Reads the real courtyard keep-out (stricter and more correct than the pad-distance component_to_component_spacing heuristic). Opposite-side parts may share XY and are not compared. Not_applicable without courtyard geometry (e.g. a KiCad board's *.CrtYd layers).",
+  "what_it_measures": "Count of same-side component courtyard pairs that overlap.",
+  "metric": { "kind": "count", "units": "count", "preferred_direction": "minimize", "target": { "max": 0 }, "limits": { "max": 0 }, "scale_min": 0, "scale_max": 5 },
+  "severity_default": "info",
+  "applies_to": ["assembly", "mechanical"],
+  "scoring": { "enabled": true, "strategy": "binary", "pass_threshold": 100, "weight": 0.2 }
+}

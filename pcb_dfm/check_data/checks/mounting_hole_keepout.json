@@ -1,0 +1,11 @@
+{
+  "id": "mounting_hole_keepout",
+  "category_id": "design_advisory",
+  "name": "Mounting-hole keep-out",
+  "description": "Advisory (needs NPTH drills + placement): a component inside a mounting hole's mechanical keep-out (screw head / washer / standoff) collides with the hardware at assembly. This is the mechanical keep-out (a few mm), distinct from the sub-mm electrical npth_to_copper_clearance. Copper is not flagged (grounded mounting holes are deliberately flooded). Not_applicable without NPTH drills and component placement.",
+  "what_it_measures": "Count of components intruding a mounting hole's mechanical keep-out annulus.",
+  "metric": { "kind": "count", "units": "count", "preferred_direction": "minimize", "target": { "max": 0 }, "limits": { "max": 0 }, "scale_min": 0, "scale_max": 5 },
+  "severity_default": "info",
+  "applies_to": ["assembly", "mechanical"],
+  "scoring": { "enabled": true, "strategy": "binary", "pass_threshold": 100, "weight": 0.2 }
+}

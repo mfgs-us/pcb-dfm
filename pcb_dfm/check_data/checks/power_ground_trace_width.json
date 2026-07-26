@@ -1,0 +1,11 @@
+{
+  "id": "power_ground_trace_width",
+  "category_id": "design_advisory",
+  "name": "Power/ground trace adequacy",
+  "description": "Advisory (needs routed trace widths): a power/ground rail routed narrower than the board's median signal trace is a current + IR-drop bottleneck. A relative test (no absolute rule): the net's median routed width is compared to the median signal width, so a board that widths power correctly passes. Median (not min) avoids tripping on a single pad-entry neck. Not_applicable without routed widths and a signal baseline.",
+  "what_it_measures": "Count of power/ground nets whose median routed width is below the median signal width.",
+  "metric": { "kind": "count", "units": "count", "preferred_direction": "minimize", "target": { "max": 0 }, "limits": { "max": 0 }, "scale_min": 0, "scale_max": 5 },
+  "severity_default": "info",
+  "applies_to": ["power", "net"],
+  "scoring": { "enabled": true, "strategy": "binary", "pass_threshold": 100, "weight": 0.2 }
+}

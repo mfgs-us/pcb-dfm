@@ -345,6 +345,68 @@ def _footprint_placement(fp: SNode) -> Tuple[Optional[float], Optional[float], f
     return None, None, 0.0
 
 
+def _courtyard_bbox(fp: SNode, ox: float, oy: float, rot_deg: float
+                    ) -> Optional[Tuple[float, float, float, float]]:
+    """Absolute bounding box of a footprint's courtyard graphics (``*.CrtYd``).
+
+    Collects the corner points of the courtyard's lines / rects / circles / polys
+    in footprint-local space, rotates + translates them to the board, and returns
+    the enclosing box. In the KiCad frame (Y flipped to Gerber later, with pads).
+    """
+    a = math.radians(rot_deg or 0.0)
+    ca, sa = math.cos(a), math.sin(a)
+    xs: List[float] = []
+    ys: List[float] = []
+
+    def add(lx: float, ly: float) -> None:
+        xs.append(ox + lx * ca - ly * sa)
+        ys.append(oy + lx * sa + ly * ca)
+
+    def on_crtyd(g: SNode) -> bool:
+        ln = _first(g, "layer")
+        return bool(ln and _atoms(ln) and "CrtYd" in _atoms(ln)[0])
+
+    def pt(node: Optional[SNode]) -> Optional[Tuple[float, float]]:
+        x, y = _fatom(node, 0), _fatom(node, 1)
+        return (x, y) if x is not None and y is not None else None
+
+    for g in _tagged(fp, "fp_line"):
+        if not on_crtyd(g):
+            continue
+        for node in (_first(g, "start"), _first(g, "end")):
+            p = pt(node)
+            if p:
+                add(*p)
+    for g in _tagged(fp, "fp_rect"):
+        if not on_crtyd(g):
+            continue
+        s, e = pt(_first(g, "start")), pt(_first(g, "end"))
+        if s and e:
+            for cx, cy in ((s[0], s[1]), (e[0], s[1]), (e[0], e[1]), (s[0], e[1])):
+                add(cx, cy)
+    for g in _tagged(fp, "fp_circle"):
+        if not on_crtyd(g):
+            continue
+        c, e = pt(_first(g, "center")), pt(_first(g, "end"))
+        if c and e:
+            r = math.hypot(e[0] - c[0], e[1] - c[1])
+            for dx, dy in ((r, 0.0), (-r, 0.0), (0.0, r), (0.0, -r)):
+                add(c[0] + dx, c[1] + dy)
+    for g in _tagged(fp, "fp_poly"):
+        if not on_crtyd(g):
+            continue
+        pts = _first(g, "pts")
+        if pts:
+            for xy in _tagged(pts, "xy"):
+                p = pt(xy)
+                if p:
+                    add(*p)
+
+    if not xs:
+        return None
+    return (min(xs), min(ys), max(xs), max(ys))
+
+
 def _parse_components(root: SNode, nets: Dict[str, Net],
                       num_to_name: Dict[str, str]) -> List[Component]:
     comps: List[Component] = []
@@ -376,10 +438,12 @@ def _parse_components(root: SNode, nets: Dict[str, Net],
             continue
         pads = (_parse_pads(fp, ref, x, y, rot, nets, num_to_name)
                 if (x is not None and y is not None) else [])
+        courtyard = (_courtyard_bbox(fp, x, y, rot)
+                     if (x is not None and y is not None) else None)
         comps.append(Component(
             ref=ref, value=value, footprint=footprint,
             x_mm=x, y_mm=y, rotation_deg=rot, side=_side_of_layer(layer),
-            pads=pads,
+            pads=pads, courtyard=courtyard,
         ))
     return comps
 
@@ -447,6 +511,9 @@ def _to_gerber_frame(components: List[Component], nets: Dict[str, Net]) -> None:
             c.y_mm = -c.y_mm
         for p in c.pads:
             p.y_mm = -p.y_mm
+        if c.courtyard is not None:
+            x0, y0, x1, y1 = c.courtyard
+            c.courtyard = (x0, -y1, x1, -y0)  # flip Y; min/max swap
     for net in nets.values():
         for pt in net.points:
             pt.y_mm = -pt.y_mm

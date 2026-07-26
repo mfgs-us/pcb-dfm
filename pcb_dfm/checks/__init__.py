@@ -66,6 +66,7 @@ def _ensure_impls_loaded() -> None:
         impl_copper_sliver_width,  # noqa: F401
         impl_copper_thermal_area,  # noqa: F401
         impl_copper_to_edge_distance,  # noqa: F401
+        impl_courtyard_overlap,  # noqa: F401
         impl_crosstalk_estimate,  # noqa: F401
         impl_decoupling_proximity,  # noqa: F401
         impl_dielectric_thickness_uniformity,  # noqa: F401
@@ -77,6 +78,7 @@ def _ensure_impls_loaded() -> None:
         impl_etch_compensation_margin,  # noqa: F401
         impl_fiducial_coverage,  # noqa: F401
         impl_fillet_radius_milling,  # noqa: F401
+        impl_fine_pitch_fiducials,  # noqa: F401
         impl_floating_copper,  # noqa: F401
         impl_highspeed_stub_length,  # noqa: F401
         impl_impedance_control,  # noqa: F401
@@ -88,12 +90,14 @@ def _ensure_impls_loaded() -> None:
         impl_min_trace_spacing,  # noqa: F401
         impl_min_trace_width,  # noqa: F401
         impl_missing_tooling_holes,  # noqa: F401
+        impl_mounting_hole_keepout,  # noqa: F401
         impl_npth_to_copper_clearance,  # noqa: F401
         impl_outline_sharp_corners,  # noqa: F401
         impl_plane_fragmentation,  # noqa: F401
         impl_plating_uniformity,  # noqa: F401
         impl_polarity_marking_consistency,  # noqa: F401
         impl_power_feed_robustness,  # noqa: F401
+        impl_power_ground_trace_width,  # noqa: F401
         impl_reference_designator_coverage,  # noqa: F401
         impl_return_path_interruptions,  # noqa: F401
         impl_silkscreen_clearance,  # noqa: F401

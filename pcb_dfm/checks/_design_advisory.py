@@ -66,6 +66,27 @@ def dist_metric(value: Optional[float], target_max: float) -> MetricResult:
                         target=float(target_max))
 
 
+def is_assembly_body(comp) -> bool:
+    """True when a component is a physical placed body that can collide at
+    assembly.
+
+    Fiducials (flat copper dots), mounting holes (a hole, not a body), and test
+    points carry a courtyard and pads but are NOT pick-and-place collision
+    bodies -- flagging their courtyards or their proximity as a component
+    collision is a false positive. Their real concerns are covered elsewhere
+    (fiducial/test-point coverage, mounting_hole_keepout).
+    """
+    from ..ingest.design_intel import classify_component
+    if classify_component(comp)[0] in ("fiducial", "mounting", "testpoint"):
+        return False
+    fp = (getattr(comp, "footprint", None) or "").lower()
+    if any(k in fp for k in ("fiducial", "mountinghole", "mounting_hole",
+                             "testpoint", "test_point")):
+        return False
+    # KiCad's unannotated-footprint placeholder (e.g. a dropped-in mounting hole).
+    return not (getattr(comp, "ref", None) or "").upper().startswith("REF**")
+
+
 def _poly_area(verts: List[Tuple[float, float]]) -> float:
     s = 0.0
     n = len(verts)

@@ -156,7 +156,7 @@ a hard fail). It is 🔬 data-gated — it needs an ordered stackup from IPC-258
 KiCad, or a sidecar `stackup.layers` list — and reports `not_applicable` from
 bare Gerbers.
 
-## Design advisory tier (12 checks)
+## Design advisory tier (16 checks)
 
 A separate `design_advisory` category: objective **layout-quality** checks, not
 fab hard-rejects. They read only the artwork (no schematic), are conservative to
@@ -178,13 +178,18 @@ acute-copper-angle concern is the DFM check `acid_trap_angle`).
 | `unconnected_pads` | *(needs netlist)* component pads that resolve to no net |
 | `power_feed_robustness` | *(needs via topology)* power/ground nets crossing layers on a single via |
 | `decoupling_proximity` | *(needs netlist + placement)* decoupling cap far from its served IC power pin |
+| `mounting_hole_keepout` | *(needs NPTH + placement)* a component inside a mounting hole's mechanical keep-out |
+| `fine_pitch_fiducials` | *(needs placement + fiducials)* a fine-pitch/BGA part with no local fiducial pair |
+| `power_ground_trace_width` | *(needs routed widths)* a power/ground rail routed thinner than the signal traces |
+| `courtyard_overlap` | *(needs courtyard geometry)* two same-side component courtyards that collide |
 
-The last five are **design-data-gated** (Tier 2) checks -- they run only when a
-netlist / placement / keep-out region is supplied, and are `not_applicable`
-otherwise. They build on the ingest enablers (E2 pad↔net resolver, E3 net
-classifier, E4 component classifier, E5 keep-out regions, E6 mask/copper
-geometry bridge). Remaining Tier-2 work: KiCad net+via extraction (#34, which
-would activate `power_feed_robustness` on KiCad boards).
+The design-data-gated (Tier 2) checks run only when a netlist / placement /
+courtyard / keep-out is supplied, and are `not_applicable` otherwise. They build
+on the ingest enablers (E2 pad↔net resolver, E3 net classifier, E4 component
+classifier, E5 keep-out regions, E6 mask/copper geometry bridge) and the KiCad
+net+pad+courtyard extraction (#34). Non-physical footprints (fiducials, mounting
+holes, test points) are excluded from the assembly-collision checks so they
+never false-flag.
 
 ## Deliberately out of scope
 

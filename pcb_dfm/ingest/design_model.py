@@ -219,6 +219,22 @@ class Component:
 
 
 @dataclass
+class KeepoutRegion:
+    """A designated region the layout should respect -- e.g. an antenna/RF
+    clearance zone that must stay free of copper (E5).
+
+    ``polygon`` is a closed (x, y) mm outline. ``layers`` limits the region to
+    named copper layers; None means all copper layers. ``kind`` names the intent
+    ('antenna', 'rf', 'keepout', 'courtyard', ...) so a check can select the ones
+    it cares about.
+    """
+    kind: str
+    polygon: List[Tuple[float, float]] = field(default_factory=list)
+    layers: Optional[List[str]] = None
+    name: Optional[str] = None
+
+
+@dataclass
 class DesignData:
     """Everything derived from a design-data source, in one place."""
     stackup: Optional[Stackup] = None
@@ -226,6 +242,7 @@ class DesignData:
     diff_pairs: List[DiffPair] = field(default_factory=list)
     controlled_impedance: List[ControlledImpedanceSpec] = field(default_factory=list)
     components: List[Component] = field(default_factory=list)
+    keepouts: List[KeepoutRegion] = field(default_factory=list)  # E5: antenna/RF/keepout zones
     warnings: List[str] = field(default_factory=list)  # non-fatal ingest/merge notes
     source: Optional[str] = None  # "sidecar" | "ipc2581" | "odbpp" | "kicad"
 

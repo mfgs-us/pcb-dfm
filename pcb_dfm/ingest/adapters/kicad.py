@@ -345,13 +345,38 @@ def _footprint_placement(fp: SNode) -> Tuple[Optional[float], Optional[float], f
     return None, None, 0.0
 
 
-def _courtyard_bbox(fp: SNode, ox: float, oy: float, rot_deg: float
-                    ) -> Optional[Tuple[float, float, float, float]]:
-    """Absolute bounding box of a footprint's courtyard graphics (``*.CrtYd``).
+def _convex_hull(points: List[Tuple[float, float]]) -> List[Tuple[float, float]]:
+    """Convex hull (monotone chain) of a point set, CCW, no repeated endpoint."""
+    pts = sorted(set(points))
+    if len(pts) <= 2:
+        return pts
+
+    def cross(o, a, b):
+        return (a[0] - o[0]) * (b[1] - o[1]) - (a[1] - o[1]) * (b[0] - o[0])
+
+    lower: List[Tuple[float, float]] = []
+    for p in pts:
+        while len(lower) >= 2 and cross(lower[-2], lower[-1], p) <= 0:
+            lower.pop()
+        lower.append(p)
+    upper: List[Tuple[float, float]] = []
+    for p in reversed(pts):
+        while len(upper) >= 2 and cross(upper[-2], upper[-1], p) <= 0:
+            upper.pop()
+        upper.append(p)
+    return lower[:-1] + upper[:-1]
+
+
+def _courtyard_hull(fp: SNode, ox: float, oy: float, rot_deg: float
+                    ) -> Optional[List[Tuple[float, float]]]:
+    """Absolute convex-hull outline of a footprint's courtyard graphics
+    (``*.CrtYd``).
 
     Collects the corner points of the courtyard's lines / rects / circles / polys
     in footprint-local space, rotates + translates them to the board, and returns
-    the enclosing box. In the KiCad frame (Y flipped to Gerber later, with pads).
+    their convex hull. A polygon (not a bbox) so a rotated part's keep-out stays
+    tight -- a 45 deg rectangle's hull is the rotated rectangle, not its inflated
+    box. In the KiCad frame (Y flipped to Gerber later, with pads).
     """
     a = math.radians(rot_deg or 0.0)
     ca, sa = math.cos(a), math.sin(a)
@@ -404,7 +429,7 @@ def _courtyard_bbox(fp: SNode, ox: float, oy: float, rot_deg: float
 
     if not xs:
         return None
-    return (min(xs), min(ys), max(xs), max(ys))
+    return _convex_hull(list(zip(xs, ys)))
 
 
 def _parse_components(root: SNode, nets: Dict[str, Net],
@@ -438,7 +463,7 @@ def _parse_components(root: SNode, nets: Dict[str, Net],
             continue
         pads = (_parse_pads(fp, ref, x, y, rot, nets, num_to_name)
                 if (x is not None and y is not None) else [])
-        courtyard = (_courtyard_bbox(fp, x, y, rot)
+        courtyard = (_courtyard_hull(fp, x, y, rot)
                      if (x is not None and y is not None) else None)
         comps.append(Component(
             ref=ref, value=value, footprint=footprint,
@@ -512,8 +537,7 @@ def _to_gerber_frame(components: List[Component], nets: Dict[str, Net]) -> None:
         for p in c.pads:
             p.y_mm = -p.y_mm
         if c.courtyard is not None:
-            x0, y0, x1, y1 = c.courtyard
-            c.courtyard = (x0, -y1, x1, -y0)  # flip Y; min/max swap
+            c.courtyard = [(px, -py) for (px, py) in c.courtyard]  # flip Y
     for net in nets.values():
         for pt in net.points:
             pt.y_mm = -pt.y_mm

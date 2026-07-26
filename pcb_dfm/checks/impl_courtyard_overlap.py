@@ -22,13 +22,41 @@ from ._design_advisory import advisory, count_metric, is_assembly_body, na
 
 _EPS_MM = 0.01  # ignore edge-touch / float noise; only real overlap counts
 
+Poly = List[Tuple[float, float]]
 
-def _overlap(a: Tuple[float, float, float, float],
-             b: Tuple[float, float, float, float]) -> bool:
-    ax0, ay0, ax1, ay1 = a
-    bx0, by0, bx1, by1 = b
-    return (min(ax1, bx1) - max(ax0, bx0) > _EPS_MM
-            and min(ay1, by1) - max(ay0, by0) > _EPS_MM)
+
+def _bbox(p: Poly) -> Tuple[float, float, float, float]:
+    xs = [x for (x, _) in p]
+    ys = [y for (_, y) in p]
+    return min(xs), min(ys), max(xs), max(ys)
+
+
+def _overlap(a: Poly, b: Poly) -> bool:
+    """True when two convex polygons overlap by more than _EPS_MM (separating-axis
+    theorem). Edge contact / float noise does not count."""
+    if len(a) < 2 or len(b) < 2:
+        return False
+    # Cheap bbox reject first.
+    ax0, ay0, ax1, ay1 = _bbox(a)
+    bx0, by0, bx1, by1 = _bbox(b)
+    if ax1 < bx0 or bx1 < ax0 or ay1 < by0 or by1 < ay0:
+        return False
+    for poly in (a, b):
+        n = len(poly)
+        for i in range(n):
+            x1, y1 = poly[i]
+            x2, y2 = poly[(i + 1) % n]
+            nx, ny = -(y2 - y1), (x2 - x1)          # edge normal
+            length = (nx * nx + ny * ny) ** 0.5
+            if length == 0:
+                continue
+            nx, ny = nx / length, ny / length        # normalize -> mm projections
+            a_proj = [px * nx + py * ny for (px, py) in a]
+            b_proj = [px * nx + py * ny for (px, py) in b]
+            # Separated (or merely touching) on this axis -> not a real overlap.
+            if min(max(a_proj), max(b_proj)) - max(min(a_proj), min(b_proj)) <= _EPS_MM:
+                return False
+    return True
 
 
 @register_check("courtyard_overlap")
@@ -45,7 +73,7 @@ def run_courtyard_overlap(ctx: CheckContext) -> CheckResult:
     def side(c) -> str:
         return (getattr(c, "side", None) or "top").lower()
 
-    pairs: List[Tuple[str, str, Tuple[float, float, float, float]]] = []
+    pairs: List[Tuple[str, str, Poly]] = []
     by_side: dict = {}
     for c in comps:
         by_side.setdefault(side(c), []).append(c)
@@ -61,8 +89,10 @@ def run_courtyard_overlap(ctx: CheckContext) -> CheckResult:
     if count == 0:
         return advisory(ctx, False, count_metric(0),
                         "No same-side component courtyards overlap.")
-    ra, rb, box = pairs[0]
-    cx, cy = 0.5 * (box[0] + box[2]), 0.5 * (box[1] + box[3])
+    ra, rb, poly = pairs[0]
+    xs = [x for (x, _) in poly]
+    ys = [y for (_, y) in poly]
+    cx, cy = sum(xs) / len(xs), sum(ys) / len(ys)
     return advisory(
         ctx, True, count_metric(count),
         f"{count} same-side component courtyard pair(s) overlap (e.g. {ra} / {rb}) "

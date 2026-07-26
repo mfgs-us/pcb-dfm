@@ -65,17 +65,28 @@ def test_mounting_na_without_npth(tmp_path):
 
 def test_mounting_intruding_component_warns(tmp_path):
     # 3 mm NPTH at (10,10) -> keep-out radius 1.5 + 2.5 = 4 mm. R1 at (13,10) is
-    # inside the keep-out but outside the owner tolerance (so not the hole's own part).
-    z = _zip(tmp_path, {"board-NPTH.drl": _npth(10, 10, 3.0)})
+    # inside the keep-out but outside the owner tolerance. Copper sits under the
+    # pad so the placement registers to the artwork.
+    z = _zip(tmp_path, {"board.gtl": _flash(13, 10, 2, 2),
+                        "board-NPTH.drl": _npth(10, 10, 3.0)})
     dd = DesignData(components=[_comp("R1", [("1", 13, 10)])])
     r = _run(z, "mounting_hole_keepout", dd)
     assert r.status == "warning" and r.metric.measured_value == 1
 
 
 def test_mounting_clear_component_passes(tmp_path):
-    z = _zip(tmp_path, {"board-NPTH.drl": _npth(10, 10, 3.0)})
-    dd = DesignData(components=[_comp("R1", [("1", 10, 20)])])  # 10 mm away
+    z = _zip(tmp_path, {"board.gtl": _flash(10, 20, 2, 2),
+                        "board-NPTH.drl": _npth(10, 10, 3.0)})
+    dd = DesignData(components=[_comp("R1", [("1", 10, 20)])])  # 10 mm away, on copper
     assert _run(z, "mounting_hole_keepout", dd).status == "pass"
+
+
+def test_mounting_misregistered_placement_na(tmp_path):
+    # R1's pad floats in empty space (no copper there) -> placement not registered
+    # -> not_applicable rather than a false "intrusion".
+    z = _zip(tmp_path, {"board-NPTH.drl": _npth(10, 10, 3.0)})  # copper only at (5,5)
+    dd = DesignData(components=[_comp("R1", [("1", 13, 10)])])
+    assert _run(z, "mounting_hole_keepout", dd).status == "not_applicable"
 
 
 def test_mounting_small_npth_ignored(tmp_path):
@@ -156,6 +167,10 @@ def test_power_width_adequate_rail_passes(tmp_path):
 
 
 # ---- courtyard_overlap -----------------------------------------------------
+def _box(x0, y0, x1, y1):
+    return [(x0, y0), (x1, y0), (x1, y1), (x0, y1)]
+
+
 def test_courtyard_na_without_geometry(tmp_path):
     dd = DesignData(components=[_comp("R1", [("1", 0, 0)])])  # no courtyard
     assert _run(_zip(tmp_path), "courtyard_overlap", dd).status == "not_applicable"
@@ -163,8 +178,8 @@ def test_courtyard_na_without_geometry(tmp_path):
 
 def test_courtyard_overlap_warns(tmp_path):
     dd = DesignData(components=[
-        _comp("U1", [("1", 0, 0)], courtyard=(0, 0, 4, 4), side="top"),
-        _comp("U2", [("1", 3, 3)], courtyard=(2, 2, 6, 6), side="top"),
+        _comp("U1", [("1", 0, 0)], courtyard=_box(0, 0, 4, 4), side="top"),
+        _comp("U2", [("1", 3, 3)], courtyard=_box(2, 2, 6, 6), side="top"),
     ])
     r = _run(_zip(tmp_path), "courtyard_overlap", dd)
     assert r.status == "warning" and r.metric.measured_value == 1
@@ -172,16 +187,16 @@ def test_courtyard_overlap_warns(tmp_path):
 
 def test_courtyard_clear_passes(tmp_path):
     dd = DesignData(components=[
-        _comp("U1", [("1", 0, 0)], courtyard=(0, 0, 4, 4), side="top"),
-        _comp("U2", [("1", 10, 10)], courtyard=(8, 8, 12, 12), side="top"),
+        _comp("U1", [("1", 0, 0)], courtyard=_box(0, 0, 4, 4), side="top"),
+        _comp("U2", [("1", 10, 10)], courtyard=_box(8, 8, 12, 12), side="top"),
     ])
     assert _run(_zip(tmp_path), "courtyard_overlap", dd).status == "pass"
 
 
 def test_courtyard_opposite_sides_not_compared(tmp_path):
     dd = DesignData(components=[
-        _comp("U1", [("1", 0, 0)], courtyard=(0, 0, 4, 4), side="top"),
-        _comp("U2", [("1", 3, 3)], courtyard=(2, 2, 6, 6), side="bottom"),
+        _comp("U1", [("1", 0, 0)], courtyard=_box(0, 0, 4, 4), side="top"),
+        _comp("U2", [("1", 3, 3)], courtyard=_box(2, 2, 6, 6), side="bottom"),
     ])
     assert _run(_zip(tmp_path), "courtyard_overlap", dd).status == "pass"
 
@@ -190,8 +205,20 @@ def test_courtyard_fiducial_excluded(tmp_path):
     # FID1's courtyard overlaps U1, but a flat fiducial is not a placement
     # collision -> excluded. The two real bodies (U1, U2) do not overlap -> pass.
     dd = DesignData(components=[
-        _comp("U1", [("1", 0, 0)], courtyard=(0, 0, 4, 4), side="top"),
-        _comp("U2", [("1", 10, 10)], courtyard=(8, 8, 12, 12), side="top"),
-        _comp("FID1", [("1", 3, 3)], courtyard=(2, 2, 6, 6), side="top"),
+        _comp("U1", [("1", 0, 0)], courtyard=_box(0, 0, 4, 4), side="top"),
+        _comp("U2", [("1", 10, 10)], courtyard=_box(8, 8, 12, 12), side="top"),
+        _comp("FID1", [("1", 3, 3)], courtyard=_box(2, 2, 6, 6), side="top"),
+    ])
+    assert _run(_zip(tmp_path), "courtyard_overlap", dd).status == "pass"
+
+
+def test_courtyard_rotated_diamonds_no_false_overlap(tmp_path):
+    # Two 45-deg diamonds whose bounding boxes overlap at a corner but whose real
+    # (convex) outlines are clear -> must NOT warn (the bbox-era false positive).
+    def diamond(cx, cy):
+        return [(cx, cy - 2), (cx + 2, cy), (cx, cy + 2), (cx - 2, cy)]
+    dd = DesignData(components=[
+        _comp("U1", [("1", 0, 0)], courtyard=diamond(0, 0), side="top"),
+        _comp("U2", [("1", 3.8, 3.8)], courtyard=diamond(3.8, 3.8), side="top"),
     ])
     assert _run(_zip(tmp_path), "courtyard_overlap", dd).status == "pass"

@@ -9,6 +9,14 @@
       "violations": 1
     },
     {
+      "confidence": "high",
+      "id": "antenna_keepout",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
       "confidence": "heuristic",
       "id": "aperture_definition_errors",
       "measured": 4.0,
@@ -390,6 +398,14 @@
       "measured": null,
       "severity": "info",
       "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
+      "id": "test_point_coverage",
+      "measured": 0.0,
+      "severity": "info",
+      "status": "pass",
       "violations": 1
     },
     {

@@ -1,0 +1,11 @@
+{
+  "id": "antenna_keepout",
+  "category_id": "design_advisory",
+  "name": "RF / antenna keep-out clearance",
+  "description": "Advisory (needs a designated antenna/RF keep-out region): copper inside an antenna keep-out detunes the antenna and kills range. Flags copper found inside any 'antenna'/'rf' keep-out region supplied via design data (sidecar keepouts). Not_applicable when no such region is designated.",
+  "what_it_measures": "Count of copper features found inside a designated antenna/RF keep-out region.",
+  "metric": { "kind": "count", "units": "count", "preferred_direction": "minimize", "target": { "max": 0 }, "limits": { "max": 0 }, "scale_min": 0, "scale_max": 10 },
+  "severity_default": "info",
+  "applies_to": ["rf", "copper"],
+  "scoring": { "enabled": true, "strategy": "binary", "pass_threshold": 100, "weight": 0.2 }
+}

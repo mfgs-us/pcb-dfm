@@ -33,6 +33,7 @@ from ..design_model import (
     ControlledImpedanceSpec,
     DesignData,
     DiffPair,
+    KeepoutRegion,
     Net,
     NetFeature,
     Stackup,
@@ -165,6 +166,25 @@ def from_sidecar(data: Dict[str, Any]) -> DesignData:
             positive=str(pos),
             negative=str(neg),
             target_ohm=(float(dp["target_ohm"]) if isinstance(dp.get("target_ohm"), (int, float)) else None),
+        ))
+
+    # Keep-out / RF regions (E5): each is {kind, polygon:[[x,y],...], layers?, name?}.
+    for ko in data.get("keepouts") or []:
+        if not isinstance(ko, dict):
+            continue
+        poly = [
+            (float(p[0]), float(p[1]))
+            for p in ko.get("polygon") or []
+            if isinstance(p, (list, tuple)) and len(p) >= 2
+        ]
+        if len(poly) < 3:
+            continue
+        layers = ko.get("layers")
+        dd.keepouts.append(KeepoutRegion(
+            kind=str(ko.get("kind", "keepout")),
+            polygon=poly,
+            layers=[str(x) for x in layers] if isinstance(layers, list) else None,
+            name=(str(ko["name"]) if ko.get("name") is not None else None),
         ))
 
     return dd

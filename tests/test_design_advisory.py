@@ -130,6 +130,22 @@ def test_fiducial_coverage_no_paste_not_applicable(tmp_path):
     assert _run(_zip(tmp_path, files), "fiducial_coverage").status == "not_applicable"
 
 
+def test_fiducial_coverage_from_design_data_passes(tmp_path):
+    # The board's design data names three fiducials -> pass, even though the bare
+    # copper here carries none the artwork heuristic could find (the droyd case,
+    # where fiducials sit in a ground pour the artwork detector missed).
+    from pcb_dfm.ingest.design_model import Component, DesignData, Pad
+    files = {"board.gko": _rect_outline(20, 20), "board.gtl": _pad(10, 10, 0.5, 0.5),
+             "board.gtp": _pad(10, 10, 0.4, 0.4)}  # paste -> SMT
+    dd = DesignData(components=[
+        Component(ref=f"FID{i}", footprint="Fiducial_1mm_Mask2mm",
+                  pads=[Pad(name="1", x_mm=float(i), y_mm=1.0)])
+        for i in range(1, 4)
+    ])
+    r = _run(_zip(tmp_path, files), "fiducial_coverage", design_data=dd)
+    assert r.status == "pass" and r.metric.measured_value == 3
+
+
 # ---- teardrop_presence ----------------------------------------------------
 def test_teardrop_thin_annular_via_warns(tmp_path):
     # 0.3 mm via in a 0.35 mm round pad -> annular ~0.025 mm (< 0.1 mm floor).

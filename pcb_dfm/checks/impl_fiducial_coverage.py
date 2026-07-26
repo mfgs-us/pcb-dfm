@@ -17,6 +17,7 @@ from ..geometry import queries
 from ..geometry.gerber_backend import GERBONARA_AVAILABLE, excellon_hits_mm
 from ..geometry.polygon_index import PolygonIndex
 from ..geometry.primitives import Bounds
+from ..ingest.design_intel import classify_component
 from ..results import CheckResult, MetricResult, Violation
 from ._design_advisory import bbox_center, na
 
@@ -24,6 +25,22 @@ _FID_MIN_DIA_MM = 0.6
 _FID_MAX_DIA_MM = 2.5
 _FID_MAX_ASPECT = 1.4      # round-ish
 _MIN_FIDUCIALS = 3
+
+
+def _design_fiducials(ctx: CheckContext) -> int:
+    """Count fiducials the design data already identifies (refdes/footprint), or
+    -1 when there is no placement data to consult. Reliable when present -- the
+    artwork heuristic below is only needed for Gerber-only boards."""
+    dd = getattr(ctx, "design_data", None)
+    comps = getattr(dd, "components", None) if dd is not None else None
+    if not comps:
+        return -1
+    return sum(
+        1 for c in comps
+        if getattr(c, "placed", True)
+        and classify_component(c)[0] == "fiducial"
+        and (c.pads or (c.x_mm is not None and c.y_mm is not None))
+    )
 
 
 def _has_smt_assembly(ctx: CheckContext) -> bool:
@@ -50,6 +67,16 @@ def run_fiducial_coverage(ctx: CheckContext) -> CheckResult:
     if not _has_smt_assembly(ctx):
         return na(ctx, "No SMT (solder-paste) assembly detected; global fiducials "
                        "are not required for a through-hole board.")
+
+    # Prefer the design data's own fiducial identity (refdes/footprint) -- the
+    # artwork heuristic below misses fiducials that sit inside a ground pour, and
+    # a placement file states them exactly. Only when it actually FINDS fiducials,
+    # though: a bare netlist (IPC-D-356) omits fiducials entirely (they carry no
+    # net), so a count of 0 there must fall through to artwork detection rather
+    # than wrongly report "no fiducials".
+    design_count = _design_fiducials(ctx)
+    if design_count > 0:
+        return _result(ctx, design_count)
 
     holes: List[Bounds] = []
     if GERBONARA_AVAILABLE:
@@ -85,14 +112,17 @@ def run_fiducial_coverage(ctx: CheckContext) -> CheckResult:
             cx, cy = bbox_center(b)
             fiducials.append((cx, cy))
 
-    count = len(fiducials)
+    return _result(ctx, len(fiducials))
+
+
+def _result(ctx: CheckContext, count: int) -> CheckResult:
     ok = count >= _MIN_FIDUCIALS
     status = "pass" if ok else "warning"
     sev = "info" if ok else "warning"
-    msg = (f"{count} global fiducial-like feature(s) detected."
+    msg = (f"{count} global fiducial(s) present."
            if ok else
-           f"Only {count} global fiducial-like feature(s) detected on an SMT board; "
-           f"automated placement wants >= {_MIN_FIDUCIALS} non-collinear fiducials.")
+           f"Only {count} global fiducial(s) on an SMT board; automated placement "
+           f"wants >= {_MIN_FIDUCIALS} non-collinear fiducials.")
     return CheckResult(
         check_id=ctx.check_def.id, name=ctx.check_def.name,
         category_id=ctx.check_def.category_id, status=status, severity=sev,

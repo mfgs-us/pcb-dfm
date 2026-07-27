@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Iterable, List
 
 
@@ -47,12 +47,38 @@ class Bounds:
 @dataclass
 class Polygon:
     """
-    Simple polygon defined by ordered vertices in mm.
+    Filled polygon in mm: an exterior ``vertices`` ring, plus zero or more
+    interior ``holes`` (clearance voids -- e.g. a plane antipad, or any region
+    a Gerber clear-polarity object cut out of the copper).
 
-    This is intentionally minimal. Later you can attach holes,
-    nets, or shape metadata as needed.
+    ``bounds`` is the exterior extent; the holes are always inside it.
     """
     vertices: List[Point2D]
+    holes: List[List[Point2D]] = field(default_factory=list)
 
     def bounds(self) -> Bounds:
         return Bounds.from_points(self.vertices)
+
+    def contains_point(self, x: float, y: float) -> bool:
+        """True when (x, y) is on copper: inside the exterior ring and outside
+        every hole. Holes make a plane antipad / cleared region read as the
+        void it physically is, not as copper."""
+        if not _ring_contains(x, y, self.vertices):
+            return False
+        return not any(_ring_contains(x, y, h) for h in self.holes)
+
+
+def _ring_contains(x: float, y: float, ring: List[Point2D]) -> bool:
+    """Even-odd ray cast: is (x, y) inside the closed polygon ``ring``?"""
+    n = len(ring)
+    if n < 3:
+        return False
+    inside = False
+    j = n - 1
+    for i in range(n):
+        xi, yi = ring[i].x, ring[i].y
+        xj, yj = ring[j].x, ring[j].y
+        if ((yi > y) != (yj > y)) and (x < (xj - xi) * (y - yi) / (yj - yi) + xi):
+            inside = not inside
+        j = i
+    return inside

@@ -201,10 +201,40 @@ def gerber_polygons_mm(path: Path) -> List[Polygon]:
         except Exception:
             return []
 
-        polys: List[Polygon] = []
+        dark: List[Polygon] = []
+        clear: List[Polygon] = []
         for obj in gf.objects:
-            polys.extend(_object_polygons_mm(obj))
-    return polys
+            target = dark if getattr(obj, "polarity_dark", True) else clear
+            target.extend(_object_polygons_mm(obj))
+    return _apply_clear_polarity(dark, clear)
+
+
+def _apply_clear_polarity(dark: List[Polygon], clear: List[Polygon]) -> List[Polygon]:
+    """Fold clear-polarity (negative) regions into the copper as holes.
+
+    A clear object -- a plane antipad, a cut-out -- removes the copper beneath it.
+    Ignoring polarity (the old behaviour) rendered an antipad as *extra* copper,
+    so a via in it read as buried-in-copper (0 mm clearance) and a netlist point
+    in it leaked into the plane's net. Here each clear polygon becomes a HOLE in
+    the dark polygon that contains it, so the void reads as a void.
+
+    Order is not tracked (a dark object re-painted over a clear is rare and not
+    modelled); antipads/clearances -- clears painted last -- are the case that
+    matters and are handled exactly.
+    """
+    if not clear:
+        return dark
+    for c in clear:
+        cb = c.bounds()
+        ccx, ccy = 0.5 * (cb.min_x + cb.max_x), 0.5 * (cb.min_y + cb.max_y)
+        for d in dark:
+            db = d.bounds()
+            if (db.min_x <= cb.min_x and db.max_x >= cb.max_x
+                    and db.min_y <= cb.min_y and db.max_y >= cb.max_y
+                    and d.contains_point(ccx, ccy)):
+                d.holes.append(list(c.vertices))
+                break
+    return dark
 
 
 @dataclass

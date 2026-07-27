@@ -265,6 +265,10 @@ class DesignData:
     keepouts: List[KeepoutRegion] = field(default_factory=list)  # E5: antenna/RF/keepout zones
     warnings: List[str] = field(default_factory=list)  # non-fatal ingest/merge notes
     source: Optional[str] = None  # "sidecar" | "ipc2581" | "odbpp" | "kicad"
+    # Stencil foil thickness (mm), when the fab/design specifies it. Authoritative
+    # input for the IPC-7525 aperture area-ratio check; when absent that check
+    # assumes a default foil and reports its finding as advisory (never gating).
+    stencil_thickness_mm: Optional[float] = None
 
     def net(self, name: str) -> Optional[Net]:
         return self.nets.get(name)

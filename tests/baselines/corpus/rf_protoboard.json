@@ -433,6 +433,14 @@
       "violations": 0
     },
     {
+      "confidence": "high",
+      "id": "stencil_aperture_ratio",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
       "confidence": "heuristic",
       "id": "tab_routing_mousebites",
       "measured": null,

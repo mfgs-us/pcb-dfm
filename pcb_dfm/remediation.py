@@ -157,6 +157,11 @@ GUIDANCE: Dict[str, Remediation] = {
     "solder_paste_area_coverage": Remediation(
         "Adjust the paste aperture area ratio for reliable paste release.",
         "Insufficient or excess paste → solder defects."),
+    "stencil_aperture_ratio": Remediation(
+        "Raise the IPC-7525 area ratio (≥ 0.66): enlarge the aperture, use a "
+        "thinner stencil foil, or a step-down/electropolished stencil for the "
+        "fine-pitch openings.",
+        "Paste won't release from the stencil → insufficient/​skipped joints."),
     "tombstoning_risk": Remediation(
         "Balance copper/thermal mass between the passive's two pads "
         "(add relief to the heavier pad).",

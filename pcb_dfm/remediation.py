@@ -57,6 +57,11 @@ GUIDANCE: Dict[str, Remediation] = {
     "drill_aspect_ratio": Remediation(
         "Reduce board thickness or enlarge the drill to lower depth-to-diameter.",
         "Plating voids / thin barrel walls → reliability failures."),
+    "microvia_geometry": Remediation(
+        "Keep microvia aspect ratio ≤ 1:1 (target 0.75:1): enlarge the drill, "
+        "thin the dielectric, or split a multi-dielectric span into stacked/​"
+        "staggered microvias.",
+        "Microvia plating voids / open connections → field failures."),
     "drill_to_drill_spacing": Remediation(
         "Increase hole-to-hole spacing.",
         "Wall breakout between adjacent holes."),

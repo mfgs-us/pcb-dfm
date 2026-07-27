@@ -100,11 +100,19 @@ class NetFeature:
 
 @dataclass
 class Via:
-    """A layer-transition via on a net (routing topology)."""
+    """A layer-transition via on a net (routing topology).
+
+    ``via_type`` is the fabrication class: "through" (default), "micro" (a
+    laser-drilled microvia spanning one dielectric), "blind" (outer to inner) or
+    "buried" (inner to inner). ``drill_mm`` is the finished hole diameter when
+    the source carries it -- needed for the microvia aspect ratio.
+    """
     x_mm: float
     y_mm: float
     from_layer: Optional[str] = None
     to_layer: Optional[str] = None
+    via_type: str = "through"
+    drill_mm: Optional[float] = None
 
 
 @dataclass

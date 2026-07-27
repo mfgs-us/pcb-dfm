@@ -250,6 +250,14 @@
     },
     {
       "confidence": "high",
+      "id": "microvia_geometry",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
       "id": "min_annular_ring",
       "measured": 0.25,
       "severity": "info",

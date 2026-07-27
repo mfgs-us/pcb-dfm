@@ -86,6 +86,7 @@ def _ensure_impls_loaded() -> None:
         impl_impedance_control,  # noqa: F401
         impl_layer_registration_margin,  # noqa: F401
         impl_mask_to_trace_clearance,  # noqa: F401
+        impl_microvia_geometry,  # noqa: F401
         impl_min_annular_ring,  # noqa: F401
         impl_min_drill_size,  # noqa: F401
         impl_min_slot_width,  # noqa: F401

@@ -1,0 +1,28 @@
+{
+  "id": "microvia_geometry",
+  "category_id": "drill_via_integrity",
+  "name": "Microvia geometry (aspect ratio)",
+  "description": "Laser-drilled microvias must be shallow enough to plate reliably: their depth-to-diameter aspect ratio must stay within the fabrication limit, and each must span a single dielectric.",
+  "what_it_measures": "For every microvia, the aspect ratio = dielectric depth (from the stackup, between the spanned copper layers) / finished drill diameter, and whether it spans exactly one dielectric.",
+  "metric": {
+    "kind": "dimensionless",
+    "units": ":1",
+    "preferred_direction": "minimize",
+    "target": { "max": 0.75 },
+    "limits": { "max": 1.0 },
+    "scale_min": 0.0,
+    "scale_max": 2.0
+  },
+  "severity_default": "error",
+  "applies_to": ["via"],
+  "params": {
+    "target_aspect": 0.75,
+    "max_aspect": 1.0
+  },
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 1.0
+  }
+}

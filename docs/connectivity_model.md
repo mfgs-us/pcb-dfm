@@ -58,8 +58,16 @@ hole-aware point-in-polygon.**
 ## Completion plan
 
 ### 1. Model polygon holes (the keystone — also the "antipad/plane" work item)
+**Partly done (#49):** clear-polarity (LPC) antipads/cut-outs are now folded into
+the copper as holes — `Polygon.holes` + hole-aware `contains_point`,
+`gerber_polygons_mm` separates dark/clear and attaches clears as holes, and net-map
+seeding/bridges + via-to-copper are hole-aware. This fixed the confirmed antipad
+false-0 (a via in an LPC antipad now reads its real clearance). **Still open:** the
+KiCad *keyhole* case below (holes woven into a self-winding region, not separate
+LPC objects) — see §2 for why that is the real points-only residual.
+
 - Extend `Polygon` with `holes: List[List[Point2D]]` (interior rings), default
-  empty so every existing call site is unchanged.
+  empty so every existing call site is unchanged. *(done)*
 - In `geometry/gerber_backend._object_polygons_mm`, split each `ArcPoly` into its
   **exterior ring and interior rings** instead of flattening the winding outline
   to one vertex list. gerbonara's arc-poly winding + polarity gives the ring
@@ -74,15 +82,37 @@ hole-aware point-in-polygon.**
   - **Merge** precision improves further (a trace in a clearance is provably not
     the pour's copper).
 
-### 2. Net-aware union for the points-only residual
-Even with holes, IPC-D-356 seeds are sparse. Add a *label-respecting* union:
-never merge two polygons already carrying **different** net seeds (that is always
-a false merge or a real short — neither should silently collapse the group).
-Then flood labels outward from seeds and **stop at a conflict boundary** rather
-than discarding the whole group. Care required: an unseeded polygon reachable
-from two nets must stay unlabelled (order-independence), so implement as
-"label P as net N iff every seed reachable from P through same-conductor copper
-is N", computed per connected component after the label-respecting union.
+### 2. Net-aware union for the points-only residual — INVESTIGATED, NO SAFE WIN
+This was prototyped and measured; it does **not** yield a safe coverage gain, and
+the reason is worth recording so it isn't re-attempted.
+
+- A *safe* flood ("label P iff every seed reachable from P is net N") is provably
+  identical to the current connected-component labelling: in a connected
+  component every polygon reaches every seed, so both discard an over-merged
+  multi-net component wholesale. Measured on pcbtools and droyd: safe-flood
+  coverage == current, to the polygon.
+- A *label-respecting* union ("never merge two different-net seeds") changed
+  nothing either — the over-merge does not run through direct seed↔seed edges; it
+  runs through **unseeded pour copper** and **multi-net-seeded pours**.
+- The only thing that moved coverage was **guessing** (nearest-seed / Voronoi),
+  which mislabels boundary copper → false shorts/opens. Off the table.
+
+Root cause of the points-only residual (diagnosed on pcbtools): the ground pour is
+a self-winding **keyhole region** whose even-odd point-in-polygon and edge-touch
+do **not** cleanly exclude its clearances. So (a) other nets' pad points fall
+"inside" the pour and seed it (a single polygon seeded by up to 5 nets), and
+(b) the pour's winding boundary passes 2–5 µm from clearance-embedded pads, under
+the 10 µm merge tolerance. Both make the pour a bridge that transitively connects
+a dozen nets into one ambiguous component — which is then correctly discarded.
+Seeding each point into only the *smallest* containing polygon cuts the leak
+(multi-net-seeded pours 17→4 on pcbtools) but does not raise coverage, because the
+pour still edge-touches everything.
+
+**Conclusion:** the residual is a computational-geometry problem — correctly
+filling self-winding Gerber regions (true exterior + interior rings from one
+keyhole path, or nonzero-winding coverage) — *not* a labelling problem. The
+clear-polarity antipad case (separate LPC flashes) is already handled (§1). The
+keyhole case is the remaining, harder work; it belongs here, not under a "flood".
 
 ### 3. Bridge precision (cross-layer)
 Plated-through-hole bridges currently union *every* polygon the hole point lands

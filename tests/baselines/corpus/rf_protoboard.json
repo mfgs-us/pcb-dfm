@@ -138,6 +138,14 @@
     },
     {
       "confidence": "high",
+      "id": "crystal_proximity",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
       "id": "debug_port_test_access",
       "measured": null,
       "severity": "info",
@@ -158,6 +166,14 @@
       "measured": null,
       "severity": "info",
       "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
+      "id": "decoupling_same_side",
+      "measured": 0.0,
+      "severity": "info",
+      "status": "pass",
       "violations": 1
     },
     {
@@ -214,6 +230,14 @@
       "measured": null,
       "severity": "info",
       "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
+      "id": "duplicate_refdes",
+      "measured": 0.0,
+      "severity": "info",
+      "status": "pass",
       "violations": 1
     },
     {
@@ -418,6 +442,14 @@
     },
     {
       "confidence": "high",
+      "id": "polarized_orientation_consistency",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
       "id": "power_feed_robustness",
       "measured": null,
       "severity": "info",
@@ -427,6 +459,14 @@
     {
       "confidence": "high",
       "id": "power_ground_trace_width",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
+      "id": "rail_name_aliasing",
       "measured": null,
       "severity": "info",
       "status": "not_applicable",
@@ -539,6 +579,14 @@
     {
       "confidence": "heuristic",
       "id": "tab_routing_mousebites",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
+      "id": "tall_part_edge_clearance",
       "measured": null,
       "severity": "info",
       "status": "not_applicable",

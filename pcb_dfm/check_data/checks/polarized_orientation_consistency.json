@@ -1,0 +1,34 @@
+{
+  "id": "polarized_orientation_consistency",
+  "category_id": "design_advisory",
+  "name": "Polarized part orientation outlier",
+  "description": "Design-review check: within a group of identical polarized parts, an odd one out at a different angle is likely mis-placed.",
+  "what_it_measures": "Count of polarized components whose placement angle is a minority within their same-footprint group (>= 4 parts, strong majority).",
+  "metric": {
+    "kind": "count",
+    "units": "count",
+    "preferred_direction": "minimize",
+    "target": {
+      "max": 0.0
+    },
+    "limits": {
+      "max": 0.0
+    },
+    "scale_min": 0.0,
+    "scale_max": 8.0
+  },
+  "severity_default": "info",
+  "applies_to": [
+    "component"
+  ],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 0.6
+  },
+  "params": {
+    "min_group": 4,
+    "majority_frac": 0.75
+  }
+}

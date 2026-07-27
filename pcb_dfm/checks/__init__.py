@@ -72,9 +72,11 @@ def _ensure_impls_loaded() -> None:
         impl_courtyard_overlap,  # noqa: F401
         impl_crosstalk_estimate,  # noqa: F401
         impl_crystal_load_caps,  # noqa: F401
+        impl_crystal_proximity,  # noqa: F401
         impl_debug_port_test_access,  # noqa: F401
         impl_decoupling_adequacy,  # noqa: F401
         impl_decoupling_proximity,  # noqa: F401
+        impl_decoupling_same_side,  # noqa: F401
         impl_dielectric_thickness_uniformity,  # noqa: F401
         impl_diff_pair_skew,  # noqa: F401
         impl_diff_pair_spacing,  # noqa: F401
@@ -82,6 +84,7 @@ def _ensure_impls_loaded() -> None:
         impl_drill_aspect_ratio,  # noqa: F401
         impl_drill_to_drill_spacing,  # noqa: F401
         impl_drill_wander_budget,  # noqa: F401
+        impl_duplicate_refdes,  # noqa: F401
         impl_etch_compensation_margin,  # noqa: F401
         impl_fiducial_coverage,  # noqa: F401
         impl_fillet_radius_milling,  # noqa: F401
@@ -107,8 +110,10 @@ def _ensure_impls_loaded() -> None:
         impl_plane_fragmentation,  # noqa: F401
         impl_plating_uniformity,  # noqa: F401
         impl_polarity_marking_consistency,  # noqa: F401
+        impl_polarized_orientation_consistency,  # noqa: F401
         impl_power_feed_robustness,  # noqa: F401
         impl_power_ground_trace_width,  # noqa: F401
+        impl_rail_name_aliasing,  # noqa: F401
         impl_reference_designator_coverage,  # noqa: F401
         impl_reset_pullup_presence,  # noqa: F401
         impl_return_path_interruptions,  # noqa: F401
@@ -123,6 +128,7 @@ def _ensure_impls_loaded() -> None:
         impl_stackup_symmetry,  # noqa: F401
         impl_stencil_aperture_ratio,  # noqa: F401
         impl_tab_routing_mousebites,  # noqa: F401
+        impl_tall_part_edge_clearance,  # noqa: F401
         impl_teardrop_presence,  # noqa: F401
         impl_test_point_coverage,  # noqa: F401
         impl_thermal_relief_spoke_width,  # noqa: F401

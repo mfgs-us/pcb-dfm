@@ -1,0 +1,33 @@
+{
+  "id": "decoupling_same_side",
+  "category_id": "design_advisory",
+  "name": "Decoupling cap same side as IC",
+  "description": "Design-review check: a bypass cap on the opposite board side from and laterally far from the IC it serves has a long, inductive loop.",
+  "what_it_measures": "Count of decoupling caps that are opposite-side and > threshold laterally from their nearest served IC.",
+  "metric": {
+    "kind": "count",
+    "units": "count",
+    "preferred_direction": "minimize",
+    "target": {
+      "max": 0.0
+    },
+    "limits": {
+      "max": 0.0
+    },
+    "scale_min": 0.0,
+    "scale_max": 8.0
+  },
+  "severity_default": "info",
+  "applies_to": [
+    "capacitor"
+  ],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 0.6
+  },
+  "params": {
+    "max_lateral_mm": 3.0
+  }
+}

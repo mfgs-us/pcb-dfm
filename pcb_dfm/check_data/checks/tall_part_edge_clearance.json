@@ -1,0 +1,34 @@
+{
+  "id": "tall_part_edge_clearance",
+  "category_id": "design_advisory",
+  "name": "Tall part edge clearance",
+  "description": "Design-review check: a tall component crowding the board edge can foul an enclosure wall or a neighbouring board.",
+  "what_it_measures": "Count of components taller than the threshold whose body is within the edge margin.",
+  "metric": {
+    "kind": "count",
+    "units": "count",
+    "preferred_direction": "minimize",
+    "target": {
+      "max": 0.0
+    },
+    "limits": {
+      "max": 0.0
+    },
+    "scale_min": 0.0,
+    "scale_max": 8.0
+  },
+  "severity_default": "info",
+  "applies_to": [
+    "component"
+  ],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 0.6
+  },
+  "params": {
+    "tall_mm": 5.0,
+    "edge_margin_mm": 2.0
+  }
+}

@@ -1,0 +1,33 @@
+{
+  "id": "crystal_proximity",
+  "category_id": "design_advisory",
+  "name": "Crystal proximity to host IC",
+  "description": "Design-review check: a crystal should sit close to its host IC's oscillator pins to keep the loop short and quiet.",
+  "what_it_measures": "Distance from each crystal to the IC that shares its oscillator net; flags those beyond the threshold.",
+  "metric": {
+    "kind": "count",
+    "units": "count",
+    "preferred_direction": "minimize",
+    "target": {
+      "max": 0.0
+    },
+    "limits": {
+      "max": 0.0
+    },
+    "scale_min": 0.0,
+    "scale_max": 8.0
+  },
+  "severity_default": "info",
+  "applies_to": [
+    "crystal"
+  ],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 0.6
+  },
+  "params": {
+    "max_distance_mm": 10.0
+  }
+}

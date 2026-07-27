@@ -1,0 +1,30 @@
+{
+  "id": "duplicate_refdes",
+  "category_id": "design_advisory",
+  "name": "Duplicate reference designator",
+  "description": "Design-review check: two placed components sharing a reference designator is an error.",
+  "what_it_measures": "Count of reference designators used by more than one placed component.",
+  "metric": {
+    "kind": "count",
+    "units": "count",
+    "preferred_direction": "minimize",
+    "target": {
+      "max": 0.0
+    },
+    "limits": {
+      "max": 0.0
+    },
+    "scale_min": 0.0,
+    "scale_max": 8.0
+  },
+  "severity_default": "info",
+  "applies_to": [
+    "component"
+  ],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 0.6
+  }
+}

@@ -1,0 +1,30 @@
+{
+  "id": "rail_name_aliasing",
+  "category_id": "design_advisory",
+  "name": "Power-rail name aliasing",
+  "description": "Design-review check: two power nets whose names collapse to the same token (e.g. +3V3 and 3V3) are probably one rail split by a naming slip.",
+  "what_it_measures": "Count of power-net name groups that normalise to the same token across distinct names.",
+  "metric": {
+    "kind": "count",
+    "units": "count",
+    "preferred_direction": "minimize",
+    "target": {
+      "max": 0.0
+    },
+    "limits": {
+      "max": 0.0
+    },
+    "scale_min": 0.0,
+    "scale_max": 8.0
+  },
+  "severity_default": "info",
+  "applies_to": [
+    "net"
+  ],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 0.6
+  }
+}

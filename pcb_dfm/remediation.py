@@ -280,6 +280,26 @@ GUIDANCE: Dict[str, Remediation] = {
     "debug_port_test_access": Remediation(
         "Bring SWD/JTAG lines to a test point or programming header.",
         "No debug access makes bring-up and field reflash impossible."),
+    # --- placement / consistency design review -----------------------------
+    "decoupling_same_side": Remediation(
+        "Place the bypass cap on the IC's side next to the pin (or directly "
+        "under it on the back), not far away on the opposite side.",
+        "A long via loop to the cap negates its decoupling."),
+    "crystal_proximity": Remediation(
+        "Move the crystal and its load caps right next to the IC's oscillator pins.",
+        "A long crystal loop picks up noise and can stop oscillation."),
+    "tall_part_edge_clearance": Remediation(
+        "Pull tall parts back from the board edge (or confirm the enclosure clears them).",
+        "A tall body at the edge fouls the case or a neighbouring board."),
+    "duplicate_refdes": Remediation(
+        "Give each placed component a unique reference designator.",
+        "Duplicate refdes breaks BOM/pick-and-place matching."),
+    "rail_name_aliasing": Remediation(
+        "Merge the aliased power nets into one name (or confirm they are truly separate rails).",
+        "A rail split by a naming slip can leave part of it unconnected."),
+    "polarized_orientation_consistency": Remediation(
+        "Check the odd-angle polarized part against its neighbours; fix a flipped placement.",
+        "A reversed polarized part fails or is destroyed at power-up."),
     "mounting_hole_keepout": Remediation(
         "Move components out of the mounting hole's screw-head / standoff keep-out.",
         "A part under the mounting hardware collides with it at assembly."),

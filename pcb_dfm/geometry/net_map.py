@@ -346,14 +346,24 @@ def _propagate_nets_through_connected_copper(
         if ra != rb:
             parent[rb] = ra
 
-    # 1) Within each layer: touching copper is one conductor.
+    # 1) Within each layer: touching copper is one conductor -- UNLESS both
+    #    polygons are directly seeded to DIFFERENT nets. Two known-different-net
+    #    copper shapes are never one conductor (either they merely render close --
+    #    adjacent connector/switch pads a few um apart -- or it is a real short,
+    #    and we must not silently merge either into one ambiguous blob). Refusing
+    #    this edge is safe: it touches only seed<->seed pairs, never unseeded
+    #    copper, so nothing is mislabelled.
     for _lyr, polys, off, index in per_layer:
         for i, poly in enumerate(polys):
+            ni = poly_net.get(id(poly))
             for pos in index.query_bbox(poly.bounds()):
                 j = cast(int, pos)
                 if j <= i:
                     continue
                 if _polygons_touch(poly, polys[j]):
+                    nj = poly_net.get(id(polys[j]))
+                    if ni is not None and nj is not None and ni != nj:
+                        continue
                     union(off + i, off + j)
 
     # 2) Across layers: a plated through-hole ties together the copper it passes

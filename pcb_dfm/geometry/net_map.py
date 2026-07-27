@@ -208,33 +208,78 @@ class NetMap:
 # Builder
 # --------------------------------------------------------------------------- #
 
-def _polygons_touch(a: Polygon, b: Polygon) -> bool:
-    """True when two copper polygons overlap or abut (i.e. are one conductor).
+_TOUCH_TOL_MM = 0.01  # boundaries within 10 um are one conductor (render-gap slack)
 
-    Boundary distance alone is NOT enough. ``_min_poly_distance`` samples
-    vertex-to-edge distances, which measures the gap between the two BOUNDARIES;
-    for polygons that genuinely overlap it still returns a positive number,
-    because neither boundary passes near the other's sampled vertices. On the
-    pcb-tools reference board that left 75% of bottom-layer polygons as isolated
-    singletons -- physically impossible for routed copper, where consecutive
-    stroke segments of a trace overlap heavily.
 
-    So test containment as well: if any vertex of either polygon lies inside the
-    other, they overlap. Same failure mode that made the first copper-spacing
-    attempt under-merge (#14).
+def _seg_seg_distance(a1: Tuple[float, float], a2: Tuple[float, float],
+                      b1: Tuple[float, float], b2: Tuple[float, float]) -> float:
+    """Minimum distance between two segments; 0.0 when they intersect."""
+    def sub(p, q): return (p[0] - q[0], p[1] - q[1])
+    def cross(p, q): return p[0] * q[1] - p[1] * q[0]
+    def dot(p, q): return p[0] * q[0] + p[1] * q[1]
+
+    r = sub(a2, a1)
+    s = sub(b2, b1)
+    denom = cross(r, s)
+    qp = sub(b1, a1)
+    if abs(denom) > 1e-12:
+        t = cross(qp, s) / denom
+        u = cross(qp, r) / denom
+        if 0.0 <= t <= 1.0 and 0.0 <= u <= 1.0:
+            return 0.0  # segments cross
+
+    def pt_seg(p, s1, s2):
+        e = sub(s2, s1)
+        length2 = dot(e, e)
+        tt = 0.0 if length2 == 0.0 else max(0.0, min(1.0, dot(sub(p, s1), e) / length2))
+        cx, cy = s1[0] + e[0] * tt, s1[1] + e[1] * tt
+        return math.hypot(p[0] - cx, p[1] - cy)
+
+    return min(pt_seg(a1, b1, b2), pt_seg(a2, b1, b2),
+               pt_seg(b1, a1, a2), pt_seg(b2, a1, a2))
+
+
+def _polygons_touch(a: Polygon, b: Polygon, tol: float = _TOUCH_TOL_MM) -> bool:
+    """True when two copper polygons are ONE conductor: their boundaries
+    intersect or come within ``tol``.
+
+    This is deliberately an EDGE test, not a vertex-in-polygon test. A ground
+    pour is a single polygon whose outline snakes around the traces it clears; a
+    trace sitting in one of those clearances has its vertices geometrically
+    *inside* the pour's outline while its copper is a clearance-width (or more)
+    away from any pour edge. The old vertex-in-polygon test read that as
+    "touching" and merged the trace into the pour's net -- collapsing a dozen
+    nets into one ambiguous blob that then had to be discarded, which is why net
+    labelling stalled far below the copper it should have reached. Two conductors
+    are joined only where their copper actually MEETS -- edges that intersect or
+    abut -- which is what this measures. It also runs markedly faster, because it
+    never point-tests against a multi-thousand-vertex pour outline.
+
+    Consequence, accepted as safe: a small polygon fully *contained* in a larger
+    one with no edge contact is not merged. On real copper that is the
+    trace-in-clearance case (correctly separated); the rare same-net
+    fully-enclosed feature is merely left unlabelled, never mislabelled.
     """
     ba, bb = a.bounds(), b.bounds()
-    if (ba.min_x > bb.max_x or bb.min_x > ba.max_x
-            or ba.min_y > bb.max_y or bb.min_y > ba.max_y):
+    if (ba.min_x > bb.max_x + tol or bb.min_x > ba.max_x + tol
+            or ba.min_y > bb.max_y + tol or bb.min_y > ba.max_y + tol):
         return False
     pa, pb = _poly_pts(a), _poly_pts(b)
-    for (x, y) in pa:
-        if _point_in_polygon(x, y, pb):
-            return True
-    for (x, y) in pb:
-        if _point_in_polygon(x, y, pa):
-            return True
-    return _min_poly_distance(a, b) <= 1e-6
+    if len(pa) < 2 or len(pb) < 2:
+        return False
+    edges_b = [(pb[i], pb[(i + 1) % len(pb)]) for i in range(len(pb))]
+    na = len(pa)
+    for i in range(na):
+        a1, a2 = pa[i], pa[(i + 1) % na]
+        axmin, axmax = min(a1[0], a2[0]) - tol, max(a1[0], a2[0]) + tol
+        aymin, aymax = min(a1[1], a2[1]) - tol, max(a1[1], a2[1]) + tol
+        for (b1, b2) in edges_b:
+            if (max(b1[0], b2[0]) < axmin or min(b1[0], b2[0]) > axmax
+                    or max(b1[1], b2[1]) < aymin or min(b1[1], b2[1]) > aymax):
+                continue
+            if _seg_seg_distance(a1, a2, b1, b2) <= tol:
+                return True
+    return False
 
 
 def _propagate_nets_through_connected_copper(

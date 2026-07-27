@@ -87,6 +87,43 @@ def test_coupled_gaps_respect_max_coupling():
     assert nm.coupled_edge_gaps("USB_DP", "USB_DN", 0.1) == []
 
 
+# ---- edge-based conductor merge (_polygons_touch) -------------------------
+def test_polygons_touch_abutting_and_overlapping():
+    from pcb_dfm.geometry.net_map import _polygons_touch
+    # Share an edge -> one conductor.
+    assert _polygons_touch(_rect(0, 0, 1, 1), _rect(1, 0, 2, 1))
+    # Overlap -> one conductor (heavily-overlapping trace strokes).
+    assert _polygons_touch(_rect(0, 0, 1, 1), _rect(0.5, 0, 1.5, 1))
+
+
+def test_polygons_touch_clearance_separated():
+    from pcb_dfm.geometry.net_map import _polygons_touch
+    # 0.2 mm apart -> different conductors.
+    assert not _polygons_touch(_rect(0, 0, 1, 1), _rect(1.2, 0, 2, 1))
+
+
+def test_polygons_touch_contained_but_far_from_edges():
+    from pcb_dfm.geometry.net_map import _polygons_touch
+    # A small trace sitting inside a big pour's OUTLINE, a clearance-width away
+    # from every pour edge -- the trace-in-clearance case. Its vertices are
+    # "inside" the pour but its copper does not meet the pour: must NOT merge.
+    pour = _rect(0, 0, 20, 20)
+    trace = _rect(9, 9, 11, 11)
+    assert not _polygons_touch(pour, trace)
+
+
+def test_pour_and_contained_trace_are_not_one_conductor():
+    """A different-net trace geographically inside a pour must not be merged into
+    it (the over-merge that collapsed net labelling). Verified at the conductor
+    level -- the union step -- which is what the edge test fixed. (Seeding a point
+    that lands in a hole-less pour's clearance is a separate limitation, tracked
+    for the fuller connectivity work.)"""
+    from pcb_dfm.geometry.net_map import _polygons_touch
+    pour = _rect(0, 0, 20, 20)
+    trace = _rect(9, 9, 11, 11)
+    assert not _polygons_touch(pour, trace)
+
+
 def test_none_without_design_data_or_geometry():
     geom, _ = _geometry()
     assert build_net_map(geom, None) is None

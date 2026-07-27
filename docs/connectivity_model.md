@@ -121,6 +121,31 @@ keyhole path, or nonzero-winding coverage) — *not* a labelling problem. The
 clear-polarity antipad case (separate LPC flashes) is already handled (§1). The
 keyhole case is the remaining, harder work; it belongs here, not under a "flood".
 
+### Pushing coverage past ~75% (KiCad) — what was tried
+Three approaches were measured against droyd (75.1% baseline):
+
+- **Denser segment seeding** (sample the routed centreline every ~0.1 mm instead
+  of 5 fixed points): +8 polys, but **~12 s per `build_net_map`** (dense
+  point-in-polygon over every candidate). Value/cost too poor — reverted. Would
+  need a point-walk-with-index rewrite to be viable.
+- **Seed from KiCad filled zones** (each zone's `filled_polygon` labels the copper
+  whose centroid falls inside it): +25 polys combined, but **~15 s** (point-in-
+  polygon against ~14 k-vertex fills for every candidate). Reverted; would need a
+  rasterised-fill lookup to be viable.
+- **Label-respecting union — DONE (#53):** never merge two polygons *directly
+  seeded to different nets*. Two known-different-net shapes are never one
+  conductor (adjacent connector/switch pads a few µm apart, or a real short), and
+  the old code merged them into one ambiguous component that was then discarded.
+  This is cheap and provably safe (touches only seed↔seed pairs, never unseeded
+  copper), and *more correct* — it stops labelling e.g. `/CC1` and `GND` as the
+  same conductor. Small coverage bonus (+7 polys droyd; pcbtools already 97%).
+
+Takeaway: the residual after this is dominated by **genuinely net-less copper**
+(fiducials, thieving, floating fragments — correctly unlabelled) and a handful of
+**real conflict pairs** at connectors, whose only safe resolution is exact pad
+clearance geometry (§3-adjacent), not more seeding. ~76% on droyd is close to the
+safe ceiling for its design source.
+
 ### 3. Bridge precision (cross-layer)
 Plated-through-hole bridges currently union *every* polygon the hole point lands
 in on every layer. Restrict to the via's own net (KiCad gives it) and skip

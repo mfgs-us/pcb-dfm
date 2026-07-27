@@ -21,7 +21,6 @@ from ._geometry_guard import implausible_extent_result
 # ring check already uses for correct drill-center-to-polygon-edge geometry.
 from .impl_min_annular_ring import (
     _min_distance_to_polygon_edges,
-    _point_in_polygon,
 )
 
 _INCH_TO_MM = 25.4
@@ -158,10 +157,10 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
     Limitation (screen, not a definitive check): without a netlist this cannot
     distinguish same-net copper from different-net copper. A via legitimately
     connected to a plane/pour (its own net, e.g. a thermal or direct connect)
-    looks identical to a via that shorts to foreign copper. Antipads are also
-    not modeled as polygon holes, so a via inside a plane's outline is reported
-    as zero clearance even when a proper antipad exists. Treat results as a
-    screen to be reviewed, not a hard pass/fail.
+    looks identical to a via that shorts to foreign copper. Treat results as a
+    screen to be reviewed, not a hard pass/fail. (Clear-polarity antipads ARE now
+    modelled as polygon holes, so a via properly cleared by an antipad reads its
+    real clearance to the antipad wall, not a spurious 0 mm.)
 
     Metric:
       measured_value: min_via_to_copper_clearance_mm
@@ -418,9 +417,19 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
                         continue
 
                     # True geometry: is the via barrel center inside this copper
-                    # polygon, and how far is the nearest polygon edge?
-                    inside = _point_in_polygon(cx, cy, poly.vertices)
+                    # polygon, and how far is the nearest polygon edge? contains_point
+                    # is hole-aware, so a via sitting in a plane's antipad reads as
+                    # OUTSIDE the plane copper (the void it physically is) rather than
+                    # buried in it -- no more false 0 mm clearance to a plane.
+                    inside = poly.contains_point(cx, cy)
                     edge_to_center = _min_distance_to_polygon_edges(cx, cy, poly.vertices)
+                    # The nearest copper boundary can be a HOLE edge (a plane
+                    # antipad), not just the exterior -- so a via cleared by an
+                    # antipad is measured to the antipad wall, its real clearance.
+                    for _hole in getattr(poly, "holes", ()):
+                        hd = _min_distance_to_polygon_edges(cx, cy, _hole)
+                        if hd < edge_to_center:
+                            edge_to_center = hd
                     if not math.isfinite(edge_to_center):
                         continue
 

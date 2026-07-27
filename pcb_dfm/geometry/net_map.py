@@ -356,7 +356,8 @@ def _propagate_nets_through_connected_copper(
         for _lyr, polys, off, index in per_layer:
             for pos in index.query_bbox(pb):
                 k = cast(int, pos)
-                if _point_in_polygon(bx, by, _poly_pts(polys[k])):
+                # A via in a plane antipad lands in the void, not the plane copper.
+                if polys[k].contains_point(bx, by):
                     landed.append(off + k)
         for other in landed[1:]:
             union(landed[0], other)
@@ -434,7 +435,9 @@ def build_net_map(geometry: BoardGeometry,
                 index, polys = _index_of(lyr)
                 for pos in index.query_bbox(pb):
                     poly = polys[cast(int, pos)]
-                    if _point_in_polygon(pt.x_mm, pt.y_mm, _poly_pts(poly)):
+                    # contains_point is hole-aware: a point in a plane antipad is
+                    # in the void, not the copper, so it does not seed the plane.
+                    if poly.contains_point(pt.x_mm, pt.y_mm):
                         pid = id(poly)
                         bucket = votes.setdefault(pid, {})
                         bucket[name] = bucket.get(name, 0) + 1

@@ -433,11 +433,17 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
                     if not math.isfinite(edge_to_center):
                         continue
 
+                    # ``ambiguous`` marks a 0.0 mm reading we cannot trust for a
+                    # hard fail: a via "inside" a large plane/pour whose antipad is
+                    # woven into a self-winding keyhole outline that even-odd
+                    # point-in-polygon does not cleanly exclude. There the via may
+                    # be perfectly cleared by a real antipad -- we just can't see
+                    # it -- so it stays advisory, never a net-aware hard fail.
+                    ambiguous = False
                     if inside:
                         # Via centre sits inside this polygon: either its own pad
                         # (fine -- the annular-ring check measures that) or a
-                        # plane/pour with no antipad around the barrel (a real
-                        # clearance defect).
+                        # plane/pour with no antipad around the barrel.
                         #
                         # Size is the reliable discriminator: a via's own pad is a
                         # small feature, a pour is not. A radius test alone is
@@ -452,6 +458,7 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
                         if own_pad:
                             continue
                         clearance = 0.0
+                        ambiguous = True
                     else:
                         # Via outside the polygon: clearance from barrel edge to
                         # the nearest polygon edge.
@@ -469,19 +476,22 @@ def run_via_to_copper_clearance(ctx: CheckContext) -> CheckResult:
                             # far more common than an actual short (#19-era
                             # reasoning), so a small overlapped feature is treated
                             # as the via's own net. A large pour is not: that is
-                            # the genuine (antipad / same-net) ambiguity, left to
-                            # report 0.0.
+                            # the genuine (antipad / same-net) ambiguity.
                             poly_extent = max(b.max_x - b.min_x, b.max_y - b.min_y)
                             if poly_extent <= own_pad_max_extent_mm:
                                 continue
                             clearance = 0.0
+                            ambiguous = True
 
                     # Marker at the via barrel center (clearance is measured to the
                     # nearest copper polygon edge from here).
                     marker_x = cx
                     marker_y = cy
 
-                    if is_foreign and (min_clear_foreign is None or clearance < min_clear_foreign):
+                    # Only a REAL (non-ambiguous) foreign clearance can hard-fail;
+                    # a plane-interior 0.0 with an unmodelled antipad stays advisory.
+                    if (is_foreign and not ambiguous
+                            and (min_clear_foreign is None or clearance < min_clear_foreign)):
                         min_clear_foreign = clearance
 
                     if min_clear is None or clearance < min_clear:

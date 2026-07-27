@@ -250,6 +250,36 @@ GUIDANCE: Dict[str, Remediation] = {
         "Add at least one bypass capacitor (typ. 0.1 µF) from each IC supply rail "
         "to ground, close to the pin.",
         "An undecoupled supply rail → noise, brown-out and marginal behaviour."),
+    # --- electrical design review ------------------------------------------
+    "floating_or_single_pin_net": Remediation(
+        "Finish or delete the net: connect its second endpoint, or mark it a "
+        "deliberate no-connect.",
+        "A single-pin net is a stub or forgotten connection."),
+    "unpowered_ic": Remediation(
+        "Tie every IC to its ground (and power) rail, including the exposed pad.",
+        "An IC with no ground/power connection will not function."),
+    "crystal_load_caps": Remediation(
+        "Add the load capacitor to ground on each oscillator pin (value per the "
+        "crystal's CL spec).",
+        "A crystal without load caps won't start or will run off-frequency."),
+    "led_series_resistor": Remediation(
+        "Add a series current-limit resistor (or use a constant-current driver).",
+        "An LED across a rail draws unlimited current → burnout."),
+    "i2c_pullup_presence": Remediation(
+        "Add a pull-up resistor from each I2C SDA/SCL line to its bus rail.",
+        "Open-drain I2C won't idle high without pull-ups → dead bus."),
+    "reset_pullup_presence": Remediation(
+        "Give the reset net a defined idle level (pull-up, RC, or a supervisor).",
+        "A floating reset causes spurious or missed resets."),
+    "bulk_capacitance_present": Remediation(
+        "Add a bulk capacitor (≥ 1 µF, typ. 10 µF) from the supply to ground.",
+        "No bulk energy storage → rail sags on load transients."),
+    "differential_pair_completeness": Remediation(
+        "Route (or add) the missing member of the differential pair.",
+        "A half-routed pair breaks the differential signal."),
+    "debug_port_test_access": Remediation(
+        "Bring SWD/JTAG lines to a test point or programming header.",
+        "No debug access makes bring-up and field reflash impossible."),
     "mounting_hole_keepout": Remediation(
         "Move components out of the mounting hole's screw-head / standoff keep-out.",
         "A part under the mounting hardware collides with it at assembly."),

@@ -1,0 +1,33 @@
+{
+  "id": "unpowered_ic",
+  "category_id": "design_advisory",
+  "name": "IC ground/power connection",
+  "description": "Design-review check: an IC with no pin on any ground net (or no pin on any power net) is almost certainly a wiring omission.",
+  "what_it_measures": "Count of ICs whose resolved pins reach no ground net (or no power net).",
+  "metric": {
+    "kind": "count",
+    "units": "count",
+    "preferred_direction": "minimize",
+    "target": {
+      "max": 0.0
+    },
+    "limits": {
+      "max": 0.0
+    },
+    "scale_min": 0.0,
+    "scale_max": 8.0
+  },
+  "severity_default": "info",
+  "applies_to": [
+    "net"
+  ],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 0.6
+  },
+  "params": {
+    "min_pins": 8
+  }
+}

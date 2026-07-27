@@ -42,6 +42,14 @@
     },
     {
       "confidence": "high",
+      "id": "bulk_capacitance_present",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
       "id": "castellated_edge_plating",
       "measured": null,
       "severity": "info",
@@ -122,6 +130,22 @@
     },
     {
       "confidence": "high",
+      "id": "crystal_load_caps",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
+      "id": "debug_port_test_access",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
       "id": "decoupling_adequacy",
       "measured": null,
       "severity": "info",
@@ -155,6 +179,14 @@
     {
       "confidence": "high",
       "id": "diff_pair_spacing",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
+      "id": "differential_pair_completeness",
       "measured": null,
       "severity": "info",
       "status": "not_applicable",
@@ -225,8 +257,24 @@
       "violations": 1
     },
     {
+      "confidence": "high",
+      "id": "floating_or_single_pin_net",
+      "measured": 0.0,
+      "severity": "info",
+      "status": "pass",
+      "violations": 1
+    },
+    {
       "confidence": "heuristic",
       "id": "highspeed_stub_length",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
+      "id": "i2c_pullup_presence",
       "measured": null,
       "severity": "info",
       "status": "not_applicable",
@@ -247,6 +295,14 @@
       "severity": "info",
       "status": "pass",
       "violations": 0
+    },
+    {
+      "confidence": "high",
+      "id": "led_series_resistor",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
     },
     {
       "confidence": "heuristic",
@@ -386,6 +442,14 @@
     },
     {
       "confidence": "high",
+      "id": "reset_pullup_presence",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
       "id": "return_path_interruptions",
       "measured": null,
       "severity": "info",
@@ -515,6 +579,14 @@
     {
       "confidence": "high",
       "id": "unconnected_pads",
+      "measured": 0.0,
+      "severity": "info",
+      "status": "pass",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
+      "id": "unpowered_ic",
       "measured": 0.0,
       "severity": "info",
       "status": "pass",

@@ -1,0 +1,30 @@
+{
+  "id": "debug_port_test_access",
+  "category_id": "design_advisory",
+  "name": "Debug port test access",
+  "description": "Design-review check: debug/programming nets (SWD/JTAG/UART/reset) should have a test point or header for bring-up.",
+  "what_it_measures": "Count of debug nets (by name) present but with no test point or connector/header access.",
+  "metric": {
+    "kind": "count",
+    "units": "count",
+    "preferred_direction": "minimize",
+    "target": {
+      "max": 0.0
+    },
+    "limits": {
+      "max": 0.0
+    },
+    "scale_min": 0.0,
+    "scale_max": 8.0
+  },
+  "severity_default": "info",
+  "applies_to": [
+    "net"
+  ],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 0.6
+  }
+}

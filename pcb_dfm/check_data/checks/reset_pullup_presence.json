@@ -1,0 +1,30 @@
+{
+  "id": "reset_pullup_presence",
+  "category_id": "design_advisory",
+  "name": "Reset bias presence",
+  "description": "Design-review check: a reset net with no pull-up (or supervisor/RC) can float to an undefined level.",
+  "what_it_measures": "Count of reset nets (by name) with no pull-up resistor to a power rail and no RC capacitor.",
+  "metric": {
+    "kind": "count",
+    "units": "count",
+    "preferred_direction": "minimize",
+    "target": {
+      "max": 0.0
+    },
+    "limits": {
+      "max": 0.0
+    },
+    "scale_min": 0.0,
+    "scale_max": 8.0
+  },
+  "severity_default": "info",
+  "applies_to": [
+    "net"
+  ],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 0.6
+  }
+}

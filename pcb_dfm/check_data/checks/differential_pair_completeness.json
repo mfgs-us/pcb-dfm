@@ -1,0 +1,30 @@
+{
+  "id": "differential_pair_completeness",
+  "category_id": "design_advisory",
+  "name": "Differential pair completeness",
+  "description": "Design-review check: a declared differential pair with only one member present or routed is an error.",
+  "what_it_measures": "Count of declared differential pairs missing a member net or its routed geometry.",
+  "metric": {
+    "kind": "count",
+    "units": "count",
+    "preferred_direction": "minimize",
+    "target": {
+      "max": 0.0
+    },
+    "limits": {
+      "max": 0.0
+    },
+    "scale_min": 0.0,
+    "scale_max": 8.0
+  },
+  "severity_default": "info",
+  "applies_to": [
+    "net"
+  ],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 0.6
+  }
+}

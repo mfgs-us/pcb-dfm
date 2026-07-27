@@ -1,0 +1,30 @@
+{
+  "id": "led_series_resistor",
+  "category_id": "design_advisory",
+  "name": "LED series resistor",
+  "description": "Design-review check: an indicator LED wired directly across a rail with no series resistor will over-current.",
+  "what_it_measures": "Count of LEDs with no series resistor on either pin that sit directly between a power and a ground rail.",
+  "metric": {
+    "kind": "count",
+    "units": "count",
+    "preferred_direction": "minimize",
+    "target": {
+      "max": 0.0
+    },
+    "limits": {
+      "max": 0.0
+    },
+    "scale_min": 0.0,
+    "scale_max": 8.0
+  },
+  "severity_default": "info",
+  "applies_to": [
+    "net"
+  ],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 0.6
+  }
+}

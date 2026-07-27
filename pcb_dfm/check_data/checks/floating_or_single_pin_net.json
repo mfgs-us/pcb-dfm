@@ -1,0 +1,30 @@
+{
+  "id": "floating_or_single_pin_net",
+  "category_id": "design_advisory",
+  "name": "Floating / single-pin net",
+  "description": "Design-review check: a net with only one connected pin is almost always a stub, typo or forgotten connection.",
+  "what_it_measures": "Count of nets with exactly one connected component pin (excluding no-connect nets and mounting/fiducial/test-only nets).",
+  "metric": {
+    "kind": "count",
+    "units": "count",
+    "preferred_direction": "minimize",
+    "target": {
+      "max": 0.0
+    },
+    "limits": {
+      "max": 0.0
+    },
+    "scale_min": 0.0,
+    "scale_max": 8.0
+  },
+  "severity_default": "info",
+  "applies_to": [
+    "net"
+  ],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 0.6
+  }
+}

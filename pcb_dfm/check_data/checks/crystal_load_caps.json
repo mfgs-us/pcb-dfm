@@ -1,0 +1,30 @@
+{
+  "id": "crystal_load_caps",
+  "category_id": "design_advisory",
+  "name": "Crystal load capacitors",
+  "description": "Design-review check: a two-pin crystal needs a load capacitor to ground on each oscillator pin.",
+  "what_it_measures": "Count of two-pin crystals whose oscillator net(s) have no capacitor to ground.",
+  "metric": {
+    "kind": "count",
+    "units": "count",
+    "preferred_direction": "minimize",
+    "target": {
+      "max": 0.0
+    },
+    "limits": {
+      "max": 0.0
+    },
+    "scale_min": 0.0,
+    "scale_max": 8.0
+  },
+  "severity_default": "info",
+  "applies_to": [
+    "net"
+  ],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 0.6
+  }
+}

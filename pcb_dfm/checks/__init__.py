@@ -60,6 +60,7 @@ def _ensure_impls_loaded() -> None:
         impl_aperture_definition_errors,  # noqa: F401
         impl_backdrill_stub_length,  # noqa: F401
         impl_board_outline_continuity,  # noqa: F401
+        impl_bulk_capacitance_present,  # noqa: F401
         impl_castellated_edge_plating,  # noqa: F401
         impl_component_edge_clearance,  # noqa: F401
         impl_component_to_component_spacing,  # noqa: F401
@@ -70,11 +71,14 @@ def _ensure_impls_loaded() -> None:
         impl_copper_to_edge_distance,  # noqa: F401
         impl_courtyard_overlap,  # noqa: F401
         impl_crosstalk_estimate,  # noqa: F401
+        impl_crystal_load_caps,  # noqa: F401
+        impl_debug_port_test_access,  # noqa: F401
         impl_decoupling_adequacy,  # noqa: F401
         impl_decoupling_proximity,  # noqa: F401
         impl_dielectric_thickness_uniformity,  # noqa: F401
         impl_diff_pair_skew,  # noqa: F401
         impl_diff_pair_spacing,  # noqa: F401
+        impl_differential_pair_completeness,  # noqa: F401
         impl_drill_aspect_ratio,  # noqa: F401
         impl_drill_to_drill_spacing,  # noqa: F401
         impl_drill_wander_budget,  # noqa: F401
@@ -83,9 +87,12 @@ def _ensure_impls_loaded() -> None:
         impl_fillet_radius_milling,  # noqa: F401
         impl_fine_pitch_fiducials,  # noqa: F401
         impl_floating_copper,  # noqa: F401
+        impl_floating_or_single_pin_net,  # noqa: F401
         impl_highspeed_stub_length,  # noqa: F401
+        impl_i2c_pullup_presence,  # noqa: F401
         impl_impedance_control,  # noqa: F401
         impl_layer_registration_margin,  # noqa: F401
+        impl_led_series_resistor,  # noqa: F401
         impl_mask_to_trace_clearance,  # noqa: F401
         impl_microvia_geometry,  # noqa: F401
         impl_min_annular_ring,  # noqa: F401
@@ -103,6 +110,7 @@ def _ensure_impls_loaded() -> None:
         impl_power_feed_robustness,  # noqa: F401
         impl_power_ground_trace_width,  # noqa: F401
         impl_reference_designator_coverage,  # noqa: F401
+        impl_reset_pullup_presence,  # noqa: F401
         impl_return_path_interruptions,  # noqa: F401
         impl_silkscreen_clearance,  # noqa: F401
         impl_silkscreen_min_width,  # noqa: F401
@@ -120,6 +128,7 @@ def _ensure_impls_loaded() -> None:
         impl_thermal_relief_spoke_width,  # noqa: F401
         impl_tombstoning_risk,  # noqa: F401
         impl_unconnected_pads,  # noqa: F401
+        impl_unpowered_ic,  # noqa: F401
         impl_unsupported_hole_types,  # noqa: F401
         impl_via_in_pad_thermal_balance,  # noqa: F401
         impl_via_tenting,  # noqa: F401

@@ -1,0 +1,30 @@
+{
+  "id": "i2c_pullup_presence",
+  "category_id": "design_advisory",
+  "name": "I2C pull-up presence",
+  "description": "Design-review check: I2C SDA/SCL nets are open-drain and need a pull-up resistor to a rail.",
+  "what_it_measures": "Count of I2C SDA/SCL nets (by name) with no pull-up resistor to a power rail.",
+  "metric": {
+    "kind": "count",
+    "units": "count",
+    "preferred_direction": "minimize",
+    "target": {
+      "max": 0.0
+    },
+    "limits": {
+      "max": 0.0
+    },
+    "scale_min": 0.0,
+    "scale_max": 8.0
+  },
+  "severity_default": "info",
+  "applies_to": [
+    "net"
+  ],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 0.6
+  }
+}

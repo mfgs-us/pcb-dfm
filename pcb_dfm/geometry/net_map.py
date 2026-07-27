@@ -147,11 +147,19 @@ class NetMap:
     """Bidirectional net <-> copper-polygon association with proximity queries."""
 
     def __init__(self, net_to_polys: Dict[str, List[NetPolygon]],
-                 poly_net: Dict[int, str]) -> None:
+                 poly_net: Dict[int, str], total_copper: int = 0) -> None:
         self._net_to_polys = net_to_polys
         self._poly_net = poly_net
+        self._total_copper = total_copper
         # Lazily-built per-(net, layer) proximity indices.
         self._indices: Dict[Tuple[str, str], Tuple[PolygonIndex, List[Polygon]]] = {}
+
+    def coverage(self) -> float:
+        """Fraction of copper polygons that carry a net label (0..1). The higher
+        it is, the more net-aware checks can be definitive rather than advisory.
+        NOTE: only meaningful after the netlist is registered to the board -- an
+        un-registered netlist scores near zero because its points miss the copper."""
+        return (self._total_copper and len(self._poly_net) / self._total_copper) or 0.0
 
     # -- lookups ----------------------------------------------------------- #
     def nets(self) -> List[str]:
@@ -484,7 +492,10 @@ def build_net_map(geometry: BoardGeometry,
     for pid, net_name in poly_net.items():
         net_to_polys.setdefault(net_name, []).append(poly_ref[pid])
 
-    return NetMap(net_to_polys, poly_net)
+    total_copper = sum(
+        1 for lyr in copper_layers for p in lyr.polygons if len(p.vertices) >= 3
+    )
+    return NetMap(net_to_polys, poly_net, total_copper=total_copper)
 
 
 def _plated_vias_from_ingest(ctx) -> Optional[List[Tuple[float, float]]]:

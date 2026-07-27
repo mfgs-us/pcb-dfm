@@ -10,12 +10,24 @@ a net. The more copper it labels, the more of those checks can be *definitive*
 
 ## Where it stands
 
-Coverage measured as `tagged_polygon_count / total copper polygons`:
+Coverage measured as `tagged_polygon_count / total copper polygons`, **in the
+real pipeline (netlist registered to the board first)**:
 
 | Board | Design source | Seeding | Coverage |
 |---|---|---|---|
 | droyd | KiCad | routed segments + points | **75%** |
-| pcbtools | IPC-D-356 | access points only | **3%** |
+| pcbtools | IPC-D-356 | access points only | **97%** |
+
+> ⚠️ A long investigation chased a "pcbtools 3%" residual that **did not exist**.
+> The 3% came from calling `build_net_map` directly in diagnostic scripts, which
+> skips the engine's `_auto_register_netlist` step. An IPC-D-356 netlist states
+> coordinates in the CAD tool's frame (here offset (0.76, 7.78) mm from the
+> Gerber origin); un-registered, its points land off-copper or in the wrong
+> polygons, which *looks* like a catastrophic over-merge. Registered — as every
+> real check run does — coverage is **97%**. Always measure through the engine
+> path, or apply `register_to_board` first. §2 below documents the (real, but
+> now moot) labelling analysis; §4's coverage guard exists to catch this class of
+> regression.
 
 The model is a union-find: seed polygons from the netlist (points that fall in a
 polygon, segments that hit one), union copper that is **one conductor**, then
@@ -97,16 +109,11 @@ the reason is worth recording so it isn't re-attempted.
 - The only thing that moved coverage was **guessing** (nearest-seed / Voronoi),
   which mislabels boundary copper → false shorts/opens. Off the table.
 
-Root cause of the points-only residual (diagnosed on pcbtools): the ground pour is
-a self-winding **keyhole region** whose even-odd point-in-polygon and edge-touch
-do **not** cleanly exclude its clearances. So (a) other nets' pad points fall
-"inside" the pour and seed it (a single polygon seeded by up to 5 nets), and
-(b) the pour's winding boundary passes 2–5 µm from clearance-embedded pads, under
-the 10 µm merge tolerance. Both make the pour a bridge that transitively connects
-a dozen nets into one ambiguous component — which is then correctly discarded.
-Seeding each point into only the *smallest* containing polygon cuts the leak
-(multi-net-seeded pours 17→4 on pcbtools) but does not raise coverage, because the
-pour still edge-touches everything.
+The whole "points-only residual" turned out to be a **measurement error**: the
+diagnostics ran `build_net_map` without registration, so the netlist sat ~7.8 mm
+off the copper and its points landed in the wrong polygons — which mimics an
+over-merge. Registered (the real pipeline), pcbtools is **97%**. There is no
+points-only residual to fix, and no net-aware flood is warranted.
 
 **Conclusion:** the residual is a computational-geometry problem — correctly
 filling self-winding Gerber regions (true exterior + interior rings from one
@@ -119,10 +126,11 @@ Plated-through-hole bridges currently union *every* polygon the hole point lands
 in on every layer. Restrict to the via's own net (KiCad gives it) and skip
 polygons the point only lands in because of a missing antipad hole (fixed by #1).
 
-### 4. Make coverage a tracked metric
-Add `NetMap.coverage()` and assert a per-board floor in the golden corpus so a
-regression in labelling is caught, and so the checks that *upgrade* to definitive
-(once coverage is high enough) can gate on it explicitly.
+### 4. Make coverage a tracked metric — DONE (#52)
+`NetMap.coverage()` exists, and `tests/test_net_coverage.py` pins a floor
+(pcbtools > 90% registered, < 10% un-registered). This is the guard that would
+have caught the un-registered-measurement mistake above immediately. A check can
+also gate on `coverage()` before upgrading itself from advisory to definitive.
 
 ### 5. Performance
 The edge test is O(|edges_a|·|edges_b|) per candidate pair with a per-edge bbox

@@ -109,6 +109,7 @@ def _ensure_impls_loaded() -> None:
         impl_solder_mask_web,  # noqa: F401
         impl_solder_paste_area_coverage,  # noqa: F401
         impl_stackup_symmetry,  # noqa: F401
+        impl_stencil_aperture_ratio,  # noqa: F401
         impl_tab_routing_mousebites,  # noqa: F401
         impl_teardrop_presence,  # noqa: F401
         impl_test_point_coverage,  # noqa: F401

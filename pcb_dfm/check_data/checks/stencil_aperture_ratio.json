@@ -1,0 +1,30 @@
+{
+  "id": "stencil_aperture_ratio",
+  "category_id": "assembly",
+  "name": "Stencil aperture ratio (IPC-7525)",
+  "description": "Check that each solder-paste stencil aperture will release paste cleanly, per the IPC-7525 area-ratio and aspect-ratio rules.",
+  "what_it_measures": "Area ratio (aperture area / aperture wall area = area / (perimeter x foil thickness)) and aspect ratio (min opening width / foil thickness) for each paste aperture.",
+  "metric": {
+    "kind": "dimensionless",
+    "units": ":1",
+    "preferred_direction": "maximize",
+    "target": { "min": 0.66 },
+    "limits": { "min": 0.5 },
+    "scale_min": 0.3,
+    "scale_max": 1.0
+  },
+  "severity_default": "warning",
+  "applies_to": ["pad_smt", "mechanical"],
+  "params": {
+    "stencil_thickness_mm": 0.12,
+    "min_area_ratio": 0.66,
+    "fail_area_ratio": 0.5,
+    "min_aspect_ratio": 1.5
+  },
+  "scoring": {
+    "enabled": true,
+    "strategy": "linear",
+    "pass_threshold": 80,
+    "weight": 0.9
+  }
+}

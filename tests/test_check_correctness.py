@@ -251,6 +251,60 @@ def test_solder_paste_area_coverage_ratio(tmp_path):
     assert result.status == "pass"
 
 
+# ==========================================================================
+# 8b. stencil_aperture_ratio -- IPC-7525 paste-release area ratio.
+#     For a square aperture side s over a foil of thickness t, the area ratio
+#     is s^2 / (4 s t) = s / (4 t); with the default t = 0.12 mm this is s/0.48.
+# ==========================================================================
+def test_stencil_aperture_ratio_pass_large_aperture(tmp_path):
+    # 0.6 mm square -> AR = 0.6 / 0.48 = 1.25, well above the 0.66 floor.
+    files = {"board.gtp": _copper_rect_pad(cx_mm=5.0, cy_mm=5.0, w_mm=0.6, h_mm=0.6)}
+    z = make_gerber_zip(tmp_path, files)
+    result = run_single_check(z, load_check_definition("stencil_aperture_ratio"))
+    assert result.metric.measured_value == pytest.approx(1.25, abs=0.03)
+    assert result.status == "pass"
+
+
+def test_stencil_aperture_ratio_warns_marginal_aperture(tmp_path):
+    # 0.28 mm square -> AR = 0.28 / 0.48 = 0.583, between the 0.5 and 0.66 lines.
+    files = {"board.gtp": _copper_rect_pad(cx_mm=5.0, cy_mm=5.0, w_mm=0.28, h_mm=0.28)}
+    z = make_gerber_zip(tmp_path, files)
+    result = run_single_check(z, load_check_definition("stencil_aperture_ratio"))
+    assert result.metric.measured_value == pytest.approx(0.583, abs=0.03)
+    assert result.status == "warning"
+
+
+def test_stencil_aperture_ratio_assumed_foil_caps_at_warning(tmp_path):
+    # 0.2 mm square -> AR = 0.417 (< 0.5). With no stencil_thickness_mm supplied
+    # the foil is assumed, so an un-releasable aperture is capped at a warning
+    # rather than hard-failing on an assumption.
+    files = {"board.gtp": _copper_rect_pad(cx_mm=5.0, cy_mm=5.0, w_mm=0.2, h_mm=0.2)}
+    z = make_gerber_zip(tmp_path, files)
+    result = run_single_check(z, load_check_definition("stencil_aperture_ratio"))
+    assert result.metric.measured_value == pytest.approx(0.417, abs=0.03)
+    assert result.status == "warning"
+
+
+def test_stencil_aperture_ratio_authoritative_thickness_fails(tmp_path):
+    # Same 0.2 mm aperture, but now the design-data states the foil thickness ->
+    # authoritative -> AR 0.417 (< 0.5) hard-fails.
+    from pcb_dfm.ingest.design_model import DesignData
+    files = {"board.gtp": _copper_rect_pad(cx_mm=5.0, cy_mm=5.0, w_mm=0.2, h_mm=0.2)}
+    z = make_gerber_zip(tmp_path, files)
+    dd = DesignData(source="test", stencil_thickness_mm=0.12)
+    result = run_single_check(
+        z, load_check_definition("stencil_aperture_ratio"), design_data=dd)
+    assert result.metric.measured_value == pytest.approx(0.417, abs=0.03)
+    assert result.status == "fail"
+
+
+def test_stencil_aperture_ratio_not_applicable_without_paste(tmp_path):
+    files = {"board.gtl": _copper_rect_pad(cx_mm=5.0, cy_mm=5.0, w_mm=1.0, h_mm=1.0)}
+    z = make_gerber_zip(tmp_path, files)
+    result = run_single_check(z, load_check_definition("stencil_aperture_ratio"))
+    assert result.status == "not_applicable"
+
+
 def test_solder_mask_web_catches_thin_web_between_large_openings(tmp_path):
     """Regression: the web pairing must be size-independent.
 

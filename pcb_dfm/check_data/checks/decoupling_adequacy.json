@@ -1,0 +1,27 @@
+{
+  "id": "decoupling_adequacy",
+  "category_id": "design_advisory",
+  "name": "Decoupling adequacy per rail",
+  "description": "Design-review check: every power rail that feeds an IC supply pin should have at least one bypass capacitor to ground. A rail with none is a classic omission.",
+  "what_it_measures": "For each power net that reaches an IC pad, whether any capacitor bridges that rail to ground, and the bypass-cap-to-supply-pin ratio.",
+  "metric": {
+    "kind": "count",
+    "units": "count",
+    "preferred_direction": "minimize",
+    "target": { "max": 0.0 },
+    "limits": { "max": 0.0 },
+    "scale_min": 0.0,
+    "scale_max": 8.0
+  },
+  "severity_default": "info",
+  "applies_to": ["ic", "capacitor"],
+  "params": {
+    "light_ratio": 0.5
+  },
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 0.7
+  }
+}

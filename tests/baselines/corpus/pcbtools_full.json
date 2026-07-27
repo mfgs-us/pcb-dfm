@@ -122,6 +122,14 @@
     },
     {
       "confidence": "high",
+      "id": "decoupling_adequacy",
+      "measured": 0.0,
+      "severity": "info",
+      "status": "pass",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
       "id": "decoupling_proximity",
       "measured": 6.4529,
       "severity": "warning",

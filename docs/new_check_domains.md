@@ -2,16 +2,20 @@
 
 Seven domains beyond the current catalogue. Ordered by value/effort.
 
-**Status (2026-07):** the three geometry-buildable domains are shipped and
-validated on the droyd board + golden corpus with zero false positives —
+**Status (2026-07):** four domains shipped, validated with zero false positives —
 §1 `stencil_aperture_ratio` (#56), §2 `castellated_edge_plating` (#57),
-§3 `copper_balance_plating` (#58). The remaining domains (§4 IPC-2152 current,
-§5 flex, §6 HDI/microvia) are **paused**: each needs a design-data input no
-current source carries (per-net current, bend regions, microvia spans), so a
-check built now would be `not_applicable` on every real board and validatable
-only synthetically. They stay spec'd here and will be built when a real
-HDI/flex/current-annotated board is available to validate against — the same
-"validate on real geometry before merge" bar the first three met.
+§3 `copper_balance_plating` (#58), and §6 `microvia_geometry`. §6 was validated
+against the KiCad QA boards issue22536 (a proper 0.33:1 microvia → pass) and
+issue18142 (a "micro" spanning two dielectrics at 1.70:1 → fail); those are GPL
+and not vendored, so committed tests reproduce the geometry synthetically. The
+KiCad adapter now parses microvia/​blind/​buried via type + drill (`(via micro …)`).
+
+Still **paused** — no data source exists: §4 IPC-2152 current (needs per-net
+current; no input format carries it) and §5 flex (needs bend-region *geometry*;
+the one local rigid-flex board, issue18142, has the flex layer names but no bend
+zones drawn). They stay spec'd and will be built when a current-annotated sidecar
+or a flex board with real bend geometry is available — same validate-on-real-
+geometry bar the others met.
 
 Conventions: every check is `not_applicable` without its inputs, states a metric
 with target/limit, and follows the tier rules (design-advisory never hard-fails;
@@ -80,7 +84,7 @@ heuristic `copper_thermal_area` into a real calc.
 routed width; warn/fail on deficit. **Category:** `thermal_power`. N/A without a
 current spec.
 
-## 5. Flex / rigid-flex — `flex_bend_rules`  [PAUSED — needs flex-region data + test board]
+## 5. Flex / rigid-flex — `flex_bend_rules`  [PAUSED — needs bend-zone geometry; local flex board has layer names only]
 **Why:** a whole domain we don't touch. High effort, only for flex builds.
 **Inputs:** a designated **flex/bend region** (design-data keepout kind `bend`) +
 stackup.
@@ -89,7 +93,7 @@ vias/pads inside a bend zone**; traces cross the bend perpendicular and use arcs
 not right-angles; teardrops at the rigid↔flex transition. **Category:** new
 `flex` or `mechanical_outline`. N/A without a bend region.
 
-## 6. HDI / microvia — `microvia_geometry`  [PAUSED — has a KiCad data path; needs an HDI test board]
+## 6. HDI / microvia — `microvia_geometry`  [DONE — validated on KiCad issue22536/issue18142]
 **Why:** microvias have tighter aspect and stacking rules than through-holes.
 **Inputs:** blind/buried via data (from/to layer + drill) — KiCad `(via (blind))`
 / IPC-2581.

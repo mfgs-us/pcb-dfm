@@ -281,10 +281,17 @@ def _parse_nets_and_routes(root: SNode, num_to_name: Dict[str, str]) -> Dict[str
             return
         layers_node = _first(el, "layers")
         layers = _atoms(layers_node) if layers_node else []
+        # KiCad writes the class as a bare atom right after `via`:
+        # `(via micro ...)` / `(via blind ...)`; a plain `(via ...)` is through.
+        head_atoms = _atoms(el)
+        vtype = head_atoms[0] if head_atoms and head_atoms[0] in (
+            "micro", "blind", "buried") else "through"
         _ensure(name).vias.append(Via(
             x_mm=x, y_mm=y,
             from_layer=layers[0] if layers else None,
             to_layer=layers[1] if len(layers) > 1 else None,
+            via_type=vtype,
+            drill_mm=_fatom(_first(el, "drill"), 0),
         ))
 
     def _add_zone(el: SNode) -> None:

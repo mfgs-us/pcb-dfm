@@ -112,6 +112,58 @@ def test_polygons_touch_contained_but_far_from_edges():
     assert not _polygons_touch(pour, trace)
 
 
+def test_polygons_touch_grid_path_big_polygon():
+    # A >40-edge polygon takes the edge-grid path; correctness must match.
+    import math
+
+    from pcb_dfm.geometry.net_map import _polygons_touch
+    circle = Polygon(vertices=[
+        Point2D(5 * math.cos(2 * math.pi * i / 60), 5 * math.sin(2 * math.pi * i / 60))
+        for i in range(60)])
+    touching = _rect(5.0, -0.5, 6.0, 0.5)   # left edge x=5 meets the circle at (5,0)
+    far = _rect(20, 20, 21, 21)
+    assert _polygons_touch(circle, touching)
+    assert not _polygons_touch(circle, far)
+
+
+def test_fill_region_seeds_pour_and_fragments():
+    # A net given ONLY a fill outline (no points/segments) still labels the copper
+    # whose centroid falls inside it -- pour plus an isolated fragment.
+    from pcb_dfm.ingest.design_model import Net as _Net
+    geom = BoardGeometry(root_dir=Path("."))
+    top = BoardLayer(name="Top", logical_layer="TopCopper", side="top", layer_type="copper")
+    top.polygons = [_rect(0, 0, 20, 20), _rect(25, 25, 26, 26)]
+    geom.add_layer(top)
+    dd = DesignData(source="test")
+    net = _Net(name="GND")
+    net.fill_regions = [("F.Cu", [(-1, -1), (30, -1), (30, 30), (-1, 30)])]
+    dd.nets = {"GND": net}
+    nm = build_net_map(geom, dd)
+    assert nm is not None
+    assert nm.net_of(top.polygons[0]) == "GND"
+    assert nm.net_of(top.polygons[1]) == "GND"
+
+
+def test_fill_region_excludes_clearance():
+    # The fill outline winds around a clearance (a hole); copper whose centroid
+    # is in that clearance must NOT be seeded by the fill.
+    from pcb_dfm.ingest.design_model import Net as _Net
+    geom = BoardGeometry(root_dir=Path("."))
+    top = BoardLayer(name="Top", logical_layer="TopCopper", side="top", layer_type="copper")
+    top.polygons = [_rect(9, 9, 11, 11)]  # a pad centred at (10,10)
+    geom.add_layer(top)
+    dd = DesignData(source="test")
+    net = _Net(name="GND")
+    # A 20x20 fill with a 4x4 clearance hole around (10,10), as one keyhole path.
+    net.fill_regions = [("F.Cu", [
+        (0, 0), (20, 0), (20, 20), (0, 20), (0, 10),
+        (8, 8), (8, 12), (12, 12), (12, 8), (8, 8), (0, 10)])]
+    dd.nets = {"GND": net}
+    nm = build_net_map(geom, dd)
+    # The pad's centroid (10,10) is inside the clearance -> not GND.
+    assert nm is None or nm.net_of(top.polygons[0]) != "GND"
+
+
 def test_pour_and_contained_trace_are_not_one_conductor():
     """A different-net trace geographically inside a pour must not be merged into
     it (the over-merge that collapsed net labelling). Verified at the conductor

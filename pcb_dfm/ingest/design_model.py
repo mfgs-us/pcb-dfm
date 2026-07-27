@@ -132,6 +132,10 @@ class Net:
     net_class: Optional[str] = None
     vias: List[Via] = field(default_factory=list)
     points: List[NetPoint] = field(default_factory=list)
+    # Poured-copper fill outlines on this net: (layer, [(x, y), ...]). The filled
+    # zone geometry (clearances already excluded), so any copper whose centroid
+    # falls inside one is on this net -- seeds pours directly.
+    fill_regions: List[Tuple[Optional[str], List[Tuple[float, float]]]] = field(default_factory=list)
 
     def routed_length_mm(self) -> float:
         return sum(f.length_mm for f in self.features)

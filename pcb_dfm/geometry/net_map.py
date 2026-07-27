@@ -26,6 +26,7 @@ from __future__ import annotations
 
 import math
 import re
+from math import floor
 from typing import Dict, List, Optional, Sequence, Tuple, cast
 
 from ..ingest.design_model import DesignData
@@ -120,23 +121,40 @@ def _canon_layer(name: Optional[str]) -> Optional[str]:
     return s
 
 
-def _seg_hits_polygon(a: Tuple[float, float], b: Tuple[float, float], poly: Polygon,
-                      samples: int = 5) -> bool:
-    """True if the segment centreline a-b runs through ``poly`` (sampled)."""
-    pts = _poly_pts(poly)
-    if len(pts) < 3:
-        return False
-    for i in range(samples + 1):
-        t = i / samples
-        x = a[0] + t * (b[0] - a[0])
-        y = a[1] + t * (b[1] - a[1])
-        if _point_in_polygon(x, y, pts):
-            return True
-    return False
+_SEG_SAMPLE_STEP_MM = 0.1  # walk a routed segment's centreline every ~0.1 mm
 
 
 def _seg_bounds(a: Tuple[float, float], b: Tuple[float, float]) -> Bounds:
     return Bounds(min(a[0], b[0]), min(a[1], b[1]), max(a[0], b[0]), max(a[1], b[1]))
+
+
+_FILL_CELL_MM = 0.2
+
+
+def _rasterize_fill(pts: List[Tuple[float, float]], cell: float = _FILL_CELL_MM
+                    ) -> set:
+    """Scanline-rasterise a (possibly self-winding, hole-bearing) fill outline
+    into the set of grid cells it covers. Even-odd crossings exclude the
+    clearances woven into the outline, so a point in a clearance is not covered.
+    Built once per fill; each copper polygon is then an O(1) cell lookup."""
+    n = len(pts)
+    if n < 3:
+        return set()
+    ys = [p[1] for p in pts]
+    cells: set = set()
+    for iy in range(floor(min(ys) / cell), floor(max(ys) / cell) + 1):
+        yc = (iy + 0.5) * cell
+        xs = []
+        for i in range(n):
+            x1, y1 = pts[i]
+            x2, y2 = pts[(i + 1) % n]
+            if (y1 <= yc) != (y2 <= yc):
+                xs.append(x1 + (yc - y1) * (x2 - x1) / (y2 - y1))
+        xs.sort()
+        for k in range(0, len(xs) - 1, 2):
+            for ix in range(floor(xs[k] / cell), floor(xs[k + 1] / cell) + 1):
+                cells.add((ix, iy))
+    return cells
 
 
 # --------------------------------------------------------------------------- #
@@ -247,47 +265,107 @@ def _seg_seg_distance(a1: Tuple[float, float], a2: Tuple[float, float],
                pt_seg(b1, a1, a2), pt_seg(b2, a1, a2))
 
 
+_GRID_EDGE_THRESHOLD = 40   # polygons with more edges than this get an edge grid
+_TOUCH_GRID_CELL_MM = 1.0
+
+Edge = Tuple[Tuple[float, float], Tuple[float, float]]
+EdgeGrid = Tuple[float, Dict[Tuple[int, int], List[Edge]]]
+
+
+def _polygon_edges(poly: Polygon) -> List[Edge]:
+    pts = _poly_pts(poly)
+    n = len(pts)
+    if n < 2:
+        return []
+    return [(pts[i], pts[(i + 1) % n]) for i in range(n)]
+
+
+def _build_edge_grid(edges: List[Edge], cell: float = _TOUCH_GRID_CELL_MM) -> EdgeGrid:
+    """Bucket each edge into the grid cells its bbox spans, so a query edge only
+    tests edges that are spatially near it -- turns a pour's thousands of edges
+    from a linear scan into a handful of lookups."""
+    grid: Dict[Tuple[int, int], List[Edge]] = {}
+    for (p1, p2) in edges:
+        ix0 = floor(min(p1[0], p2[0]) / cell)
+        ix1 = floor(max(p1[0], p2[0]) / cell)
+        iy0 = floor(min(p1[1], p2[1]) / cell)
+        iy1 = floor(max(p1[1], p2[1]) / cell)
+        for ix in range(ix0, ix1 + 1):
+            for iy in range(iy0, iy1 + 1):
+                grid.setdefault((ix, iy), []).append((p1, p2))
+    return (cell, grid)
+
+
+def _edges_vs_grid(edges: List[Edge], grid_t: EdgeGrid, tol: float) -> bool:
+    cell, grid = grid_t
+    get = grid.get
+    for (s1, s2) in edges:
+        for ix in range(floor((min(s1[0], s2[0]) - tol) / cell),
+                        floor((max(s1[0], s2[0]) + tol) / cell) + 1):
+            for iy in range(floor((min(s1[1], s2[1]) - tol) / cell),
+                            floor((max(s1[1], s2[1]) + tol) / cell) + 1):
+                bucket = get((ix, iy))
+                if bucket:
+                    for (b1, b2) in bucket:
+                        if _seg_seg_distance(s1, s2, b1, b2) <= tol:
+                            return True
+    return False
+
+
+def _edges_vs_edges(ea: List[Edge], eb: List[Edge], tol: float) -> bool:
+    for (a1, a2) in ea:
+        axmin = (a1[0] if a1[0] < a2[0] else a2[0]) - tol
+        axmax = (a1[0] if a1[0] > a2[0] else a2[0]) + tol
+        aymin = (a1[1] if a1[1] < a2[1] else a2[1]) - tol
+        aymax = (a1[1] if a1[1] > a2[1] else a2[1]) + tol
+        for (b1, b2) in eb:
+            if ((b1[0] if b1[0] > b2[0] else b2[0]) < axmin
+                    or (b1[0] if b1[0] < b2[0] else b2[0]) > axmax
+                    or (b1[1] if b1[1] > b2[1] else b2[1]) < aymin
+                    or (b1[1] if b1[1] < b2[1] else b2[1]) > aymax):
+                continue
+            if _seg_seg_distance(a1, a2, b1, b2) <= tol:
+                return True
+    return False
+
+
+def _fast_touch(ea: List[Edge], ga: Optional[EdgeGrid],
+                eb: List[Edge], gb: Optional[EdgeGrid], tol: float) -> bool:
+    """Edge-intersection/abut test given precomputed edges and optional grids."""
+    if not ea or not eb:
+        return False
+    if ga is not None:
+        return _edges_vs_grid(eb, ga, tol)
+    if gb is not None:
+        return _edges_vs_grid(ea, gb, tol)
+    return _edges_vs_edges(ea, eb, tol)
+
+
 def _polygons_touch(a: Polygon, b: Polygon, tol: float = _TOUCH_TOL_MM) -> bool:
     """True when two copper polygons are ONE conductor: their boundaries
     intersect or come within ``tol``.
 
-    This is deliberately an EDGE test, not a vertex-in-polygon test. A ground
-    pour is a single polygon whose outline snakes around the traces it clears; a
-    trace sitting in one of those clearances has its vertices geometrically
-    *inside* the pour's outline while its copper is a clearance-width (or more)
-    away from any pour edge. The old vertex-in-polygon test read that as
-    "touching" and merged the trace into the pour's net -- collapsing a dozen
-    nets into one ambiguous blob that then had to be discarded, which is why net
-    labelling stalled far below the copper it should have reached. Two conductors
-    are joined only where their copper actually MEETS -- edges that intersect or
-    abut -- which is what this measures. It also runs markedly faster, because it
-    never point-tests against a multi-thousand-vertex pour outline.
+    Deliberately an EDGE test, not a vertex-in-polygon test. A ground pour is a
+    single polygon whose outline snakes around the traces it clears; a trace in
+    one of those clearances is geometrically *inside* the pour's outline while
+    its copper is a clearance-width (or more) from any pour edge. Vertex-in-
+    polygon read that as "touching" and merged the trace into the pour's net --
+    collapsing a dozen nets into one blob that then had to be discarded. Two
+    conductors are joined only where their copper actually MEETS. Large polygons
+    are indexed by an edge grid so this stays fast on multi-thousand-vertex pours.
 
-    Consequence, accepted as safe: a small polygon fully *contained* in a larger
-    one with no edge contact is not merged. On real copper that is the
-    trace-in-clearance case (correctly separated); the rare same-net
+    Safe consequence: a small polygon fully *contained* in a larger one with no
+    edge contact is not merged (the trace-in-clearance case); the rare same-net
     fully-enclosed feature is merely left unlabelled, never mislabelled.
     """
     ba, bb = a.bounds(), b.bounds()
     if (ba.min_x > bb.max_x + tol or bb.min_x > ba.max_x + tol
             or ba.min_y > bb.max_y + tol or bb.min_y > ba.max_y + tol):
         return False
-    pa, pb = _poly_pts(a), _poly_pts(b)
-    if len(pa) < 2 or len(pb) < 2:
-        return False
-    edges_b = [(pb[i], pb[(i + 1) % len(pb)]) for i in range(len(pb))]
-    na = len(pa)
-    for i in range(na):
-        a1, a2 = pa[i], pa[(i + 1) % na]
-        axmin, axmax = min(a1[0], a2[0]) - tol, max(a1[0], a2[0]) + tol
-        aymin, aymax = min(a1[1], a2[1]) - tol, max(a1[1], a2[1]) + tol
-        for (b1, b2) in edges_b:
-            if (max(b1[0], b2[0]) < axmin or min(b1[0], b2[0]) > axmax
-                    or max(b1[1], b2[1]) < aymin or min(b1[1], b2[1]) > aymax):
-                continue
-            if _seg_seg_distance(a1, a2, b1, b2) <= tol:
-                return True
-    return False
+    ea, eb = _polygon_edges(a), _polygon_edges(b)
+    ga = _build_edge_grid(ea) if len(ea) >= _GRID_EDGE_THRESHOLD else None
+    gb = _build_edge_grid(eb) if len(eb) >= _GRID_EDGE_THRESHOLD else None
+    return _fast_touch(ea, ga, eb, gb, tol)
 
 
 def _propagate_nets_through_connected_copper(
@@ -333,6 +411,18 @@ def _propagate_nets_through_connected_copper(
     if total == 0:
         return
 
+    # Precompute each polygon's edges once, and an edge grid for the big ones
+    # (pours), so a pour's thousands of edges are indexed a single time and every
+    # touch test against it is a handful of cell lookups, not a linear scan.
+    all_edges: List[List[Edge]] = [[]] * total
+    all_grid: List[Optional[EdgeGrid]] = [None] * total
+    for _lyr, polys, off, _index in per_layer:
+        for i, poly in enumerate(polys):
+            edges = _polygon_edges(poly)
+            all_edges[off + i] = edges
+            if len(edges) >= _GRID_EDGE_THRESHOLD:
+                all_grid[off + i] = _build_edge_grid(edges)
+
     parent = list(range(total))
 
     def find(a: int) -> int:
@@ -356,15 +446,24 @@ def _propagate_nets_through_connected_copper(
     for _lyr, polys, off, index in per_layer:
         for i, poly in enumerate(polys):
             ni = poly_net.get(id(poly))
+            gi = off + i
+            ei, gridi, bi = all_edges[gi], all_grid[gi], poly.bounds()
             for pos in index.query_bbox(poly.bounds()):
                 j = cast(int, pos)
                 if j <= i:
                     continue
-                if _polygons_touch(poly, polys[j]):
-                    nj = poly_net.get(id(polys[j]))
-                    if ni is not None and nj is not None and ni != nj:
-                        continue
-                    union(off + i, off + j)
+                other_poly = polys[j]
+                nj = poly_net.get(id(other_poly))
+                # Never merge two directly-seeded different nets (see below).
+                if ni is not None and nj is not None and ni != nj:
+                    continue
+                bj = other_poly.bounds()
+                if (bi.min_x > bj.max_x + _TOUCH_TOL_MM or bj.min_x > bi.max_x + _TOUCH_TOL_MM
+                        or bi.min_y > bj.max_y + _TOUCH_TOL_MM or bj.min_y > bi.max_y + _TOUCH_TOL_MM):
+                    continue
+                gj = off + j
+                if _fast_touch(ei, gridi, all_edges[gj], all_grid[gj], _TOUCH_TOL_MM):
+                    union(gi, gj)
 
     # 2) Across layers: a plated through-hole ties together the copper it passes
     #    through on every layer.
@@ -414,7 +513,7 @@ def build_net_map(geometry: BoardGeometry,
         return None
     netted = [
         (name, net) for name, net in design_data.nets.items()
-        if net.has_geometry() or net.has_points()
+        if net.has_geometry() or net.has_points() or net.fill_regions
     ]
     if not netted:
         return None
@@ -461,18 +560,53 @@ def build_net_map(geometry: BoardGeometry,
                         bucket[name] = bucket.get(name, 0) + 1
                         poly_ref[pid] = (lyr.logical_layer, poly)
 
+    # Routed segments: WALK the centreline at a fine step and seed the polygon at
+    # each point, instead of testing each candidate polygon with a coarse 5-point
+    # sample that steps over the short stroke polygons a trace is rendered as. A
+    # point query is cheap, so this is both denser and faster.
     for name, net in netted:
         for (a, b), seg_layer, _w in net.route_segments():
             canon = _canon_layer(seg_layer)
-            # Prefer the matching layer; if the source layer can't be mapped to a
-            # copper layer we have, fall back to matching against all of them.
             targets = layers_by_canon.get(canon) or copper_layers
-            sb = _seg_bounds(a, b)
+            length = math.hypot(b[0] - a[0], b[1] - a[1])
+            steps = max(5, int(length / _SEG_SAMPLE_STEP_MM))
+            seeded: set = set()
+            for k in range(steps + 1):
+                t = k / steps
+                x, y = a[0] + t * (b[0] - a[0]), a[1] + t * (b[1] - a[1])
+                pb = Bounds(x, y, x, y)
+                for lyr in targets:
+                    index, polys = _index_of(lyr)
+                    for pos in index.query_bbox(pb):
+                        poly = polys[cast(int, pos)]
+                        pid = id(poly)
+                        if pid in seeded or not poly.contains_point(x, y):
+                            continue
+                        seeded.add(pid)
+                        bucket = votes.setdefault(pid, {})
+                        bucket[name] = bucket.get(name, 0) + 1
+                        poly_ref[pid] = (lyr.logical_layer, poly)
+
+    # Poured-copper fill outlines (KiCad filled zones): rasterise each once and
+    # seed any copper whose centroid lands in a covered cell. The fill already
+    # excludes clearances, so foreign pads in a pour's antipad are not seeded.
+    for name, net in netted:
+        for (fill_layer, fill_pts) in getattr(net, "fill_regions", ()):
+            cells = _rasterize_fill(fill_pts)
+            if not cells:
+                continue
+            canon = _canon_layer(fill_layer)
+            targets = layers_by_canon.get(canon) or copper_layers
+            fb = Bounds(min(x for x, _ in fill_pts), min(y for _, y in fill_pts),
+                        max(x for x, _ in fill_pts), max(y for _, y in fill_pts))
             for lyr in targets:
                 index, polys = _index_of(lyr)
-                for pos in index.query_bbox(sb):
+                for pos in index.query_bbox(fb):
                     poly = polys[cast(int, pos)]
-                    if _seg_hits_polygon(a, b, poly):
+                    pb2 = poly.bounds()
+                    ccx = 0.5 * (pb2.min_x + pb2.max_x)
+                    ccy = 0.5 * (pb2.min_y + pb2.max_y)
+                    if (floor(ccx / _FILL_CELL_MM), floor(ccy / _FILL_CELL_MM)) in cells:
                         pid = id(poly)
                         bucket = votes.setdefault(pid, {})
                         bucket[name] = bucket.get(name, 0) + 1

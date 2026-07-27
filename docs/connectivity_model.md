@@ -121,30 +121,30 @@ keyhole path, or nonzero-winding coverage) — *not* a labelling problem. The
 clear-polarity antipad case (separate LPC flashes) is already handled (§1). The
 keyhole case is the remaining, harder work; it belongs here, not under a "flood".
 
-### Pushing coverage past ~75% (KiCad) — what was tried
-Three approaches were measured against droyd (75.1% baseline):
+### Pushing coverage past ~75% (KiCad) — DONE, optimized (#54)
+All three approaches were first found too slow, then made fast. Measured on droyd:
 
-- **Denser segment seeding** (sample the routed centreline every ~0.1 mm instead
-  of 5 fixed points): +8 polys, but **~12 s per `build_net_map`** (dense
-  point-in-polygon over every candidate). Value/cost too poor — reverted. Would
-  need a point-walk-with-index rewrite to be viable.
-- **Seed from KiCad filled zones** (each zone's `filled_polygon` labels the copper
-  whose centroid falls inside it): +25 polys combined, but **~15 s** (point-in-
-  polygon against ~14 k-vertex fills for every candidate). Reverted; would need a
-  rasterised-fill lookup to be viable.
-- **Label-respecting union — DONE (#53):** never merge two polygons *directly
-  seeded to different nets*. Two known-different-net shapes are never one
-  conductor (adjacent connector/switch pads a few µm apart, or a real short), and
-  the old code merged them into one ambiguous component that was then discarded.
-  This is cheap and provably safe (touches only seed↔seed pairs, never unseeded
-  copper), and *more correct* — it stops labelling e.g. `/CC1` and `GND` as the
-  same conductor. Small coverage bonus (+7 polys droyd; pcbtools already 97%).
+- **`_polygons_touch` edge grid** (the real cost): the merge was O(edges·edges),
+  and droyd's 2851-vertex pour made `build_net_map` take **~11 s**. Each polygon's
+  edges are now precomputed once and big polygons carry a spatial **edge grid**,
+  so a touch test is a handful of cell lookups. **11 s → ~1.1 s (10×).**
+- **Point-walk segment seeding** (#1): walk the routed centreline every ~0.1 mm
+  and seed the polygon at each point (a cheap point query), instead of a coarse
+  5-point sample that steps over short stroke polygons. Denser *and* faster.
+- **Rasterised filled-zone seeding** (#2): scanline-rasterise each KiCad
+  `filled_polygon` into a cell set once (even-odd excludes the clearances), then
+  seed any copper whose centroid lands in a covered cell — O(1) per polygon
+  instead of point-in-polygon against a 14 k-vertex fill.
+- **Label-respecting union** (from #53): never merge two directly-seeded different
+  nets — safe, and stops labelling e.g. `/CC1` and `GND` as one conductor.
 
-Takeaway: the residual after this is dominated by **genuinely net-less copper**
-(fiducials, thieving, floating fragments — correctly unlabelled) and a handful of
-**real conflict pairs** at connectors, whose only safe resolution is exact pad
-clearance geometry (§3-adjacent), not more seeding. ~76% on droyd is close to the
-safe ceiling for its design source.
+Net result: droyd **75.1 % → 79.0 %** coverage in **~1.7 s** (was ~15 s for the
+same 79 %, and the baseline was ~11 s for 75 %). No corpus baseline moved.
+
+The residual is now dominated by **genuinely net-less copper** (fiducials,
+thieving, floating fragments — correctly unlabelled) and a few **real conflict
+pairs** at connectors, whose only safe resolution is exact pad-clearance geometry,
+not more seeding. ~79 % on droyd is close to the safe ceiling for its source.
 
 ### 3. Bridge precision (cross-layer)
 Plated-through-hole bridges currently union *every* polygon the hole point lands

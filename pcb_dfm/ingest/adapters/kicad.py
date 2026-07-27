@@ -287,12 +287,30 @@ def _parse_nets_and_routes(root: SNode, num_to_name: Dict[str, str]) -> Dict[str
             to_layer=layers[1] if len(layers) > 1 else None,
         ))
 
+    def _add_zone(el: SNode) -> None:
+        name = _resolve_net_name(_first(el, "net"), num_to_name)
+        if not name:
+            return
+        for fp in _tagged(el, "filled_polygon"):
+            layer_node = _first(fp, "layer")
+            layer = _atoms(layer_node)[0] if layer_node and _atoms(layer_node) else None
+            pts_node = _first(fp, "pts")
+            if pts_node is None:
+                continue
+            pts = [(x, y) for xy in _tagged(pts_node, "xy")
+                   for x in [_fatom(xy, 0)] for y in [_fatom(xy, 1)]
+                   if x is not None and y is not None]
+            if len(pts) >= 3:
+                _ensure(name).fill_regions.append((layer, pts))
+
     for seg_el in _tagged(root, "segment"):
         _add_route(seg_el)
     for arc_el in _tagged(root, "arc"):
         _add_route(arc_el)  # chord approximation via start/end
     for via_el in _tagged(root, "via"):
         _add_via(via_el)
+    for zone_el in _tagged(root, "zone"):
+        _add_zone(zone_el)
 
     return nets
 
@@ -547,6 +565,8 @@ def _to_gerber_frame(components: List[Component], nets: Dict[str, Net]) -> None:
             if f.segments:
                 f.segments = [((x0, -y0), (x1, -y1))
                               for ((x0, y0), (x1, y1)) in f.segments]
+        net.fill_regions = [(layer, [(x, -y) for (x, y) in pts])
+                            for (layer, pts) in net.fill_regions]
 
 
 def from_kicad(source: Union[str, Path]) -> DesignData:

@@ -39,6 +39,10 @@ GUIDANCE: Dict[str, Remediation] = {
     "copper_density_balance": Remediation(
         "Balance copper across the board (add thieving/hatch in sparse areas).",
         "Warp and uneven etch/plating."),
+    "copper_balance_plating": Remediation(
+        "Balance the two outer layers (add copper thieving/​hatch to the lighter "
+        "side) so top and bottom coverage are comparable.",
+        "Reflow warp and uneven outer-layer plating."),
     "etch_compensation_margin": Remediation(
         "Raise the smallest feature above the fab's etch floor, or add etch compensation.",
         "Yield loss on features sitting at the process limit."),

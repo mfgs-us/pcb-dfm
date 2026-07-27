@@ -63,6 +63,7 @@ def _ensure_impls_loaded() -> None:
         impl_castellated_edge_plating,  # noqa: F401
         impl_component_edge_clearance,  # noqa: F401
         impl_component_to_component_spacing,  # noqa: F401
+        impl_copper_balance_plating,  # noqa: F401
         impl_copper_density_balance,  # noqa: F401
         impl_copper_sliver_width,  # noqa: F401
         impl_copper_thermal_area,  # noqa: F401

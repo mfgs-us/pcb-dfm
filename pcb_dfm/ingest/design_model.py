@@ -163,11 +163,23 @@ class DiffPair:
 
 @dataclass
 class ControlledImpedanceSpec:
-    """A controlled-impedance constraint on a net or net class."""
+    """A controlled-impedance constraint on a net or net class.
+
+    ``geometry`` selects the cross-section model: ``microstrip`` (a trace on an
+    outer layer over one reference plane) or ``stripline`` (an inner trace
+    between two planes). ``spacing_mm`` (edge-to-edge gap) marks a differential
+    pair, and then ``target_ohm`` is the *differential* impedance. ``height_mm``
+    overrides the dielectric height to use (distance to the reference plane for
+    microstrip; plane-to-plane for stripline); when absent it is taken from the
+    stackup.
+    """
     name: str
     target_ohm: float
     width_mm: Optional[float] = None
     tolerance_pct: float = 10.0
+    geometry: str = "microstrip"          # "microstrip" | "stripline"
+    spacing_mm: Optional[float] = None     # edge-to-edge gap -> differential pair
+    height_mm: Optional[float] = None      # dielectric height override
 
 
 @dataclass

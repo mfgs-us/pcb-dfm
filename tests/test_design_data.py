@@ -92,6 +92,40 @@ def test_impedance_from_ipc2581_stackup():
     assert r.metric.units == "%"
 
 
+_STACKUP = {"er": 4.3, "dielectric_thickness_mm": 0.20, "copper_thickness_mm": 0.035,
+            "dielectric_layers_mm": [0.20, 0.20]}
+
+
+def test_impedance_stripline_uses_stripline_model():
+    # Same width/target as a microstrip, but geometry=stripline -> the stripline
+    # formula gives a different (lower) Z0, so the two models are distinguishable.
+    ms = _run("impedance_control", {"stackup": _STACKUP, "controlled_impedance": [
+        {"name": "SIG", "width_mm": 0.20, "target_ohm": 50.0, "geometry": "microstrip"}]})
+    sl = _run("impedance_control", {"stackup": _STACKUP, "controlled_impedance": [
+        {"name": "SIG", "width_mm": 0.20, "target_ohm": 50.0, "geometry": "stripline"}]})
+    # microstrip is well over 50 here, stripline is under -> different verdicts/dev.
+    assert ms.metric.measured_value != pytest.approx(sl.metric.measured_value, abs=1.0)
+
+
+def test_impedance_differential_pair_passes_at_target():
+    # A gap makes it differential; the modelled Zdiff (~108 ohm for this
+    # geometry) matches a target set to it -> pass. (Same spec without the gap is
+    # single-ended ~66 ohm, so the differential path is genuinely engaged.)
+    r = _run("impedance_control", {"stackup": _STACKUP, "controlled_impedance": [
+        {"name": "USB", "width_mm": 0.20, "target_ohm": 108.0, "tolerance_pct": 10,
+         "spacing_mm": 0.20}]})
+    assert r.status == "pass"
+    assert r.metric.measured_value < 5.0
+
+
+def test_impedance_differential_flags_gross_mismatch():
+    # A 50 ohm differential target on a wide-spaced pair is far off -> fail.
+    r = _run("impedance_control", {"stackup": _STACKUP, "controlled_impedance": [
+        {"name": "X", "width_mm": 0.20, "target_ohm": 50.0, "tolerance_pct": 10,
+         "spacing_mm": 0.60}]})
+    assert r.status == "fail"
+
+
 def test_dielectric_uniformity_pass_from_ipc2581():
     # Both dielectrics are 0.20 mm -> zero deviation -> pass.
     r = _run("dielectric_thickness_uniformity", IPC)

@@ -2,19 +2,27 @@
   "id": "impedance_control",
   "category_id": "fabrication_stackup",
   "name": "Impedance control",
-  "description": "Compare realized impedance of controlled impedance traces to their targets.",
+  "description": "Compare realized impedance of controlled-impedance traces to their targets. Needs a stackup (Er, dielectric height, copper thickness) and per-net specs (width, target). Models single-ended and edge-coupled differential impedance for both microstrip (outer layer over one plane) and stripline (inner layer between two planes) via IPC-2141; geometry defaults to microstrip. Not_applicable without stackup + controlled-impedance specs.",
   "what_it_measures": "Percentage deviation of calculated trace impedance from specified target impedance.",
   "metric": {
     "kind": "percent",
     "units": "%",
     "preferred_direction": "minimize",
-    "target": { "max": 8.0 },
-    "limits": { "max": 10.0 },
+    "target": {
+      "max": 8.0
+    },
+    "limits": {
+      "max": 10.0
+    },
     "scale_min": 0.0,
     "scale_max": 20.0
   },
   "severity_default": "warning",
-  "applies_to": ["trace", "stackup", "net"],
+  "applies_to": [
+    "trace",
+    "stackup",
+    "net"
+  ],
   "scoring": {
     "enabled": true,
     "strategy": "linear",

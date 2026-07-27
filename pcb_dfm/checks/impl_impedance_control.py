@@ -35,6 +35,47 @@ def _microstrip_z0(er: float, h_mm: float, w_mm: float, t_mm: float) -> float:
     return (87.0 / math.sqrt(er + 1.41)) * math.log(arg)
 
 
+def _stripline_z0(er: float, b_mm: float, w_mm: float, t_mm: float) -> float:
+    """
+    IPC-2141 single-ended symmetric-stripline impedance estimate (ohms), for an
+    inner trace centred between two reference planes ``b`` apart:
+
+        Z0 = 60 / sqrt(Er) * ln( 4*b / (0.67*pi*(0.8*w + t)) )
+    """
+    denom = 0.67 * math.pi * (0.8 * w_mm + t_mm)
+    if er <= 0 or b_mm <= 0 or denom <= 0:
+        raise ValueError("degenerate stackup/trace geometry")
+    arg = 4.0 * b_mm / denom
+    if arg <= 0:
+        raise ValueError("non-physical stripline ratio")
+    return (60.0 / math.sqrt(er)) * math.log(arg)
+
+
+def _differential_z(z0: float, geometry: str, s_mm: float, h_mm: float) -> float:
+    """Edge-coupled differential impedance from the single-ended Z0 and the
+    edge-to-edge gap ``s`` (IPC-2141 coupling approximations):
+
+        microstrip: Zdiff = 2*Z0 * (1 - 0.48 * exp(-0.96 * s/h))
+        stripline:  Zdiff = 2*Z0 * (1 - 0.347 * exp(-2.9  * s/h))
+    """
+    ratio = s_mm / h_mm if h_mm > 0 else 0.0
+    if geometry == "stripline":
+        k = 0.347 * math.exp(-2.9 * ratio)
+    else:
+        k = 0.48 * math.exp(-0.96 * ratio)
+    return 2.0 * z0 * (1.0 - k)
+
+
+def _z0_for(spec, er: float, h_mm: float, b_mm: float, t_mm: float) -> float:
+    """Single-ended Z0 for a spec's geometry, choosing the microstrip reference
+    height ``h`` or the stripline plane-to-plane ``b`` (spec.height_mm overrides
+    either)."""
+    w_mm = float(spec.width_mm)
+    if (spec.geometry or "microstrip").lower() == "stripline":
+        return _stripline_z0(er, float(spec.height_mm or b_mm), w_mm, t_mm)
+    return _microstrip_z0(er, float(spec.height_mm or h_mm), w_mm, t_mm)
+
+
 @register_check("impedance_control")
 def run_impedance_control(ctx: CheckContext) -> CheckResult:
     """
@@ -60,6 +101,11 @@ def run_impedance_control(ctx: CheckContext) -> CheckResult:
     t_mm = (stackup.copper_thickness_mm if stackup is not None else None)
     if t_mm is None:
         t_mm = 0.035  # default 1oz finished copper
+    # Plane-to-plane separation for stripline: the total dielectric between the
+    # bracketing planes (approximation; a spec's height_mm overrides it).
+    b_mm = (sum(stackup.dielectric_thicknesses_mm()) if stackup is not None else None)
+    if not b_mm:
+        b_mm = h_mm
 
     have_inputs = (
         isinstance(er, (int, float))
@@ -91,21 +137,30 @@ def run_impedance_control(ctx: CheckContext) -> CheckResult:
     worst_dev_pct = 0.0
     for spec in controlled:
         name = spec.name
-        w_mm = spec.width_mm
         target_ohm = spec.target_ohm
         tol_pct = spec.tolerance_pct
-        if not isinstance(w_mm, (int, float)):
+        if not isinstance(spec.width_mm, (int, float)):
             continue
+        geometry = (spec.geometry or "microstrip").lower()
         try:
-            z0 = _microstrip_z0(float(er), float(h_mm), float(w_mm), float(t_mm))
-        except ValueError:
+            z0 = _z0_for(spec, float(er), float(h_mm), float(b_mm), float(t_mm))
+        except (ValueError, TypeError):
             continue
-        dev_pct = abs(z0 - float(target_ohm)) / float(target_ohm) * 100.0
+        # Differential pair (an edge-to-edge gap is given): compare the modelled
+        # differential impedance to the differential target.
+        if isinstance(spec.spacing_mm, (int, float)) and spec.spacing_mm > 0:
+            ref_h = float(spec.height_mm or (b_mm if geometry == "stripline" else h_mm))
+            z = _differential_z(z0, geometry, float(spec.spacing_mm), ref_h)
+            kind = f"differential {geometry}"
+        else:
+            z = z0
+            kind = f"single-ended {geometry}"
+        dev_pct = abs(z - float(target_ohm)) / float(target_ohm) * 100.0
         worst_dev_pct = max(worst_dev_pct, dev_pct)
         if dev_pct > tol_pct:
             violations.append(Violation(
                 message=(
-                    f"Net {name}: estimated Z0 {z0:.1f} ohm vs target "
+                    f"Net {name} ({kind}): estimated Z {z:.1f} ohm vs target "
                     f"{float(target_ohm):.1f} ohm ({dev_pct:.1f}% off, tolerance "
                     f"{tol_pct:.0f}%)."
                 ),

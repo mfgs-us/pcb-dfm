@@ -246,6 +246,10 @@ GUIDANCE: Dict[str, Remediation] = {
     "decoupling_proximity": Remediation(
         "Move decoupling caps right up to the IC power pin they serve.",
         "Loop inductance to a distant bypass cap negates its decoupling."),
+    "decoupling_adequacy": Remediation(
+        "Add at least one bypass capacitor (typ. 0.1 µF) from each IC supply rail "
+        "to ground, close to the pin.",
+        "An undecoupled supply rail → noise, brown-out and marginal behaviour."),
     "mounting_hole_keepout": Remediation(
         "Move components out of the mounting hole's screw-head / standoff keep-out.",
         "A part under the mounting hardware collides with it at assembly."),

@@ -1,0 +1,28 @@
+{
+  "id": "castellated_edge_plating",
+  "category_id": "mechanical_outline",
+  "name": "Castellated / edge-plated hole geometry",
+  "description": "Validate plated holes that cross the board outline (castellations): each should be cleanly bisected by the edge, not left as a thin plated sliver, and castellations should not be packed tighter than the plating process allows.",
+  "what_it_measures": "For every plated hole intersected by the board outline, how much of the plated barrel remains inside the copper (a sliver leaves an incomplete/​breaking-out barrel) and the centre-to-centre pitch between adjacent castellations.",
+  "metric": {
+    "kind": "count",
+    "units": "count",
+    "preferred_direction": "minimize",
+    "target": { "max": 0.0 },
+    "limits": { "max": 0.0 },
+    "scale_min": 0.0,
+    "scale_max": 10.0
+  },
+  "severity_default": "warning",
+  "applies_to": ["mechanical", "via", "pad_tht"],
+  "params": {
+    "sliver_tolerance_mm": 0.1,
+    "min_pitch_mm": 1.0
+  },
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 0.8
+  }
+}

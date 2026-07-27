@@ -134,6 +134,11 @@ GUIDANCE: Dict[str, Remediation] = {
     "fillet_radius_milling": Remediation(
         "Add internal corner radii ≥ the router bit radius.",
         "Sharp inside corners cannot be milled as drawn."),
+    "castellated_edge_plating": Remediation(
+        "Route the board edge through (or just inside) the castellation centre so "
+        "at least half the plated barrel stays in copper, and keep castellation "
+        "pitch ≥ the fab's minimum (~1 mm).",
+        "Sliver/​breaking-out edge plating and bridged castellations → scrap."),
     "copper_thermal_area": Remediation(
         "Add thermal relief or reduce copper mass on the thermal pad.",
         "Cold joints / tombstoning at reflow."),

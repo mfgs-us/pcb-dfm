@@ -60,6 +60,7 @@ def _ensure_impls_loaded() -> None:
         impl_aperture_definition_errors,  # noqa: F401
         impl_backdrill_stub_length,  # noqa: F401
         impl_board_outline_continuity,  # noqa: F401
+        impl_castellated_edge_plating,  # noqa: F401
         impl_component_edge_clearance,  # noqa: F401
         impl_component_to_component_spacing,  # noqa: F401
         impl_copper_density_balance,  # noqa: F401

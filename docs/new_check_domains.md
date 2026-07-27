@@ -1,9 +1,17 @@
 # New DFM check domains — spec
 
-Seven domains beyond the current catalogue. Ordered by value/effort. The first
-three build from geometry we already have (paste, drills+outline, copper layers)
-and are being implemented now; the rest are gated on new design-data inputs and
-are spec'd for later.
+Seven domains beyond the current catalogue. Ordered by value/effort.
+
+**Status (2026-07):** the three geometry-buildable domains are shipped and
+validated on the droyd board + golden corpus with zero false positives —
+§1 `stencil_aperture_ratio` (#56), §2 `castellated_edge_plating` (#57),
+§3 `copper_balance_plating` (#58). The remaining domains (§4 IPC-2152 current,
+§5 flex, §6 HDI/microvia) are **paused**: each needs a design-data input no
+current source carries (per-net current, bend regions, microvia spans), so a
+check built now would be `not_applicable` on every real board and validatable
+only synthetically. They stay spec'd here and will be built when a real
+HDI/flex/current-annotated board is available to validate against — the same
+"validate on real geometry before merge" bar the first three met.
 
 Conventions: every check is `not_applicable` without its inputs, states a metric
 with target/limit, and follows the tier rules (design-advisory never hard-fails;
@@ -11,7 +19,7 @@ fab/assembly may). No folklore — objective, sourced rules only.
 
 ---
 
-## 1. Stencil aperture ratios (IPC-7525) — `stencil_aperture_ratio`  [BUILD FIRST]
+## 1. Stencil aperture ratios (IPC-7525) — `stencil_aperture_ratio`  [DONE #56]
 **Why:** paste release from the stencil is governed by two ratios; below them the
 paste stays in the aperture and you get insufficient/​skipped joints. Definitive.
 
@@ -29,7 +37,7 @@ default 0.12 mm = ~5 mil).
 Exclude board-scale polygons (a paste "aperture" the size of a thermal pad is a
 windowpane; only aperture-scale features count).
 
-## 2. Castellated / edge plating — `castellated_edge_plating`  [BUILD]
+## 2. Castellated / edge plating — `castellated_edge_plating`  [DONE #57]
 **Why:** castellated modules (half-vias on the board edge) and edge-plated boards
 have specific fab rules; a plated hole that only *touches* the edge (not bisected)
 or copper hard against an unplated edge fails.
@@ -47,7 +55,7 @@ centre is within ~½ its diameter of the outline is a castellation.
 **Metric:** count of malformed castellations. **Category:** `mechanical_outline`.
 N/A when no plated hole sits on the outline.
 
-## 3. Per-layer copper balance for plating — `copper_balance_plating`  [BUILD]
+## 3. Per-layer copper balance for plating — `copper_balance_plating`  [DONE #58]
 **Why:** grossly unequal copper *coverage* between layers plates unevenly (dog-bone
 / dimple), and an unbalanced outer/inner set warps on reflow. Distinct from the
 existing *local* `copper_density_balance`; this is whole-layer coverage %.
@@ -60,7 +68,7 @@ two outer layers differ by > 20 pp (warp risk). **Metric:** coverage spread (pp)
 
 ---
 
-## 4. IPC-2152 current capacity — `trace_current_capacity`  [needs current spec]
+## 4. IPC-2152 current capacity — `trace_current_capacity`  [PAUSED — needs current spec + test board]
 **Why:** a trace narrower than its rated current needs will overheat. Turns the
 heuristic `copper_thermal_area` into a real calc.
 
@@ -72,7 +80,7 @@ heuristic `copper_thermal_area` into a real calc.
 routed width; warn/fail on deficit. **Category:** `thermal_power`. N/A without a
 current spec.
 
-## 5. Flex / rigid-flex — `flex_bend_rules`  [needs flex-region data]
+## 5. Flex / rigid-flex — `flex_bend_rules`  [PAUSED — needs flex-region data + test board]
 **Why:** a whole domain we don't touch. High effort, only for flex builds.
 **Inputs:** a designated **flex/bend region** (design-data keepout kind `bend`) +
 stackup.
@@ -81,7 +89,7 @@ vias/pads inside a bend zone**; traces cross the bend perpendicular and use arcs
 not right-angles; teardrops at the rigid↔flex transition. **Category:** new
 `flex` or `mechanical_outline`. N/A without a bend region.
 
-## 6. HDI / microvia — `microvia_geometry`  [needs blind/buried via data]
+## 6. HDI / microvia — `microvia_geometry`  [PAUSED — has a KiCad data path; needs an HDI test board]
 **Why:** microvias have tighter aspect and stacking rules than through-holes.
 **Inputs:** blind/buried via data (from/to layer + drill) — KiCad `(via (blind))`
 / IPC-2581.

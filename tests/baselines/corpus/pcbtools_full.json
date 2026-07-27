@@ -42,6 +42,14 @@
     },
     {
       "confidence": "high",
+      "id": "castellated_edge_plating",
+      "measured": 6.0,
+      "severity": "warning",
+      "status": "warning",
+      "violations": 6
+    },
+    {
+      "confidence": "high",
       "id": "component_edge_clearance",
       "measured": 0.2616,
       "severity": "warning",

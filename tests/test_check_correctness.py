@@ -99,6 +99,14 @@ def _drill(diameter_mm: float) -> str:
     )
 
 
+def _drill_holes(diameter_mm: float, positions: list[tuple[float, float]]) -> str:
+    """An Excellon file with several plated holes of one diameter at ``positions``."""
+    lines = ["M48", "METRIC,TZ", f"T1C{diameter_mm:.3f}", "%", "T1"]
+    lines += [f"X{x:.3f}Y{y:.3f}" for (x, y) in positions]
+    lines += ["T0", "M30", ""]
+    return "\n".join(lines)
+
+
 def _drill_slot(diameter_mm: float) -> str:
     """An Excellon file with a single G85 routed slot; slot WIDTH == tool
     diameter, slot LENGTH == distance between the two G85 coordinates."""
@@ -302,6 +310,57 @@ def test_stencil_aperture_ratio_not_applicable_without_paste(tmp_path):
     files = {"board.gtl": _copper_rect_pad(cx_mm=5.0, cy_mm=5.0, w_mm=1.0, h_mm=1.0)}
     z = make_gerber_zip(tmp_path, files)
     result = run_single_check(z, load_check_definition("stencil_aperture_ratio"))
+    assert result.status == "not_applicable"
+
+
+# ==========================================================================
+# 8c. castellated_edge_plating -- plated holes crossing the board outline.
+# ==========================================================================
+def test_castellated_edge_plating_pass_bisected_hole(tmp_path):
+    # A 0.6 mm plated hole centred ON the right edge (x=10) -> cleanly bisected.
+    files = {
+        "board.gko": _outline_rect(10.0, 10.0),
+        "board.drl": _drill_holes(0.6, [(10.0, 5.0)]),
+    }
+    z = make_gerber_zip(tmp_path, files)
+    result = run_single_check(z, load_check_definition("castellated_edge_plating"))
+    assert result.status == "pass"
+    assert result.metric.measured_value == 0.0
+
+
+def test_castellated_edge_plating_warns_sliver(tmp_path):
+    # 0.6 mm hole centred 0.2 mm OUTSIDE the right edge -> < half the barrel
+    # remains in copper -> plating sliver.
+    files = {
+        "board.gko": _outline_rect(10.0, 10.0),
+        "board.drl": _drill_holes(0.6, [(10.2, 5.0)]),
+    }
+    z = make_gerber_zip(tmp_path, files)
+    result = run_single_check(z, load_check_definition("castellated_edge_plating"))
+    assert result.status == "warning"
+    assert result.metric.measured_value == 1.0
+
+
+def test_castellated_edge_plating_warns_tight_pitch(tmp_path):
+    # Two bisected castellations 0.5 mm centre-to-centre (< 1.0 mm floor).
+    files = {
+        "board.gko": _outline_rect(10.0, 10.0),
+        "board.drl": _drill_holes(0.5, [(10.0, 5.0), (10.0, 5.5)]),
+    }
+    z = make_gerber_zip(tmp_path, files)
+    result = run_single_check(z, load_check_definition("castellated_edge_plating"))
+    assert result.status == "warning"
+    assert result.metric.measured_value == 1.0
+
+
+def test_castellated_edge_plating_not_applicable_internal_hole(tmp_path):
+    # An ordinary plated hole in the middle of the board crosses no edge.
+    files = {
+        "board.gko": _outline_rect(10.0, 10.0),
+        "board.drl": _drill_holes(0.6, [(5.0, 5.0)]),
+    }
+    z = make_gerber_zip(tmp_path, files)
+    result = run_single_check(z, load_check_definition("castellated_edge_plating"))
     assert result.status == "not_applicable"
 
 

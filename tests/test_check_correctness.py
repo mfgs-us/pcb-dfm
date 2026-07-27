@@ -314,6 +314,45 @@ def test_stencil_aperture_ratio_not_applicable_without_paste(tmp_path):
 
 
 # ==========================================================================
+# 8d. copper_balance_plating -- outer-layer copper symmetry.
+# ==========================================================================
+def test_copper_balance_plating_pass_symmetric(tmp_path):
+    # Full copper pour on both outer layers -> ~0 pp imbalance.
+    files = {
+        "board.gko": _outline_rect(10.0, 10.0),
+        "board.gtl": _copper_rect_pad(cx_mm=5.0, cy_mm=5.0, w_mm=10.0, h_mm=10.0),
+        "board.gbl": _copper_rect_pad(cx_mm=5.0, cy_mm=5.0, w_mm=10.0, h_mm=10.0),
+    }
+    z = make_gerber_zip(tmp_path, files)
+    result = run_single_check(z, load_check_definition("copper_balance_plating"))
+    assert result.status == "pass"
+    assert result.metric.measured_value < 10.0
+
+
+def test_copper_balance_plating_warns_lopsided(tmp_path):
+    # Tiny top pad vs a full bottom pour -> ~99 pp imbalance (> 65 pp).
+    files = {
+        "board.gko": _outline_rect(10.0, 10.0),
+        "board.gtl": _copper_rect_pad(cx_mm=5.0, cy_mm=5.0, w_mm=1.0, h_mm=1.0),
+        "board.gbl": _copper_rect_pad(cx_mm=5.0, cy_mm=5.0, w_mm=10.0, h_mm=10.0),
+    }
+    z = make_gerber_zip(tmp_path, files)
+    result = run_single_check(z, load_check_definition("copper_balance_plating"))
+    assert result.status == "warning"
+    assert result.metric.measured_value > 65.0
+
+
+def test_copper_balance_plating_not_applicable_single_sided(tmp_path):
+    files = {
+        "board.gko": _outline_rect(10.0, 10.0),
+        "board.gtl": _copper_rect_pad(cx_mm=5.0, cy_mm=5.0, w_mm=10.0, h_mm=10.0),
+    }
+    z = make_gerber_zip(tmp_path, files)
+    result = run_single_check(z, load_check_definition("copper_balance_plating"))
+    assert result.status == "not_applicable"
+
+
+# ==========================================================================
 # 8c. castellated_edge_plating -- plated holes crossing the board outline.
 # ==========================================================================
 def test_castellated_edge_plating_pass_bisected_hole(tmp_path):

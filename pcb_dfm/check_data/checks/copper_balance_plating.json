@@ -1,0 +1,27 @@
+{
+  "id": "copper_balance_plating",
+  "category_id": "fabrication_stackup",
+  "name": "Outer-layer copper balance",
+  "description": "Compare whole-layer copper coverage of the two outer layers; grossly asymmetric outer copper warps on reflow and plates unevenly.",
+  "what_it_measures": "Difference (percentage points) between top-side and bottom-side copper coverage, each measured as an exact union rasterisation intersected with the board outline.",
+  "metric": {
+    "kind": "ratio",
+    "units": "%",
+    "preferred_direction": "minimize",
+    "target": { "max": 65.0 },
+    "limits": { "max": 65.0 },
+    "scale_min": 0.0,
+    "scale_max": 100.0
+  },
+  "severity_default": "info",
+  "applies_to": ["copper"],
+  "params": {
+    "outer_balance_pp": 65.0
+  },
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 0.5
+  }
+}

@@ -65,6 +65,14 @@
       "violations": 0
     },
     {
+      "confidence": "high",
+      "id": "copper_balance_plating",
+      "measured": 11.8516,
+      "severity": "info",
+      "status": "pass",
+      "violations": 1
+    },
+    {
       "confidence": "heuristic",
       "id": "copper_density_balance",
       "measured": 89.7411,

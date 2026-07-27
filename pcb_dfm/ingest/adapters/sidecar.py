@@ -13,7 +13,11 @@ controlled-impedance / net info and is what the correctness tests use::
         "dielectric_layers_mm": [0.10, 0.20, 0.20, 0.10]
       },
       "controlled_impedance": [
-        {"name": "USB_DP", "width_mm": 0.20, "target_ohm": 90, "tolerance_pct": 10}
+        {"name": "USB_DP", "width_mm": 0.20, "target_ohm": 90, "tolerance_pct": 10,
+         "geometry": "microstrip", "spacing_mm": 0.20}
+        // geometry: "microstrip" (default) | "stripline";
+        // spacing_mm present -> differential pair (target_ohm is differential);
+        // height_mm optional -> overrides the stackup dielectric height.
       ],
       "nets": {
         "USB_DP": {"routed_length_mm": 51.2, "net_class": "USB"},
@@ -115,11 +119,18 @@ def from_sidecar(data: Dict[str, Any]) -> DesignData:
         target = spec.get("target_ohm")
         if not isinstance(target, (int, float)):
             continue
+        def _f(key):
+            v = spec.get(key)
+            return float(v) if isinstance(v, (int, float)) else None
+        geometry = str(spec.get("geometry", "microstrip")).lower()
         dd.controlled_impedance.append(ControlledImpedanceSpec(
             name=str(spec.get("name", "?")),
             target_ohm=float(target),
-            width_mm=(float(spec["width_mm"]) if isinstance(spec.get("width_mm"), (int, float)) else None),
-            tolerance_pct=(float(spec["tolerance_pct"]) if isinstance(spec.get("tolerance_pct"), (int, float)) else 10.0),
+            width_mm=_f("width_mm"),
+            tolerance_pct=(_f("tolerance_pct") if _f("tolerance_pct") is not None else 10.0),
+            geometry=(geometry if geometry in ("microstrip", "stripline") else "microstrip"),
+            spacing_mm=_f("spacing_mm"),
+            height_mm=_f("height_mm"),
         ))
 
     nets = data.get("nets")

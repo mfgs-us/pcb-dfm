@@ -666,6 +666,14 @@
     },
     {
       "confidence": "high",
+      "id": "thermal_pad_via_count",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
       "id": "thermal_relief_spoke_width",
       "measured": null,
       "severity": "info",
@@ -718,6 +726,14 @@
       "measured": 0.0,
       "severity": "info",
       "status": "pass",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
+      "id": "unrouted_or_partial_net",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
       "violations": 1
     },
     {

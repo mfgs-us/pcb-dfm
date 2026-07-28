@@ -200,12 +200,46 @@ class Pad:
 
     ``name`` is the pad / pin identifier from the footprint ("1", "2", "A1",
     "K", ...). ``through_hole`` distinguishes wave-soldered THT pads from SMD.
+    ``width_mm``/``height_mm`` are the pad's copper extent in its own frame and
+    ``rotation_deg`` its absolute orientation, so ``contains`` can test whether a
+    point (a trace end, a via) actually lands on the pad -- not just near its
+    centre. Size is None when the source does not carry it.
     """
     name: str
     x_mm: float
     y_mm: float
     pad_type: Optional[str] = None  # "smd" | "thru_hole" | "np_thru_hole" | ...
     through_hole: bool = False
+    width_mm: Optional[float] = None
+    height_mm: Optional[float] = None
+    shape: Optional[str] = None      # "rect"|"roundrect"|"circle"|"oval"|"custom"
+    rotation_deg: float = 0.0        # absolute, in the same frame as x/y
+
+    def area_mm2(self) -> Optional[float]:
+        if self.width_mm is None or self.height_mm is None:
+            return None
+        if self.shape in ("circle", "oval"):
+            import math
+            return math.pi * 0.25 * self.width_mm * self.height_mm
+        return self.width_mm * self.height_mm
+
+    def contains(self, x: float, y: float, margin_mm: float = 0.0) -> bool:
+        """True when (x, y) lands on this pad (rotated bbox / disc), padded by
+        ``margin_mm``. Falls back to a small disc when size is unknown."""
+        import math
+        dx, dy = x - self.x_mm, y - self.y_mm
+        if self.width_mm is None or self.height_mm is None:
+            return (dx * dx + dy * dy) <= (margin_mm or 0.15) ** 2
+        a = math.radians(-self.rotation_deg)
+        ca, sa = math.cos(a), math.sin(a)
+        lx = dx * ca - dy * sa
+        ly = dx * sa + dy * ca
+        hw = 0.5 * self.width_mm + margin_mm
+        hh = 0.5 * self.height_mm + margin_mm
+        if self.shape == "circle":
+            r = 0.5 * max(self.width_mm, self.height_mm) + margin_mm
+            return (dx * dx + dy * dy) <= r * r
+        return abs(lx) <= hw and abs(ly) <= hh
 
 
 @dataclass

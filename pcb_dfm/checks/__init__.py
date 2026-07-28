@@ -138,6 +138,7 @@ def _ensure_impls_loaded() -> None:
         impl_tall_part_edge_clearance,  # noqa: F401
         impl_teardrop_presence,  # noqa: F401
         impl_test_point_coverage,  # noqa: F401
+        impl_thermal_pad_via_count,  # noqa: F401
         impl_thermal_relief_spoke_width,  # noqa: F401
         impl_tombstoning_risk,  # noqa: F401
         impl_trace_necking,  # noqa: F401
@@ -145,6 +146,7 @@ def _ensure_impls_loaded() -> None:
         impl_trace_right_angle_bends,  # noqa: F401
         impl_unconnected_pads,  # noqa: F401
         impl_unpowered_ic,  # noqa: F401
+        impl_unrouted_or_partial_net,  # noqa: F401
         impl_unsupported_hole_types,  # noqa: F401
         impl_via_in_pad_thermal_balance,  # noqa: F401
         impl_via_tenting,  # noqa: F401

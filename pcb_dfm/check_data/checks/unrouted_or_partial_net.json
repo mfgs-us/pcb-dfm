@@ -1,0 +1,33 @@
+{
+  "id": "unrouted_or_partial_net",
+  "category_id": "design_advisory",
+  "name": "Unrouted / partially-routed net",
+  "description": "Design-review check: a net with pins on two or more components but no copper connecting them all (ratsnest remaining).",
+  "what_it_measures": "Count of multi-component nets with no routing, or whose pads split into disconnected groups.",
+  "metric": {
+    "kind": "count",
+    "units": "count",
+    "preferred_direction": "minimize",
+    "target": {
+      "max": 0.0
+    },
+    "limits": {
+      "max": 0.0
+    },
+    "scale_min": 0.0,
+    "scale_max": 8.0
+  },
+  "severity_default": "info",
+  "applies_to": [
+    "net"
+  ],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 0.5
+  },
+  "params": {
+    "margin_mm": 0.05
+  }
+}

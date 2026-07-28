@@ -1,0 +1,31 @@
+{
+  "id": "critical_pin_connectivity",
+  "category_id": "design_advisory",
+  "name": "Critical (power) pin connectivity",
+  "description": "Design-review check: a power_in pin must reach a rail. Flags power pins with no net, or on a net with nothing else on it (an unconnected supply pin). Needs schematic pin types.",
+  "what_it_measures": "Count of power_in pins that are unconnected or sit on a single-pin net.",
+  "metric": {
+    "kind": "count",
+    "units": "count",
+    "preferred_direction": "minimize",
+    "target": {
+      "max": 0.0
+    },
+    "limits": {
+      "max": 0.0
+    },
+    "scale_min": 0.0,
+    "scale_max": 8.0
+  },
+  "severity_default": "info",
+  "applies_to": [
+    "component",
+    "net"
+  ],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 0.8
+  }
+}

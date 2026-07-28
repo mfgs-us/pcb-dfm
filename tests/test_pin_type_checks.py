@@ -107,3 +107,31 @@ def test_open_drain_with_pullup_passes():
 def test_open_drain_na_without_pin_types():
     dd = build([("U1", [("1", 0, 0, "IRQ"), ("2", 0, 1, "VCC")])])
     assert run("open_drain_pullup", dd).status == "not_applicable"
+
+
+# -- critical_pin_connectivity ----------------------------------------------
+def test_unpowered_part_flagged():
+    # U1's only power_in pin lands on a signal net -> no rail -> unpowered part.
+    dd = build([("U1", [("1", 0, 0, "SIG")]), ("U2", [("1", 5, 0, "SIG")])],
+               pin_types={("U1", "1"): "power_in"})
+    r = run("critical_pin_connectivity", dd)
+    assert r.status == "warning" and "U1" in r.violations[0].message
+
+
+def test_dead_end_power_pin_flagged():
+    # Power pin on a power-named net that has nothing else on it -> dead end.
+    dd = build([("U1", [("1", 0, 0, "VBAT_X")])],
+               pin_types={("U1", "1"): "power_in"})
+    r = run("critical_pin_connectivity", dd)
+    assert r.status == "warning"
+
+
+def test_powered_part_passes():
+    dd = build([("U1", [("1", 0, 0, "GND")]), ("U2", [("1", 5, 0, "GND")])],
+               pin_types={("U1", "1"): "power_in"})
+    assert run("critical_pin_connectivity", dd).status == "pass"
+
+
+def test_critical_pin_na_without_pin_types():
+    dd = build([("U1", [("1", 0, 0, "GND")]), ("U2", [("1", 5, 0, "GND")])])
+    assert run("critical_pin_connectivity", dd).status == "not_applicable"

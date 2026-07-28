@@ -137,6 +137,14 @@
       "violations": 1
     },
     {
+      "confidence": "high",
+      "id": "critical_pin_connectivity",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
       "confidence": "heuristic",
       "id": "crosstalk_estimate",
       "measured": null,

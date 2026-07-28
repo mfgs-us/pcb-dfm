@@ -434,7 +434,23 @@
     },
     {
       "confidence": "high",
+      "id": "net_without_driver",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
       "id": "npth_to_copper_clearance",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
+      "id": "open_drain_pullup",
       "measured": null,
       "severity": "info",
       "status": "not_applicable",
@@ -451,6 +467,14 @@
     {
       "confidence": "high",
       "id": "outline_sharp_corners",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
+      "id": "output_drive_contention",
       "measured": null,
       "severity": "info",
       "status": "not_applicable",

@@ -1,0 +1,30 @@
+{
+  "id": "output_drive_contention",
+  "category_id": "high_speed_si",
+  "name": "Output drive contention",
+  "description": "Design-review check: two or more push-pull output pins on one net fight each other -- a short when they disagree. Needs schematic pin types.",
+  "what_it_measures": "Count of nets with two or more push-pull output pins and no shared-bus pin (tri-state/open-drain).",
+  "metric": {
+    "kind": "count",
+    "units": "count",
+    "preferred_direction": "minimize",
+    "target": {
+      "max": 0.0
+    },
+    "limits": {
+      "max": 0.0
+    },
+    "scale_min": 0.0,
+    "scale_max": 8.0
+  },
+  "severity_default": "info",
+  "applies_to": [
+    "net"
+  ],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 0.7
+  }
+}

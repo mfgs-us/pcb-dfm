@@ -301,6 +301,15 @@ GUIDANCE: Dict[str, Remediation] = {
         "Check the odd-angle polarized part against its neighbours; fix a flipped placement.",
         "A reversed polarized part fails or is destroyed at power-up."),
     # --- trace shape / routing review --------------------------------------
+    "output_drive_contention": Remediation(
+        "Remove the second driver (or make the shared line open-drain/tri-state).",
+        "Two push-pull outputs fighting → a short and stressed drivers."),
+    "net_without_driver": Remediation(
+        "Add the missing driver, or a pull resistor to define the level.",
+        "A net of only inputs floats → indeterminate logic."),
+    "open_drain_pullup": Remediation(
+        "Add a pull-up (or pull-down) resistor from the open-drain net to a rail.",
+        "An open-drain line with no pull can't idle → dead signal."),
     "trace_right_angle_bends": Remediation(
         "Replace 90° bends on high-speed traces with 45° chamfers or arcs.",
         "Right-angle bends are impedance discontinuities / reflection points."),

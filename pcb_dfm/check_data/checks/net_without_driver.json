@@ -1,0 +1,30 @@
+{
+  "id": "net_without_driver",
+  "category_id": "high_speed_si",
+  "name": "Net with no driver",
+  "description": "Design-review check: a signal net of only input pins (no output/bidirectional/passive) is never driven -- a floating input. Needs schematic pin types.",
+  "what_it_measures": "Count of multi-pin signal nets whose pins are all inputs, with no driver and no biasing passive.",
+  "metric": {
+    "kind": "count",
+    "units": "count",
+    "preferred_direction": "minimize",
+    "target": {
+      "max": 0.0
+    },
+    "limits": {
+      "max": 0.0
+    },
+    "scale_min": 0.0,
+    "scale_max": 8.0
+  },
+  "severity_default": "info",
+  "applies_to": [
+    "net"
+  ],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 0.7
+  }
+}

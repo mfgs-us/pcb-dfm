@@ -109,9 +109,12 @@ def _ensure_impls_loaded() -> None:
         impl_missing_tooling_holes,  # noqa: F401
         impl_mounting_hole_keepout,  # noqa: F401
         impl_net_via_count,  # noqa: F401
+        impl_net_without_driver,  # noqa: F401
         impl_npth_to_copper_clearance,  # noqa: F401
+        impl_open_drain_pullup,  # noqa: F401
         impl_orphan_or_redundant_via,  # noqa: F401
         impl_outline_sharp_corners,  # noqa: F401
+        impl_output_drive_contention,  # noqa: F401
         impl_plane_fragmentation,  # noqa: F401
         impl_plating_uniformity,  # noqa: F401
         impl_polarity_marking_consistency,  # noqa: F401

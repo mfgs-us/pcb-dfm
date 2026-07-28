@@ -53,9 +53,14 @@ class ResolvedDesign:
     # Schematic pin electrical types present on each net (empty without a
     # schematic). Enables direction-aware checks (contention, no-driver, ...).
     net_pin_types: Dict[str, set] = field(default_factory=dict)
+    # (ref, pin) the schematic marks no-connect AND the layout leaves unconnected.
+    nc_pins: set = field(default_factory=set)
 
     def has_pin_types(self) -> bool:
         return bool(self.dd.pin_types)
+
+    def is_nc(self, ref: str, pin: str) -> bool:
+        return (ref, pin) in self.nc_pins
 
     # -- net-function sets --------------------------------------------------
     def ground_nets(self) -> Set[str]:
@@ -154,6 +159,7 @@ def resolve_design(dd: Optional[DesignData]) -> Optional[ResolvedDesign]:
             pin_types_on_net[net].add(et)
     net_func = {name: net_function_with_pins(name, net.net_class, pin_types_on_net.get(name, ()))
                 for name, net in dd.nets.items()}
+    nc_pins = set(dd.nc_pins)
     comp_by_ref = {c.ref: c for c in dd.components}
     part_class = {ref: classify_component(c)[0] for ref, c in comp_by_ref.items()}
     pins_on_net: Dict[str, int] = defaultdict(int)
@@ -162,4 +168,5 @@ def resolve_design(dd: Optional[DesignData]) -> Optional[ResolvedDesign]:
     return ResolvedDesign(
         dd=dd, idx=idx, net_func=net_func, part_class=part_class,
         comp_by_ref=comp_by_ref, pins_on_net=dict(pins_on_net),
-        net_pin_types={n: set(t) for n, t in pin_types_on_net.items()})
+        net_pin_types={n: set(t) for n, t in pin_types_on_net.items()},
+        nc_pins=nc_pins)

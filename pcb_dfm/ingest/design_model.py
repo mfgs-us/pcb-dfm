@@ -313,6 +313,10 @@ class DesignData:
     # "unspecified" | "free". This is *functional intent* the layout can't carry,
     # and it is the join key (ref, pin) == (component ref, pad name).
     pin_types: Dict[Tuple[str, str], str] = field(default_factory=dict)
+    # Pins the schematic explicitly marks no-connect ((ref, pin_number)). Lets a
+    # check tell an *intentionally* unused pin from a forgotten one -- and suppress
+    # floating/​dangling/​unconnected findings the designer already acknowledged.
+    nc_pins: set = field(default_factory=set)
     # Stencil foil thickness (mm), when the fab/design specifies it. Authoritative
     # input for the IPC-7525 aperture area-ratio check; when absent that check
     # assumes a default foil and reports its finding as advisory (never gating).

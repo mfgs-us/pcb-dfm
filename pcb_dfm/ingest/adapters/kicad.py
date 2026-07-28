@@ -590,37 +590,69 @@ _ETYPES = frozenset((
 ))
 
 
-def _parse_schematic_pin_types(sch_root: SNode) -> Dict[Tuple[str, str], str]:
-    """(ref, pin_number) -> electrical type, from a ``.kicad_sch``.
+def _pin_abs(dx: float, dy: float, x: float, y: float, angle: float,
+             mirror: Optional[str]) -> Tuple[float, float]:
+    """Absolute schematic position of a lib pin at ``(dx, dy)`` placed on a symbol
+    instance at ``(x, y)`` with ``angle``/``mirror``. Library coords are Y-up,
+    the schematic is Y-down (verified: the Y-flip matches known no-connect pins)."""
+    px, py = dx, -dy
+    if mirror == "x":
+        py = -py
+    elif mirror == "y":
+        px = -px
+    a = math.radians(angle or 0.0)
+    ca, sa = math.cos(a), math.sin(a)
+    return (x + px * ca - py * sa, y + px * sa + py * ca)
 
-    Pin electrical types live in the ``lib_symbols`` definitions (by pin number);
-    the body ``(symbol ...)`` instances map a Reference to a ``lib_id``. Joining
-    them tags every placed pin -- ``power_in``/``output``/``open_collector``/
-    ``no_connect``/... -- which is functional intent the layout doesn't carry.
+
+def _parse_schematic_functional(sch_root: SNode
+                                ) -> Tuple[Dict[Tuple[str, str], str], set]:
+    """``(pin_types, nc_pins)`` from a ``.kicad_sch``.
+
+    Pin electrical types live in the ``lib_symbols`` definitions (type + position,
+    by pin number); the body instances map a Reference to a ``lib_id`` + placement.
+    Joining them tags every placed pin, and transforming each pin's library
+    position by its instance placement lets us match the positional
+    ``(no_connect (at X Y))`` markers to the specific pins they sit on.
     """
     lib = _first(sch_root, "lib_symbols")
-    lib_pins: Dict[str, Dict[str, str]] = {}
+    # lib_name -> {unit_int: {pin_number: (etype, dx, dy)}}. A multi-unit part
+    # places each unit at its own instance position, so pin geometry (for the
+    # no-connect match) must be kept per unit -- pin *types* are unit-independent.
+    lib_units: Dict[str, Dict[int, Dict[str, Tuple[Optional[str], float, float]]]] = {}
     if lib is not None:
         for sym in _tagged(lib, "symbol"):
             name = sym[1] if len(sym) > 1 and isinstance(sym[1], str) else None
             if not name:
                 continue
-            pins: Dict[str, str] = {}
-
-            def _collect(node: SNode) -> None:
-                for pin in _tagged(node, "pin"):
+            units: Dict[int, Dict[str, Tuple[Optional[str], float, float]]] = {}
+            for sub in _tagged(sym, "symbol"):   # "SYM_<unit>_<bodystyle>"
+                subname = sub[1] if len(sub) > 1 and isinstance(sub[1], str) else ""
+                parts = subname.rsplit("_", 2)
+                unit = int(parts[1]) if len(parts) == 3 and parts[1].isdigit() else 0
+                d = units.setdefault(unit, {})
+                for pin in _tagged(sub, "pin"):
                     etype = pin[1] if len(pin) > 1 and isinstance(pin[1], str) else None
+                    at = _first(pin, "at")
                     numnode = _first(pin, "number")
                     num = _atoms(numnode)[0] if numnode and _atoms(numnode) else None
-                    if etype in _ETYPES and num:
-                        pins[num] = etype
-                for sub in _tagged(node, "symbol"):   # multi-unit sub-symbols
-                    _collect(sub)
+                    if num:
+                        d[num] = (etype if etype in _ETYPES else None,
+                                  _fatom(at, 0) or 0.0, _fatom(at, 1) or 0.0)
+            lib_units[name] = units
 
-            _collect(sym)
-            lib_pins[name] = pins
+    nc_pts: List[Tuple[float, float]] = []
+    for nc in _tagged(sch_root, "no_connect"):
+        at = _first(nc, "at")
+        nx, ny = _fatom(at, 0), _fatom(at, 1)
+        if nx is not None and ny is not None:
+            nc_pts.append((nx, ny))
 
-    out: Dict[Tuple[str, str], str] = {}
+    def _is_nc(px: float, py: float, tol: float = 0.1) -> bool:
+        return any(abs(px - nx) < tol and abs(py - ny) < tol for (nx, ny) in nc_pts)
+
+    pin_types: Dict[Tuple[str, str], str] = {}
+    nc_pins: set = set()
     for sym in _tagged(sch_root, "symbol"):
         libid = _first(sym, "lib_id")
         lib_name = _atoms(libid)[0] if libid and _atoms(libid) else None
@@ -629,22 +661,43 @@ def _parse_schematic_pin_types(sch_root: SNode) -> Dict[Tuple[str, str], str]:
             if len(prop) > 2 and prop[1] == "Reference" and isinstance(prop[2], str):
                 ref = prop[2]
                 break
-        if not ref or ref.startswith("#") or lib_name not in lib_pins:
-            continue  # '#PWR'/'#FLG' power/flag symbols have no footprint
-        for num, etype in lib_pins[lib_name].items():
-            out[(ref, num)] = etype
-    return out
+        if not ref or ref.startswith("#") or lib_name not in lib_units:
+            continue
+        units = lib_units[lib_name]
+        # Pin types: unit-independent, so tag from every unit.
+        for pins in units.values():
+            for num, (etype, _dx, _dy) in pins.items():
+                if etype is not None:
+                    pin_types[(ref, num)] = etype
+        # No-connect: place only THIS instance's unit at THIS instance's position.
+        if not nc_pts:
+            continue
+        at = _first(sym, "at")
+        sx, sy = _fatom(at, 0) or 0.0, _fatom(at, 1) or 0.0
+        angle = _fatom(at, 2) or 0.0
+        mnode = _first(sym, "mirror")
+        mirror = _atoms(mnode)[0] if mnode and _atoms(mnode) else None
+        unode = _first(sym, "unit")
+        uatoms = _atoms(unode) if unode else []
+        this_unit = int(uatoms[0]) if uatoms and uatoms[0].isdigit() else None
+        pins_here = units.get(this_unit, {}) if this_unit is not None \
+            else {n: v for u in units.values() for n, v in u.items()}
+        for num, (_etype, dx, dy) in pins_here.items():
+            px, py = _pin_abs(dx, dy, sx, sy, angle, mirror)
+            if _is_nc(px, py):
+                nc_pins.add((ref, num))
+    return pin_types, nc_pins
 
 
-def _read_schematic_pin_types(board: Path) -> Dict[Tuple[str, str], str]:
+def _read_schematic_functional(board: Path) -> Tuple[Dict[Tuple[str, str], str], set]:
     """Parse the sibling ``.kicad_sch`` (root sheet) when present."""
     sch = board.with_suffix(".kicad_sch")
     if not sch.exists():
-        return {}
+        return {}, set()
     try:
-        return _parse_schematic_pin_types(_parse_sexpr(sch.read_text(encoding="utf-8")))
+        return _parse_schematic_functional(_parse_sexpr(sch.read_text(encoding="utf-8")))
     except Exception:
-        return {}
+        return {}, set()
 
 
 def from_kicad(source: Union[str, Path]) -> DesignData:
@@ -659,11 +712,20 @@ def from_kicad(source: Union[str, Path]) -> DesignData:
         _apply_project_netclasses(pro, nets)
     _to_gerber_frame(components, nets)
 
+    pin_types, nc_pins = _read_schematic_functional(board)
+    # A no-connect match is only trusted when the pin is ALSO unconnected in the
+    # layout. On a dense schematic, pins and markers share the 1.27 mm grid, so
+    # position-matching alone produces collisions on connected pins; requiring the
+    # layout to agree removes them and guarantees we never mislabel a wired pin.
+    connected = {(pt.ref, pt.pin) for net in nets.values() for pt in net.points
+                 if pt.ref and pt.pin}
+    nc_pins = {rp for rp in nc_pins if rp not in connected}
     return DesignData(
         stackup=_parse_stackup(root),
         nets=nets,
         diff_pairs=_infer_diff_pairs(nets),
         components=components,
-        pin_types=_read_schematic_pin_types(board),
+        pin_types=pin_types,
+        nc_pins=nc_pins,
         source="kicad",
     )

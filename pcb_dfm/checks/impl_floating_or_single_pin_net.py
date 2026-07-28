@@ -31,6 +31,9 @@ def run_floating_or_single_pin_net(ctx: CheckContext) -> CheckResult:
         classes = {c for c in r.classes_on(net) if c is not None}
         if classes and classes <= _SKIP_ONLY:
             continue  # a lone test point / mounting hole net is not a stub
+        # A net whose one pin the schematic marks no-connect is intentional.
+        if any(r.is_nc(ref, pad) for (ref, pad), n in r.idx.pad_net.items() if n == net):
+            continue
         single.append(net)
     single.sort()
     flagged = bool(single)

@@ -22,6 +22,23 @@ _OPEN_DRAIN = {"open_collector", "open_emitter"}
 _I2C_RE = re.compile(r"(^|[_/-])(sda|scl|i2c|smb)", re.I)
 
 
+def _sinks_an_led(rd, net: str) -> bool:
+    """True when this open-drain net drives an indicator LED.
+
+    An open-drain pin sinking an LED (rail -> R -> LED -> pin, or the LED right on
+    the net) idles high through the LED+resistor path to the rail, so it needs no
+    separate pull-up. Match the LED directly on the net, or one resistor hop away
+    (the common series-resistor placement)."""
+    if rd.has_class_on(net, "led"):
+        return True
+    for ref in rd.comps_on(net):
+        if rd.part_class.get(ref) == "resistor":
+            if any(other != net and rd.has_class_on(other, "led")
+                   for other in rd.nets_of(ref)):
+                return True
+    return False
+
+
 @register_check("open_drain_pullup")
 def run_open_drain_pullup(ctx: CheckContext) -> CheckResult:
     rd = resolve_design(ctx.design_data)
@@ -37,8 +54,15 @@ def run_open_drain_pullup(ctx: CheckContext) -> CheckResult:
     for net, types in rd.net_pin_types.items():
         if not (types & _OPEN_DRAIN):
             continue
+        # A KiCad ``unconnected-(...)`` placeholder is a deliberately-unconnected
+        # pin, and a single-pin net is floating (owned by floating_or_single_pin_net)
+        # -- a missing pull-up is only meaningful on a net that is actually in use.
+        if net.startswith("unconnected-") or rd.pins_on_net.get(net, 0) < 2:
+            continue
         if _I2C_RE.search(net or ""):
             continue  # SDA/SCL -> i2c_pullup_presence owns these
+        if _sinks_an_led(rd, net):
+            continue
         if not rd.resistor_to_power_on(net):
             bad.append(net)
     bad.sort()

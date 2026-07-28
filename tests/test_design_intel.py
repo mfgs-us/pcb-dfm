@@ -50,6 +50,16 @@ def test_class_from_refdes():
         assert got == cls, f"{ref} -> {got}, want {cls}"
 
 
+def test_diode_refdes_with_led_footprint_is_led():
+    # A D-prefixed part is a generic diode by refdes, but an LED footprint is
+    # decisive -- otherwise LED-aware checks miss D-numbered indicator LEDs.
+    got, pol = classify_component(
+        Component(ref="D606", value="GREEN", footprint="CM5IO:LED-SMD_L1.7-W0.6-RD"))
+    assert got == "led" and pol is True
+    # A real signal diode (no LED footprint) stays a diode.
+    assert classify_component(Component(ref="D403", footprint="DFN2510A-10"))[0] == "diode"
+
+
 def test_polarity_inference():
     assert classify_component(Component(ref="D1"))[1] is True     # diode
     assert classify_component(Component(ref="LED2"))[1] is True   # led

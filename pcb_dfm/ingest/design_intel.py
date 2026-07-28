@@ -138,6 +138,12 @@ def classify_component(comp: Component) -> Tuple[Optional[str], Optional[bool]]:
         elif "diode" in fp:
             cls = "diode"
 
+    # A D-prefixed part classifies as a generic diode from its refdes, but an LED
+    # footprint (LED-SMD, ...) is decisive -- refine so LED-aware checks (series
+    # resistor, indicator-sink pull-up) recognise it.
+    if cls == "diode" and "led" in fp:
+        cls = "led"
+
     polarized: Optional[bool] = comp.polarized
     if polarized is None and cls is not None:
         if cls in _POLARIZED_CLASSES:

@@ -689,15 +689,71 @@ def _parse_schematic_functional(sch_root: SNode
     return pin_types, nc_pins
 
 
+def _sheet_files(sch_root: SNode, base_dir: Path) -> List[Path]:
+    """Child ``.kicad_sch`` files referenced by ``(sheet ...)`` instances.
+
+    Each sheet carries a ``(property "Sheetfile" "sub.kicad_sch")`` (KiCad 7+;
+    older files spell it ``"Sheet file"``) naming the child, path relative to the
+    parent sheet's directory."""
+    out: List[Path] = []
+    for sheet in _tagged(sch_root, "sheet"):
+        for prop in _tagged(sheet, "property"):
+            if (len(prop) > 2 and isinstance(prop[1], str)
+                    and prop[1] in ("Sheetfile", "Sheet file")
+                    and isinstance(prop[2], str) and prop[2]):
+                out.append(base_dir / prop[2])
+                break
+    return out
+
+
 def _read_schematic_functional(board: Path) -> Tuple[Dict[Tuple[str, str], str], set]:
-    """Parse the sibling ``.kicad_sch`` (root sheet) when present."""
-    sch = board.with_suffix(".kicad_sch")
-    if not sch.exists():
+    """Walk the whole sheet hierarchy from the sibling root ``.kicad_sch``.
+
+    Pin electrical types and no-connect markers are collected across every sheet,
+    not just the root -- on a hierarchical design the sub-sheets carry most of the
+    parts. Each sheet is parsed in its own coordinate frame (the NC position match
+    in ``_parse_schematic_functional`` is per-file, so the parent's placement is
+    not applied), and results are unioned.
+
+    A reused sub-sheet (one file instantiated more than once) is parsed once, so
+    only the instance whose refdes are written to the symbols' ``Reference``
+    property is covered; the others fall back to partial coverage, exactly as
+    before this change -- we under-report rather than mis-report. Full per-instance
+    refdes resolution via the ``(instances ...)`` block is tracked separately.
+    """
+    root_sch = board.with_suffix(".kicad_sch")
+    if not root_sch.exists():
         return {}, set()
-    try:
-        return _parse_schematic_functional(_parse_sexpr(sch.read_text(encoding="utf-8")))
-    except Exception:
-        return {}, set()
+
+    pin_types: Dict[Tuple[str, str], str] = {}
+    nc_pins: set = set()
+    visited: set = set()
+
+    def walk(path: Path, depth: int) -> None:
+        if depth > 32 or not path.exists():
+            return
+        try:
+            key = path.resolve()
+        except OSError:
+            key = path
+        if key in visited:
+            return  # cycle / reused sheet -- parse each file at most once
+        visited.add(key)
+        try:
+            root = _parse_sexpr(path.read_text(encoding="utf-8"))
+        except Exception:
+            return
+        try:
+            pt, nc = _parse_schematic_functional(root)
+            pin_types.update(pt)
+            nc_pins.update(nc)
+        except Exception:
+            pass  # a malformed sheet degrades to partial coverage, never a crash
+        for child in _sheet_files(root, path.parent):
+            walk(child, depth + 1)
+
+    walk(root_sch, 0)
+    return pin_types, nc_pins
 
 
 def from_kicad(source: Union[str, Path]) -> DesignData:

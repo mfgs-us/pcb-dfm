@@ -50,6 +50,12 @@ class ResolvedDesign:
     part_class: Dict[str, Optional[str]]     # ref -> class
     comp_by_ref: Dict[str, Component]
     pins_on_net: Dict[str, int] = field(default_factory=dict)
+    # Schematic pin electrical types present on each net (empty without a
+    # schematic). Enables direction-aware checks (contention, no-driver, ...).
+    net_pin_types: Dict[str, set] = field(default_factory=dict)
+
+    def has_pin_types(self) -> bool:
+        return bool(self.dd.pin_types)
 
     # -- net-function sets --------------------------------------------------
     def ground_nets(self) -> Set[str]:
@@ -155,4 +161,5 @@ def resolve_design(dd: Optional[DesignData]) -> Optional[ResolvedDesign]:
         pins_on_net[net] += 1
     return ResolvedDesign(
         dd=dd, idx=idx, net_func=net_func, part_class=part_class,
-        comp_by_ref=comp_by_ref, pins_on_net=dict(pins_on_net))
+        comp_by_ref=comp_by_ref, pins_on_net=dict(pins_on_net),
+        net_pin_types={n: set(t) for n, t in pin_types_on_net.items()})

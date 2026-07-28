@@ -1,0 +1,30 @@
+{
+  "id": "open_drain_pullup",
+  "category_id": "design_advisory",
+  "name": "Open-drain pull-up presence",
+  "description": "Design-review check: an open-collector/open-emitter net needs a pull-up to a rail. Uses schematic pin types (I2C SDA/SCL stay covered by i2c_pullup_presence as the name-based fallback).",
+  "what_it_measures": "Count of open-drain nets (by pin type) with no pull-up resistor to a rail.",
+  "metric": {
+    "kind": "count",
+    "units": "count",
+    "preferred_direction": "minimize",
+    "target": {
+      "max": 0.0
+    },
+    "limits": {
+      "max": 0.0
+    },
+    "scale_min": 0.0,
+    "scale_max": 8.0
+  },
+  "severity_default": "info",
+  "applies_to": [
+    "net"
+  ],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 0.7
+  }
+}

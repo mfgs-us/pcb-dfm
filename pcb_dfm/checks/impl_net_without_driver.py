@@ -32,14 +32,23 @@ def run_net_without_driver(ctx: CheckContext) -> CheckResult:
 
     bad: List[str] = []
     for net, types in rd.net_pin_types.items():
-        if rd.net_func.get(net) != "signal":
+        if rd.net_func.get(net) != "signal" or net.startswith("unconnected-"):
             continue
         if not (types & _RECEIVER_ONLY):
             continue                    # no input pin -> not our concern
-        if types & _DRIVERS:
-            continue                    # a driver is present
-        if "passive" in types:
-            continue                    # a pull/series passive can bias it
+        if types & _DRIVERS or "passive" in types:
+            continue                    # a driver, or a passive pin that biases it
+        # Only the unambiguous case: a net connecting ONLY IC pins. Anything else
+        # -- a discrete passive, a connector (off-board drive), a bus, an
+        # unclassified part -- could supply the missing drive, and symbols type
+        # those pins inconsistently, so a net that touches them is left alone.
+        if any(rd.part_class.get(c) != "ic" for c in rd.comps_on(net)):
+            continue
+        # And only when every pin has a known type (an unparsed hierarchical pin
+        # could be the driver).
+        if any((ref, pad) not in rd.dd.pin_types
+               for (ref, pad), n in rd.idx.pad_net.items() if n == net):
+            continue
         # Only inputs (+ maybe unspecified/free/no_connect) -> nothing drives it.
         if rd.pins_on_net.get(net, 0) >= 2:
             bad.append(net)

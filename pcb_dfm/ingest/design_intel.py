@@ -43,18 +43,20 @@ def classify_net(name: Optional[str], net_class: Optional[str] = None) -> NetFun
     nc = (net_class or "").strip().lower()
     if not n:
         return "signal"
-    # net_class hint wins if explicit.
-    if "ground" in nc or nc in ("gnd", "power_gnd"):
-        return "ground"
-    if "power" in nc or nc in ("pwr", "supply"):
-        return "power"
-    # Token match on the net name. A trailing index (GND1, VCC2) is stripped so
-    # the rail keyword still matches. Ground first (VSS/GND are unambiguous).
+    # The NAME's rail token wins over the net class: KiCad commonly puts GND *and*
+    # VCC in one "Power" net class for width rules, so honouring the class first
+    # would mis-label GND as power. A trailing index (GND1, VCC2) is stripped so
+    # the keyword still matches; ground first (VSS/GND are unambiguous).
     tokens = re.split(r"[^a-z0-9]+", n)
     stems = {re.sub(r"\d+$", "", t) or t for t in tokens} | set(tokens)
     if stems & set(_GROUND_TOKENS):
         return "ground"
     if stems & set(_POWER_TOKENS) or any(_RAIL_RE.match(t) for t in tokens):
+        return "power"
+    # Otherwise fall back to an explicit net-class hint.
+    if "ground" in nc or nc in ("gnd", "power_gnd"):
+        return "ground"
+    if "power" in nc or nc in ("pwr", "supply"):
         return "power"
     return "signal"
 

@@ -43,8 +43,9 @@ def run_orphan_or_redundant_via(ctx: CheckContext) -> CheckResult:
                 if hypot(vs[i][0] - vs[j][0], vs[i][1] - vs[j][1]) <= coincide:
                     redundant.append((name, vs[i][0], vs[i][1]))
                     break
-        # Orphan: only signal vias (pours connect ground/power stitching vias).
-        if classify_net(name, net.net_class) != "signal":
+        # Orphan: only signal vias, and not on a poured net -- a via on a filled
+        # zone connects to the pour, not to a trace endpoint.
+        if classify_net(name, net.net_class) != "signal" or net.fill_regions:
             continue
         endpoints = [pt for (seg, _l, _w) in net.route_segments() for pt in seg]
         pads = rd.pad_points_on(name) if rd is not None else []

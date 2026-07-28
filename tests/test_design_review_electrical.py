@@ -85,10 +85,12 @@ def _big_ic(gnd_net: str):
     return ("U1", "BGA", pads)
 
 
-def test_unpowered_ic_flagged_when_no_ground():
-    # 8-pin IC fully resolved, none of its nets is ground; GND exists via C1.
+def test_unpowered_ic_flagged_when_no_rail():
+    # 8-pin IC fully resolved, on only signal nets -- reaches no power/ground rail
+    # at all (rails exist via C1). A part merely lacking a GND-named net is fine.
+    pads = [(str(i), float(i), 0.0, f"SIG{i}") for i in range(1, 9)]
     dd = build([
-        _big_ic("SIG8"),
+        ("U1", "BGA", pads),
         ("C1", "1uF", [("1", 20, 0, "VCC"), ("2", 21, 0, "GND")]),
     ])
     r = run("unpowered_ic", dd)

@@ -1,0 +1,30 @@
+{
+  "id": "schematic_layout_consistency",
+  "category_id": "design_advisory",
+  "name": "Schematic / layout pin consistency",
+  "description": "Design-review check: a component whose schematic pins (that aren't marked no-connect) don't all have a matching footprint pad -- a wrong-footprint or pin-mapping error. Needs a schematic.",
+  "what_it_measures": "Count of components with a non-no-connect numeric schematic pin absent from the placed footprint's pads.",
+  "metric": {
+    "kind": "count",
+    "units": "count",
+    "preferred_direction": "minimize",
+    "target": {
+      "max": 0.0
+    },
+    "limits": {
+      "max": 0.0
+    },
+    "scale_min": 0.0,
+    "scale_max": 8.0
+  },
+  "severity_default": "info",
+  "applies_to": [
+    "component"
+  ],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 0.8
+  }
+}

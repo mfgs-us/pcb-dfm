@@ -51,6 +51,7 @@ def run_critical_pin_connectivity(ctx: CheckContext) -> CheckResult:
     reaches_rail: Dict[str, bool] = defaultdict(bool)
     has_power_pin: Dict[str, bool] = defaultdict(bool)
     dead_end: List[str] = []
+    forgotten: List[str] = []   # unconnected power pin that isn't marked no-connect
     reviewed = 0
     for (ref, pin), et in dd.pin_types.items():
         if et != "power_in":
@@ -62,7 +63,11 @@ def run_critical_pin_connectivity(ctx: CheckContext) -> CheckResult:
         reviewed += 1
         net = rd.idx.pad_net.get((ref, pin))
         if net is None:
-            continue  # no-connect-ambiguous -> not judged here
+            # Unconnected. With no-connect markers we can tell a forgotten power
+            # pin from an intentionally-unused one; without them, stay silent.
+            if not rd.is_nc(ref, pin):
+                forgotten.append(f"{ref}.{pin}")
+            continue
         if rd.pins_on_net.get(net, 0) < 2:
             dead_end.append(f"{ref}.{pin} ({net})")
         if _is_rail(net):
@@ -79,11 +84,14 @@ def run_critical_pin_connectivity(ctx: CheckContext) -> CheckResult:
                                and dd.pin_types.get((ref, p.name)) == "power_in"
                                for p in rd.comp_by_ref[ref].pads))
     dead_end.sort()
-    total = len(unpowered) + len(dead_end)
+    forgotten.sort()
+    total = len(unpowered) + len(dead_end) + len(forgotten)
     if flagged := (total > 0):
         bits = []
         if unpowered:
             bits.append(f"{len(unpowered)} part(s) with no powered rail: {', '.join(unpowered[:6])}")
+        if forgotten:
+            bits.append(f"{len(forgotten)} unconnected power pin(s) (not no-connect): {', '.join(forgotten[:6])}")
         if dead_end:
             bits.append(f"{len(dead_end)} power pin(s) on a dead-end net: {', '.join(dead_end[:6])}")
         msg = "Power connectivity issue -- " + "; ".join(bits) + "."

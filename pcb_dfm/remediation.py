@@ -313,6 +313,25 @@ GUIDANCE: Dict[str, Remediation] = {
     "net_via_count": Remediation(
         "Re-route to cut layer changes on the net (fewer vias).",
         "Excess vias add inductance and stubs and slow high-speed edges."),
+    # --- routing structure / completeness ----------------------------------
+    "acute_trace_angle": Remediation(
+        "Open acute route bends to ≥ 90° (45° chamfers).",
+        "Acute copper crotches trap etchant → over-etch / opens."),
+    "self_crossing_trace": Remediation(
+        "Re-route the net so it does not cross itself on one layer.",
+        "A self-crossing route is a routing error / loop."),
+    "orphan_or_redundant_via": Remediation(
+        "Delete the via that connects nothing, or de-stack duplicate vias.",
+        "Orphan/redundant vias are wasted drills and reliability risks."),
+    "coupled_run_length": Remediation(
+        "Increase spacing or shorten the parallel run between the two nets.",
+        "Long close coupling → crosstalk."),
+    "signal_plane_adjacency": Remediation(
+        "Re-stack so each signal layer is adjacent to a ground/power plane.",
+        "A signal layer with no adjacent plane has no clean return path → EMI/SI."),
+    "trace_over_cutout": Remediation(
+        "Re-route the trace around the board cutout/slot.",
+        "Copper over a void has no support and no return path."),
     "mounting_hole_keepout": Remediation(
         "Move components out of the mounting hole's screw-head / standoff keep-out.",
         "A part under the mounting hardware collides with it at assembly."),

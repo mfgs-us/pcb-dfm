@@ -1,0 +1,30 @@
+{
+  "id": "self_crossing_trace",
+  "category_id": "design_advisory",
+  "name": "Self-crossing trace",
+  "description": "Design-review check: a signal net whose route crosses itself on one layer indicates a routing error or loop.",
+  "what_it_measures": "Count of signal nets with two non-adjacent same-layer segments that cross.",
+  "metric": {
+    "kind": "count",
+    "units": "count",
+    "preferred_direction": "minimize",
+    "target": {
+      "max": 0.0
+    },
+    "limits": {
+      "max": 0.0
+    },
+    "scale_min": 0.0,
+    "scale_max": 8.0
+  },
+  "severity_default": "info",
+  "applies_to": [
+    "net"
+  ],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 0.5
+  }
+}

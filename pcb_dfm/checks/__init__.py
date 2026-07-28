@@ -56,6 +56,7 @@ def _ensure_impls_loaded() -> None:
     # Mechanical outline
     from . import (
         impl_acid_trap_angle,  # noqa: F401
+        impl_acute_trace_angle,  # noqa: F401
         impl_antenna_keepout,  # noqa: F401
         impl_aperture_definition_errors,  # noqa: F401
         impl_backdrill_stub_length,  # noqa: F401
@@ -69,6 +70,7 @@ def _ensure_impls_loaded() -> None:
         impl_copper_sliver_width,  # noqa: F401
         impl_copper_thermal_area,  # noqa: F401
         impl_copper_to_edge_distance,  # noqa: F401
+        impl_coupled_run_length,  # noqa: F401
         impl_courtyard_overlap,  # noqa: F401
         impl_crosstalk_estimate,  # noqa: F401
         impl_crystal_load_caps,  # noqa: F401
@@ -108,6 +110,7 @@ def _ensure_impls_loaded() -> None:
         impl_mounting_hole_keepout,  # noqa: F401
         impl_net_via_count,  # noqa: F401
         impl_npth_to_copper_clearance,  # noqa: F401
+        impl_orphan_or_redundant_via,  # noqa: F401
         impl_outline_sharp_corners,  # noqa: F401
         impl_plane_fragmentation,  # noqa: F401
         impl_plating_uniformity,  # noqa: F401
@@ -119,6 +122,8 @@ def _ensure_impls_loaded() -> None:
         impl_reference_designator_coverage,  # noqa: F401
         impl_reset_pullup_presence,  # noqa: F401
         impl_return_path_interruptions,  # noqa: F401
+        impl_self_crossing_trace,  # noqa: F401
+        impl_signal_plane_adjacency,  # noqa: F401
         impl_silkscreen_clearance,  # noqa: F401
         impl_silkscreen_min_width,  # noqa: F401
         impl_silkscreen_off_board,  # noqa: F401
@@ -136,6 +141,7 @@ def _ensure_impls_loaded() -> None:
         impl_thermal_relief_spoke_width,  # noqa: F401
         impl_tombstoning_risk,  # noqa: F401
         impl_trace_necking,  # noqa: F401
+        impl_trace_over_cutout,  # noqa: F401
         impl_trace_right_angle_bends,  # noqa: F401
         impl_unconnected_pads,  # noqa: F401
         impl_unpowered_ic,  # noqa: F401

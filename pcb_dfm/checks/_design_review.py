@@ -100,6 +100,21 @@ class ResolvedDesign:
     def has_class_on(self, net: str, cls: str) -> bool:
         return any(self.part_class.get(r) == cls for r in self.comps_on(net))
 
+    def pad_points_on(self, net: str) -> List[tuple]:
+        """(x, y) of every component pad resolved onto ``net``."""
+        out = []
+        for (ref, padname), n in self.idx.pad_net.items():
+            if n != net:
+                continue
+            comp = self.comp_by_ref.get(ref)
+            if comp is None:
+                continue
+            for p in comp.pads:
+                if p.name == padname and p.x_mm is not None:
+                    out.append((p.x_mm, p.y_mm))
+                    break
+        return out
+
 
 def resolve_design(dd: Optional[DesignData]) -> Optional[ResolvedDesign]:
     """Resolve ``dd`` into a ``ResolvedDesign``, or None when there isn't enough

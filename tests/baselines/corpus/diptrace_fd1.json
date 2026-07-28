@@ -10,6 +10,14 @@
     },
     {
       "confidence": "high",
+      "id": "acute_trace_angle",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
       "id": "antenna_keepout",
       "measured": null,
       "severity": "info",
@@ -111,6 +119,14 @@
       "severity": "error",
       "status": "fail",
       "violations": 100
+    },
+    {
+      "confidence": "high",
+      "id": "coupled_run_length",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
     },
     {
       "confidence": "high",
@@ -426,6 +442,14 @@
     },
     {
       "confidence": "high",
+      "id": "orphan_or_redundant_via",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
       "id": "outline_sharp_corners",
       "measured": 0.0,
       "severity": "info",
@@ -507,6 +531,22 @@
     {
       "confidence": "high",
       "id": "return_path_interruptions",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
+      "id": "self_crossing_trace",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
+      "id": "signal_plane_adjacency",
       "measured": null,
       "severity": "info",
       "status": "not_applicable",
@@ -643,6 +683,14 @@
     {
       "confidence": "high",
       "id": "trace_necking",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
+      "id": "trace_over_cutout",
       "measured": null,
       "severity": "info",
       "status": "not_applicable",

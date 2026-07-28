@@ -1,0 +1,146 @@
+{
+  "antenna_keepout": {
+    "metric": null,
+    "status": "not_applicable"
+  },
+  "bulk_capacitance_present": {
+    "metric": 0.0,
+    "status": "pass"
+  },
+  "component_edge_clearance": {
+    "metric": null,
+    "status": "not_applicable"
+  },
+  "courtyard_overlap": {
+    "metric": null,
+    "status": "not_applicable"
+  },
+  "critical_pin_connectivity": {
+    "metric": 0.0,
+    "status": "pass"
+  },
+  "crystal_load_caps": {
+    "metric": 0.0,
+    "status": "pass"
+  },
+  "crystal_proximity": {
+    "metric": null,
+    "status": "not_applicable"
+  },
+  "debug_port_test_access": {
+    "metric": 0.0,
+    "status": "pass"
+  },
+  "decoupling_adequacy": {
+    "metric": 0.0,
+    "status": "pass"
+  },
+  "decoupling_proximity": {
+    "metric": 2.0,
+    "status": "pass"
+  },
+  "decoupling_same_side": {
+    "metric": 0.0,
+    "status": "pass"
+  },
+  "differential_pair_completeness": {
+    "metric": null,
+    "status": "not_applicable"
+  },
+  "duplicate_refdes": {
+    "metric": null,
+    "status": "not_applicable"
+  },
+  "fiducial_coverage": {
+    "metric": null,
+    "status": "not_applicable"
+  },
+  "fine_pitch_fiducials": {
+    "metric": null,
+    "status": "not_applicable"
+  },
+  "floating_copper": {
+    "metric": null,
+    "status": "not_applicable"
+  },
+  "floating_or_single_pin_net": {
+    "metric": 0.0,
+    "status": "pass"
+  },
+  "i2c_pullup_presence": {
+    "metric": 0.0,
+    "status": "pass"
+  },
+  "led_series_resistor": {
+    "metric": 0.0,
+    "status": "pass"
+  },
+  "open_drain_pullup": {
+    "metric": 0.0,
+    "status": "pass"
+  },
+  "outline_sharp_corners": {
+    "metric": null,
+    "status": "not_applicable"
+  },
+  "polarized_orientation_consistency": {
+    "metric": null,
+    "status": "not_applicable"
+  },
+  "power_feed_robustness": {
+    "metric": 0.0,
+    "status": "pass"
+  },
+  "power_ground_trace_width": {
+    "metric": null,
+    "status": "not_applicable"
+  },
+  "rail_name_aliasing": {
+    "metric": 0.0,
+    "status": "pass"
+  },
+  "reference_designator_coverage": {
+    "metric": null,
+    "status": "not_applicable"
+  },
+  "reset_pullup_presence": {
+    "metric": 0.0,
+    "status": "pass"
+  },
+  "schematic_layout_consistency": {
+    "metric": 0.0,
+    "status": "pass"
+  },
+  "self_crossing_trace": {
+    "metric": null,
+    "status": "not_applicable"
+  },
+  "silkscreen_off_board": {
+    "metric": null,
+    "status": "not_applicable"
+  },
+  "tall_part_edge_clearance": {
+    "metric": null,
+    "status": "not_applicable"
+  },
+  "teardrop_presence": {
+    "metric": null,
+    "status": "not_applicable"
+  },
+  "test_point_coverage": {
+    "metric": null,
+    "status": "not_applicable"
+  },
+  "unconnected_pads": {
+    "metric": 0.0,
+    "status": "pass"
+  },
+  "unpowered_ic": {
+    "metric": 0.0,
+    "status": "pass"
+  },
+  "unrouted_or_partial_net": {
+    "metric": 14.0,
+    "status": "warning"
+  }
+}

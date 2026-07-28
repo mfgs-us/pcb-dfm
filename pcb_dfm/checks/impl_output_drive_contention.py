@@ -30,6 +30,8 @@ def run_output_drive_contention(ctx: CheckContext) -> CheckResult:
 
     bad: List[str] = []
     for net, types in rd.net_pin_types.items():
+        if net.startswith("unconnected-"):
+            continue  # KiCad placeholder for an unconnected pad, not a real net
         if types & _SHARED_BUS:
             continue  # a shared bus (tri-state / open-drain) is not contention
         # Count push-pull output pins on the net.

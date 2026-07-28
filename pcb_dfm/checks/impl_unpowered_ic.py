@@ -20,34 +20,29 @@ def run_unpowered_ic(ctx: CheckContext) -> CheckResult:
     powers = r.power_nets()
     min_pins = int((ctx.check_def.raw.get("params", {}) or {}).get("min_pins", 8))
 
-    no_gnd, no_pwr = [], []
+    rails = grounds | powers
+    floating = []
     for ref, cls in r.part_class.items():
         if cls != "ic":
             continue
         comp = r.comp_by_ref[ref]
         npads = len(comp.pads)
-        # Only large digital ICs, where GND naming is reliable. Small analog/power
-        # parts (SOT-23 &c.) often reference a non-GND net (e.g. BAT_NEG) and would
-        # false-positive.
+        # Only large digital ICs, where rail naming is reliable.
         if npads < min_pins:
             continue
         # Require every pad resolved to a net -- an unmatched pad means our view is
         # incomplete, so we must not claim a pin is missing.
         if any((ref, p.name) not in r.idx.pad_net for p in comp.pads):
             continue
-        nets = r.nets_of(ref)
-        if not (nets & grounds):
-            no_gnd.append(ref)
-        elif powers and not (nets & powers):
-            no_pwr.append(ref)
-    no_gnd.sort()
-    no_pwr.sort()
-    flagged = bool(no_gnd or no_pwr)
-    parts = []
-    if no_gnd:
-        parts.append(f"no ground connection: {', '.join(no_gnd)}")
-    if no_pwr:
-        parts.append(f"no power connection: {', '.join(no_pwr)}")
-    msg = ("IC(s) with " + "; ".join(parts) + " -- verify.") if flagged \
-        else "All multi-pin ICs reach a ground (and power) rail."
-    return advisory(ctx, flagged, count_metric(len(no_gnd) + len(no_pwr)), msg)
+        # Flag only a truly floating IC -- one that reaches NEITHER a power nor a
+        # ground rail. Requiring a *ground*-named net false-positives on parts
+        # whose reference is an oddly-named net (a battery monitor's BAT-, a
+        # regulator's sense return, a tube's cathode).
+        if not (r.nets_of(ref) & rails):
+            floating.append(ref)
+    floating.sort()
+    flagged = bool(floating)
+    msg = (f"IC(s) not connected to any power or ground rail: "
+           f"{', '.join(floating)} -- verify.") if flagged \
+        else "All multi-pin ICs reach a power/ground rail."
+    return advisory(ctx, flagged, count_metric(len(floating)), msg)

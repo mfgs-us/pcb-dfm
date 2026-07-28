@@ -33,7 +33,8 @@ def run_trace_necking(ctx: CheckContext) -> CheckResult:
     # Only nets where sustained width matters: power/ground and impedance-spec'd.
     imp_nets = {s.name for s in dd.controlled_impedance}
     candidates = [n for name, n in dd.nets.items()
-                  if n.has_geometry()
+                  if n.has_geometry() and not n.fill_regions   # a poured net's thin
+                                                               # stitching runs are normal
                   and (classify_net(name, n.net_class) in ("power", "ground")
                        or name in imp_nets)]
     if not candidates:

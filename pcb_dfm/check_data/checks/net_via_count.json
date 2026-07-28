@@ -1,0 +1,33 @@
+{
+  "id": "net_via_count",
+  "category_id": "high_speed_si",
+  "name": "Excessive layer changes per net",
+  "description": "Design-review check: a signal net with many vias/layer changes adds inductance and stubs and signals congested routing.",
+  "what_it_measures": "Count of signal nets whose via (layer-change) count exceeds the threshold.",
+  "metric": {
+    "kind": "count",
+    "units": "count",
+    "preferred_direction": "minimize",
+    "target": {
+      "max": 0.0
+    },
+    "limits": {
+      "max": 0.0
+    },
+    "scale_min": 0.0,
+    "scale_max": 8.0
+  },
+  "severity_default": "info",
+  "applies_to": [
+    "net"
+  ],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 0.5
+  },
+  "params": {
+    "max_vias": 8
+  }
+}

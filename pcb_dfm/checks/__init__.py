@@ -97,6 +97,7 @@ def _ensure_impls_loaded() -> None:
         impl_layer_registration_margin,  # noqa: F401
         impl_led_series_resistor,  # noqa: F401
         impl_mask_to_trace_clearance,  # noqa: F401
+        impl_meander_spacing,  # noqa: F401
         impl_microvia_geometry,  # noqa: F401
         impl_min_annular_ring,  # noqa: F401
         impl_min_drill_size,  # noqa: F401
@@ -105,6 +106,7 @@ def _ensure_impls_loaded() -> None:
         impl_min_trace_width,  # noqa: F401
         impl_missing_tooling_holes,  # noqa: F401
         impl_mounting_hole_keepout,  # noqa: F401
+        impl_net_via_count,  # noqa: F401
         impl_npth_to_copper_clearance,  # noqa: F401
         impl_outline_sharp_corners,  # noqa: F401
         impl_plane_fragmentation,  # noqa: F401
@@ -133,6 +135,8 @@ def _ensure_impls_loaded() -> None:
         impl_test_point_coverage,  # noqa: F401
         impl_thermal_relief_spoke_width,  # noqa: F401
         impl_tombstoning_risk,  # noqa: F401
+        impl_trace_necking,  # noqa: F401
+        impl_trace_right_angle_bends,  # noqa: F401
         impl_unconnected_pads,  # noqa: F401
         impl_unpowered_ic,  # noqa: F401
         impl_unsupported_hole_types,  # noqa: F401

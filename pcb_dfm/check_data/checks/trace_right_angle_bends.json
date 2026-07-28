@@ -1,0 +1,33 @@
+{
+  "id": "trace_right_angle_bends",
+  "category_id": "high_speed_si",
+  "name": "Right-angle bends on high-speed traces",
+  "description": "Design-review check: a 90-degree (or sharper) bend on a high-speed/diff-pair/controlled-impedance trace is an impedance discontinuity; use 45-degree chamfers or arcs.",
+  "what_it_measures": "Count of route bends at or below the angle threshold on shape-sensitive (high-speed) nets.",
+  "metric": {
+    "kind": "count",
+    "units": "count",
+    "preferred_direction": "minimize",
+    "target": {
+      "max": 0.0
+    },
+    "limits": {
+      "max": 0.0
+    },
+    "scale_min": 0.0,
+    "scale_max": 8.0
+  },
+  "severity_default": "info",
+  "applies_to": [
+    "net"
+  ],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 0.5
+  },
+  "params": {
+    "angle_max_deg": 95.0
+  }
+}

@@ -1,0 +1,34 @@
+{
+  "id": "meander_spacing",
+  "category_id": "high_speed_si",
+  "name": "Meander / serpentine spacing",
+  "description": "Design-review check: length-tuning meanders should keep adjacent legs >= 3x trace width apart, or the meander self-couples and loses effective delay.",
+  "what_it_measures": "Signal nets whose own near-parallel same-layer legs are closer than the spacing factor times trace width.",
+  "metric": {
+    "kind": "count",
+    "units": "count",
+    "preferred_direction": "minimize",
+    "target": {
+      "max": 0.0
+    },
+    "limits": {
+      "max": 0.0
+    },
+    "scale_min": 0.0,
+    "scale_max": 8.0
+  },
+  "severity_default": "info",
+  "applies_to": [
+    "net"
+  ],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 0.5
+  },
+  "params": {
+    "spacing_factor": 3.0,
+    "parallel_tol_deg": 15.0
+  }
+}

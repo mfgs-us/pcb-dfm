@@ -570,6 +570,14 @@
     },
     {
       "confidence": "high",
+      "id": "schematic_layout_consistency",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
       "id": "self_crossing_trace",
       "measured": null,
       "severity": "info",

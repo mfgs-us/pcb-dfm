@@ -126,6 +126,7 @@ def _ensure_impls_loaded() -> None:
         impl_reference_designator_coverage,  # noqa: F401
         impl_reset_pullup_presence,  # noqa: F401
         impl_return_path_interruptions,  # noqa: F401
+        impl_schematic_layout_consistency,  # noqa: F401
         impl_self_crossing_trace,  # noqa: F401
         impl_signal_plane_adjacency,  # noqa: F401
         impl_silkscreen_clearance,  # noqa: F401

@@ -116,6 +116,34 @@ def parallel_overlap_offset(s1: Seg, s2: Seg) -> Optional[Tuple[float, float]]:
     return offset, overlap
 
 
+def _orient(p: Point, q: Point, r: Point) -> float:
+    return (q[1] - p[1]) * (r[0] - q[0]) - (q[0] - p[0]) * (r[1] - q[1])
+
+
+def _on_seg(p: Point, q: Point, r: Point) -> bool:
+    return (min(p[0], r[0]) <= q[0] <= max(p[0], r[0])
+            and min(p[1], r[1]) <= q[1] <= max(p[1], r[1]))
+
+
+def segments_cross(s1: Seg, s2: Seg, tol: float = 1e-6) -> bool:
+    """True only for a *proper* interior crossing -- segments that merely share
+    an endpoint (consecutive route segments) or just touch do not count."""
+    (p1, p2), (p3, p4) = s1, s2
+    for a in (p1, p2):
+        for b in (p3, p4):
+            if hypot(a[0] - b[0], a[1] - b[1]) <= tol:
+                return False  # shared endpoint -> adjacent, not a crossing
+    d1, d2 = _orient(p3, p4, p1), _orient(p3, p4, p2)
+    d3, d4 = _orient(p1, p2, p3), _orient(p1, p2, p4)
+    if ((d1 > 0) != (d2 > 0)) and ((d3 > 0) != (d4 > 0)):
+        return True
+    return False
+
+
+def coincident(p: Point, pts, tol: float) -> bool:
+    return any(hypot(p[0] - q[0], p[1] - q[1]) <= tol for q in pts)
+
+
 def segments_by_layer(net: Net) -> Dict[Optional[str], List[Tuple[Seg, Optional[float]]]]:
     out: Dict[Optional[str], List[Tuple[Seg, Optional[float]]]] = defaultdict(list)
     for (seg, layer, width) in net.route_segments():
@@ -123,23 +151,31 @@ def segments_by_layer(net: Net) -> Dict[Optional[str], List[Tuple[Seg, Optional[
     return out
 
 
-def bend_angles(segments: List[Tuple[Seg, Optional[float]]], tol: float = 1e-3
-                ) -> List[Tuple[Point, float]]:
+def bend_angles(segments: List[Tuple[Seg, Optional[float]]], tol: float = 1e-3,
+                min_seg_mm: float = 0.15) -> List[Tuple[Point, float]]:
     """(vertex, interior_angle) at every point where exactly two of these
     (same-layer) segments meet -- i.e. a bend, not an endpoint, T-junction, or
-    via transition."""
-    inc: Dict[Tuple[int, int], List[Point]] = defaultdict(list)
+    via transition.
+
+    Bends whose incident segments are shorter than ``min_seg_mm`` are skipped:
+    KiCad emits tiny (~0.03 mm) chord/teardrop segments near pads and vias whose
+    joint angles are geometric noise, not real route corners."""
+    inc: Dict[Tuple[int, int], List[Tuple[Point, float]]] = defaultdict(list)
     pts: Dict[Tuple[int, int], Point] = {}
     for (seg, _w) in segments:
         a, b = seg
+        length = seg_len(seg)
         ka = (round(a[0] / tol), round(a[1] / tol))
         kb = (round(b[0] / tol), round(b[1] / tol))
         pts[ka], pts[kb] = a, b
-        inc[ka].append(b)
-        inc[kb].append(a)
+        inc[ka].append((b, length))
+        inc[kb].append((a, length))
     bends = []
     for vk, neigh in inc.items():
         if len(neigh) != 2:
             continue
-        bends.append((pts[vk], interior_angle(neigh[0], pts[vk], neigh[1])))
+        (pa, la), (pc, lc) = neigh
+        if la < min_seg_mm or lc < min_seg_mm:
+            continue  # tiny-segment artifact
+        bends.append((pts[vk], interior_angle(pa, pts[vk], pc)))
     return bends

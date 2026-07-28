@@ -1,0 +1,30 @@
+{
+  "id": "trace_over_cutout",
+  "category_id": "mechanical_outline",
+  "name": "Trace over board cutout",
+  "description": "Design-review check: a trace routed over an internal board cutout/slot has no copper support and no return path.",
+  "what_it_measures": "Count of routed segments that pass through an internal board-outline cutout.",
+  "metric": {
+    "kind": "count",
+    "units": "count",
+    "preferred_direction": "minimize",
+    "target": {
+      "max": 0.0
+    },
+    "limits": {
+      "max": 0.0
+    },
+    "scale_min": 0.0,
+    "scale_max": 8.0
+  },
+  "severity_default": "info",
+  "applies_to": [
+    "net"
+  ],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 0.5
+  }
+}

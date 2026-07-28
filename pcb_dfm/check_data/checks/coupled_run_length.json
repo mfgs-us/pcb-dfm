@@ -1,0 +1,35 @@
+{
+  "id": "coupled_run_length",
+  "category_id": "high_speed_si",
+  "name": "Coupled parallel run length",
+  "description": "Design-review check: two different signal nets running parallel and close for a long distance couple (crosstalk by length, not just spacing).",
+  "what_it_measures": "Net pairs whose close, near-parallel, same-layer coupled length exceeds the threshold.",
+  "metric": {
+    "kind": "count",
+    "units": "count",
+    "preferred_direction": "minimize",
+    "target": {
+      "max": 0.0
+    },
+    "limits": {
+      "max": 0.0
+    },
+    "scale_min": 0.0,
+    "scale_max": 8.0
+  },
+  "severity_default": "info",
+  "applies_to": [
+    "net"
+  ],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 0.5
+  },
+  "params": {
+    "gap_factor": 3.0,
+    "min_coupled_mm": 20.0,
+    "parallel_tol_deg": 15.0
+  }
+}

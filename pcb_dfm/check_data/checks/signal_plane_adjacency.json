@@ -1,0 +1,33 @@
+{
+  "id": "signal_plane_adjacency",
+  "category_id": "fabrication_stackup",
+  "name": "Signal layer reference-plane adjacency",
+  "description": "Design-review check: on a 4+ layer board, every signal layer should be adjacent to a reference plane for a clean return path.",
+  "what_it_measures": "Count of signal copper layers with no adjacent solid-plane layer in the stack.",
+  "metric": {
+    "kind": "count",
+    "units": "count",
+    "preferred_direction": "minimize",
+    "target": {
+      "max": 0.0
+    },
+    "limits": {
+      "max": 0.0
+    },
+    "scale_min": 0.0,
+    "scale_max": 8.0
+  },
+  "severity_default": "info",
+  "applies_to": [
+    "net"
+  ],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 0.5
+  },
+  "params": {
+    "plane_coverage": 0.65
+  }
+}

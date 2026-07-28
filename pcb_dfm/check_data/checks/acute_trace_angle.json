@@ -1,0 +1,33 @@
+{
+  "id": "acute_trace_angle",
+  "category_id": "copper_geometry",
+  "name": "Acute route angle",
+  "description": "Design-review check: an acute (<90 deg) bend in a routed trace centreline traps etchant (acid trap) on any net.",
+  "what_it_measures": "Count of routed bends with an interior angle below the acute threshold.",
+  "metric": {
+    "kind": "count",
+    "units": "count",
+    "preferred_direction": "minimize",
+    "target": {
+      "max": 0.0
+    },
+    "limits": {
+      "max": 0.0
+    },
+    "scale_min": 0.0,
+    "scale_max": 8.0
+  },
+  "severity_default": "info",
+  "applies_to": [
+    "net"
+  ],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 0.5
+  },
+  "params": {
+    "angle_min_deg": 85.0
+  }
+}

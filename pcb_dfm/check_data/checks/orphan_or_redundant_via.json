@@ -1,0 +1,34 @@
+{
+  "id": "orphan_or_redundant_via",
+  "category_id": "drill_via_integrity",
+  "name": "Orphan / redundant via",
+  "description": "Design-review check: a signal via with no trace at it (connects nothing), or two vias stacked at one spot.",
+  "what_it_measures": "Count of orphan signal vias plus coincident redundant via pairs.",
+  "metric": {
+    "kind": "count",
+    "units": "count",
+    "preferred_direction": "minimize",
+    "target": {
+      "max": 0.0
+    },
+    "limits": {
+      "max": 0.0
+    },
+    "scale_min": 0.0,
+    "scale_max": 8.0
+  },
+  "severity_default": "info",
+  "applies_to": [
+    "via"
+  ],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 0.5
+  },
+  "params": {
+    "coincide_mm": 0.1,
+    "tol_mm": 0.3
+  }
+}

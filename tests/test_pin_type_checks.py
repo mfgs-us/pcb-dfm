@@ -89,8 +89,11 @@ def test_input_with_passive_bias_passes():
 
 # -- open_drain_pullup ------------------------------------------------------
 def test_open_drain_no_pullup_flagged():
+    # An in-use open-drain net (a driver U1 and a listener U2) with no pull-up:
+    # the line can't idle high. A single-pin open-drain net is a *floating*
+    # concern (floating_or_single_pin_net owns it), not a missing-pull-up one.
     dd = build([("U1", [("1", 0, 0, "IRQ"), ("2", 0, 1, "VCC")]),
-                ("U2", [("1", 5, 0, "VCC"), ("2", 5, 1, "GND")])],
+                ("U2", [("1", 5, 0, "IRQ"), ("2", 5, 1, "GND")])],
                pin_types={("U1", "1"): "open_collector"})
     r = run("open_drain_pullup", dd)
     assert r.status == "warning" and "IRQ" in r.violations[0].message
@@ -100,6 +103,35 @@ def test_open_drain_with_pullup_passes():
     dd = build([("U1", [("1", 0, 0, "IRQ")]),
                 ("R1", [("1", 0.01, 0, "IRQ"), ("2", 1, 0, "VCC")]),
                 ("U2", [("1", 5, 0, "VCC")])],
+               pin_types={("U1", "1"): "open_collector"})
+    assert run("open_drain_pullup", dd).status == "pass"
+
+
+def test_open_drain_with_pullup_passes_via_led_sink():
+    # Open-drain sinking an indicator LED (IRQ -> R -> LED -> VCC) idles high
+    # through the LED path; no separate pull-up needed. (#86 real-board FP.)
+    dd = build([("U1", [("1", 0, 0, "IRQ"), ("2", 0, 1, "GND")]),
+                ("U2", [("1", 5, 0, "IRQ"), ("2", 5, 1, "GND")]),
+                ("R1", [("1", 0.01, 0, "IRQ"), ("2", 1, 0, "LEDA")]),
+                ("LED1", [("1", 1.01, 0, "LEDA"), ("2", 2, 0, "VCC")])],
+               pin_types={("U1", "1"): "open_collector"})
+    assert run("open_drain_pullup", dd).status == "pass"
+
+
+def test_open_drain_unconnected_placeholder_skipped():
+    # A KiCad unconnected-(...) net is a deliberately-unconnected pin -> not a
+    # missing-pull-up. (#86 real-board FP: nFault/PG on cm5_minima.)
+    dd = build([("U1", [("1", 0, 0, "unconnected-(U1-nFault-Pad4)"), ("2", 0, 1, "VCC")]),
+                ("U2", [("1", 5, 0, "VCC"), ("2", 5, 1, "GND")])],
+               pin_types={("U1", "1"): "open_collector"})
+    assert run("open_drain_pullup", dd).status == "pass"
+
+
+def test_open_drain_single_pin_net_skipped():
+    # An open-drain pin whose net reaches nothing else is floating (owned by
+    # floating_or_single_pin_net), not a missing-pull-up. (#86: HDMI1_CEC.)
+    dd = build([("U1", [("1", 0, 0, "IRQ"), ("2", 0, 1, "VCC")]),
+                ("U2", [("1", 5, 0, "VCC"), ("2", 5, 1, "GND")])],
                pin_types={("U1", "1"): "open_collector"})
     assert run("open_drain_pullup", dd).status == "pass"
 

@@ -301,6 +301,9 @@ GUIDANCE: Dict[str, Remediation] = {
         "Check the odd-angle polarized part against its neighbours; fix a flipped placement.",
         "A reversed polarized part fails or is destroyed at power-up."),
     # --- trace shape / routing review --------------------------------------
+    "critical_pin_connectivity": Remediation(
+        "Connect the power pin to its rail (route it, or fix the net assignment).",
+        "An unconnected supply pin means the part is unpowered."),
     "output_drive_contention": Remediation(
         "Remove the second driver (or make the shared line open-drain/tri-state).",
         "Two push-pull outputs fighting → a short and stressed drivers."),

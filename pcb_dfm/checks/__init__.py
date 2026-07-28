@@ -72,6 +72,7 @@ def _ensure_impls_loaded() -> None:
         impl_copper_to_edge_distance,  # noqa: F401
         impl_coupled_run_length,  # noqa: F401
         impl_courtyard_overlap,  # noqa: F401
+        impl_critical_pin_connectivity,  # noqa: F401
         impl_crosstalk_estimate,  # noqa: F401
         impl_crystal_load_caps,  # noqa: F401
         impl_crystal_proximity,  # noqa: F401

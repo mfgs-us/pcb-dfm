@@ -49,11 +49,24 @@ _BASELINES = Path(__file__).parent / "baselines" / "trust"
 
 
 def _design_review_check_ids():
+    """The Tier-2 design-review checks -- those whose implementation reads the
+    resolved netlist/pin-type picture, i.e. imports ``resolve_design`` or the
+    ``advisory`` helper. Keyed off the implementation, not ``category_id``: the
+    review checks are spread across categories (net_without_driver and
+    output_drive_contention sit under ``high_speed_si``, not ``design_advisory``),
+    so a category filter silently drops them."""
+    import sys
     _ensure_impls_loaded()
-    return sorted(
-        cd.id for cd in load_all_check_definitions()
-        if cd.category_id == "design_advisory"
-    )
+    ids = []
+    for cd in load_all_check_definitions():
+        runner = get_check_runner(cd.id)
+        if runner is None:
+            continue
+        mod = sys.modules.get(getattr(runner, "__module__", ""))
+        g = vars(mod) if mod is not None else {}
+        if "resolve_design" in g or "advisory" in g:
+            ids.append(cd.id)
+    return sorted(ids)
 
 
 _DR_CHECKS = _design_review_check_ids()
@@ -105,6 +118,20 @@ def test_trust_board_must_pass(board):
         assert r.status == "pass", (
             f"{board.name}: {cid} regressed to {r.status!r} (expected pass) -- {why}\n"
             f"  {r.violations[0].message if r.violations else ''}")
+
+
+@pytest.mark.parametrize("board", trust_boards.TRUST_BOARDS, ids=lambda b: b.name)
+def test_trust_board_must_flag(board):
+    """Every check that a correct engine MUST fire on this board does -- the
+    catch-rate complement to must_pass. A silent miss here means a real defect
+    slipped through, the failure mode #86's coverage was meant to prevent."""
+    dd = board.build()
+    for cid, why in board.must_flag.items():
+        r = _run(cid, dd)
+        assert r is not None, f"{cid} did not run on {board.name}"
+        assert r.status == "warning", (
+            f"{board.name}: {cid} missed a defect (status {r.status!r}, expected "
+            f"warning) -- {why}\n  {r.violations[0].message if r.violations else ''}")
 
 
 @pytest.mark.parametrize("board", trust_boards.TRUST_BOARDS, ids=lambda b: b.name)

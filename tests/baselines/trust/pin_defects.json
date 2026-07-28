@@ -1,15 +1,15 @@
 {
   "acute_trace_angle": {
-    "metric": 1.0,
-    "status": "warning"
+    "metric": null,
+    "status": "not_applicable"
   },
   "antenna_keepout": {
     "metric": null,
     "status": "not_applicable"
   },
   "bulk_capacitance_present": {
-    "metric": 0.0,
-    "status": "pass"
+    "metric": 1.0,
+    "status": "warning"
   },
   "coupled_run_length": {
     "metric": null,
@@ -20,20 +20,20 @@
     "status": "not_applicable"
   },
   "critical_pin_connectivity": {
-    "metric": 0.0,
-    "status": "pass"
+    "metric": 1.0,
+    "status": "warning"
   },
   "crystal_load_caps": {
-    "metric": 0.0,
-    "status": "pass"
+    "metric": null,
+    "status": "not_applicable"
   },
   "crystal_proximity": {
     "metric": null,
     "status": "not_applicable"
   },
   "debug_port_test_access": {
-    "metric": 0.0,
-    "status": "pass"
+    "metric": null,
+    "status": "not_applicable"
   },
   "decoupling_adequacy": {
     "metric": 0.0,
@@ -68,48 +68,48 @@
     "status": "pass"
   },
   "i2c_pullup_presence": {
-    "metric": 0.0,
-    "status": "pass"
+    "metric": null,
+    "status": "not_applicable"
   },
   "led_series_resistor": {
-    "metric": 0.0,
-    "status": "pass"
+    "metric": null,
+    "status": "not_applicable"
   },
   "meander_spacing": {
     "metric": null,
     "status": "not_applicable"
   },
   "net_via_count": {
-    "metric": 0.0,
-    "status": "pass"
+    "metric": null,
+    "status": "not_applicable"
   },
   "net_without_driver": {
-    "metric": 0.0,
-    "status": "pass"
+    "metric": 1.0,
+    "status": "warning"
   },
   "open_drain_pullup": {
-    "metric": 0.0,
-    "status": "pass"
+    "metric": 1.0,
+    "status": "warning"
   },
   "orphan_or_redundant_via": {
-    "metric": 0.0,
-    "status": "pass"
+    "metric": null,
+    "status": "not_applicable"
   },
   "outline_sharp_corners": {
     "metric": null,
     "status": "not_applicable"
   },
   "output_drive_contention": {
-    "metric": 0.0,
-    "status": "pass"
+    "metric": 1.0,
+    "status": "warning"
   },
   "polarized_orientation_consistency": {
     "metric": null,
     "status": "not_applicable"
   },
   "power_feed_robustness": {
-    "metric": 0.0,
-    "status": "pass"
+    "metric": null,
+    "status": "not_applicable"
   },
   "power_ground_trace_width": {
     "metric": null,
@@ -124,8 +124,8 @@
     "status": "not_applicable"
   },
   "reset_pullup_presence": {
-    "metric": 0.0,
-    "status": "pass"
+    "metric": null,
+    "status": "not_applicable"
   },
   "schematic_layout_consistency": {
     "metric": 0.0,
@@ -160,8 +160,8 @@
     "status": "not_applicable"
   },
   "trace_necking": {
-    "metric": 0.0,
-    "status": "pass"
+    "metric": null,
+    "status": "not_applicable"
   },
   "trace_over_cutout": {
     "metric": null,
@@ -180,7 +180,7 @@
     "status": "pass"
   },
   "unrouted_or_partial_net": {
-    "metric": 14.0,
+    "metric": 4.0,
     "status": "warning"
   }
 }

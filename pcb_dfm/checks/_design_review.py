@@ -21,7 +21,7 @@ from ..ingest.design_intel import (
     PadNetIndex,
     build_pad_net_index,
     classify_component,
-    classify_net,
+    net_function_with_pins,
 )
 from ..ingest.design_model import Component, DesignData
 
@@ -139,7 +139,15 @@ def resolve_design(dd: Optional[DesignData]) -> Optional[ResolvedDesign]:
     idx = build_pad_net_index(dd)
     if not idx.pad_net:
         return None
-    net_func = {name: classify_net(name, net.net_class) for name, net in dd.nets.items()}
+    # Schematic pin electrical types per net (functional intent), then refine the
+    # net function with them -- a rail feeding a power pin need not match a name.
+    pin_types_on_net: Dict[str, set] = defaultdict(set)
+    for (ref, pin), net in idx.pad_net.items():
+        et = dd.pin_types.get((ref, pin))
+        if et:
+            pin_types_on_net[net].add(et)
+    net_func = {name: net_function_with_pins(name, net.net_class, pin_types_on_net.get(name, ()))
+                for name, net in dd.nets.items()}
     comp_by_ref = {c.ref: c for c in dd.components}
     part_class = {ref: classify_component(c)[0] for ref, c in comp_by_ref.items()}
     pins_on_net: Dict[str, int] = defaultdict(int)

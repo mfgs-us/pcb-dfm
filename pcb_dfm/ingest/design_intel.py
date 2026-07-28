@@ -63,6 +63,28 @@ def is_power_or_ground(name: Optional[str], net_class: Optional[str] = None) -> 
     return classify_net(name, net_class) in ("power", "ground")
 
 
+_GND_HINTS = ("gnd", "vss", "neg", "return", "_ret", "agnd", "dgnd", "pgnd", "earth")
+
+
+def net_function_with_pins(name: Optional[str], net_class: Optional[str],
+                           pin_types: "set[str] | frozenset[str] | tuple") -> NetFunction:
+    """Net function, refined by schematic pin electrical types.
+
+    Name/net_class classification wins when it is decisive. Otherwise a net that
+    feeds a ``power_in``/``power_out`` pin is a supply rail -- functional evidence
+    a name can't give (e.g. a battery IC's ``BAT_NEG`` reference, which no rail
+    token matches). This is how schematic ingest sharpens the checks that key off
+    net function (decoupling, floating, coupled-run, ...).
+    """
+    base = classify_net(name, net_class)
+    if base != "signal":
+        return base
+    if any(t in ("power_in", "power_out") for t in pin_types):
+        n = (name or "").lower()
+        return "ground" if any(h in n for h in _GND_HINTS) else "power"
+    return "signal"
+
+
 # --------------------------------------------------------------------------
 # E4 -- component classifier (part class + polarity)
 # --------------------------------------------------------------------------

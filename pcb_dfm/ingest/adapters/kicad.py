@@ -583,6 +583,70 @@ def _to_gerber_frame(components: List[Component], nets: Dict[str, Net]) -> None:
                             for (layer, pts) in net.fill_regions]
 
 
+_ETYPES = frozenset((
+    "input", "output", "bidirectional", "tri_state", "passive", "free",
+    "unspecified", "power_in", "power_out", "open_collector", "open_emitter",
+    "no_connect",
+))
+
+
+def _parse_schematic_pin_types(sch_root: SNode) -> Dict[Tuple[str, str], str]:
+    """(ref, pin_number) -> electrical type, from a ``.kicad_sch``.
+
+    Pin electrical types live in the ``lib_symbols`` definitions (by pin number);
+    the body ``(symbol ...)`` instances map a Reference to a ``lib_id``. Joining
+    them tags every placed pin -- ``power_in``/``output``/``open_collector``/
+    ``no_connect``/... -- which is functional intent the layout doesn't carry.
+    """
+    lib = _first(sch_root, "lib_symbols")
+    lib_pins: Dict[str, Dict[str, str]] = {}
+    if lib is not None:
+        for sym in _tagged(lib, "symbol"):
+            name = sym[1] if len(sym) > 1 and isinstance(sym[1], str) else None
+            if not name:
+                continue
+            pins: Dict[str, str] = {}
+
+            def _collect(node: SNode) -> None:
+                for pin in _tagged(node, "pin"):
+                    etype = pin[1] if len(pin) > 1 and isinstance(pin[1], str) else None
+                    numnode = _first(pin, "number")
+                    num = _atoms(numnode)[0] if numnode and _atoms(numnode) else None
+                    if etype in _ETYPES and num:
+                        pins[num] = etype
+                for sub in _tagged(node, "symbol"):   # multi-unit sub-symbols
+                    _collect(sub)
+
+            _collect(sym)
+            lib_pins[name] = pins
+
+    out: Dict[Tuple[str, str], str] = {}
+    for sym in _tagged(sch_root, "symbol"):
+        libid = _first(sym, "lib_id")
+        lib_name = _atoms(libid)[0] if libid and _atoms(libid) else None
+        ref = None
+        for prop in _tagged(sym, "property"):
+            if len(prop) > 2 and prop[1] == "Reference" and isinstance(prop[2], str):
+                ref = prop[2]
+                break
+        if not ref or ref.startswith("#") or lib_name not in lib_pins:
+            continue  # '#PWR'/'#FLG' power/flag symbols have no footprint
+        for num, etype in lib_pins[lib_name].items():
+            out[(ref, num)] = etype
+    return out
+
+
+def _read_schematic_pin_types(board: Path) -> Dict[Tuple[str, str], str]:
+    """Parse the sibling ``.kicad_sch`` (root sheet) when present."""
+    sch = board.with_suffix(".kicad_sch")
+    if not sch.exists():
+        return {}
+    try:
+        return _parse_schematic_pin_types(_parse_sexpr(sch.read_text(encoding="utf-8")))
+    except Exception:
+        return {}
+
+
 def from_kicad(source: Union[str, Path]) -> DesignData:
     board, pro = _resolve_board(Path(source))
     root = _parse_sexpr(board.read_text(encoding="utf-8"))
@@ -600,5 +664,6 @@ def from_kicad(source: Union[str, Path]) -> DesignData:
         nets=nets,
         diff_pairs=_infer_diff_pairs(nets),
         components=components,
+        pin_types=_read_schematic_pin_types(board),
         source="kicad",
     )

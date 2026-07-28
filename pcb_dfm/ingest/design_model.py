@@ -307,6 +307,12 @@ class DesignData:
     keepouts: List[KeepoutRegion] = field(default_factory=list)  # E5: antenna/RF/keepout zones
     warnings: List[str] = field(default_factory=list)  # non-fatal ingest/merge notes
     source: Optional[str] = None  # "sidecar" | "ipc2581" | "odbpp" | "kicad"
+    # Schematic-derived pin electrical types: (ref, pin_number) -> type, one of
+    # "power_in" | "power_out" | "input" | "output" | "bidirectional" |
+    # "open_collector" | "open_emitter" | "passive" | "tri_state" | "no_connect" |
+    # "unspecified" | "free". This is *functional intent* the layout can't carry,
+    # and it is the join key (ref, pin) == (component ref, pad name).
+    pin_types: Dict[Tuple[str, str], str] = field(default_factory=dict)
     # Stencil foil thickness (mm), when the fab/design specifies it. Authoritative
     # input for the IPC-7525 aperture area-ratio check; when absent that check
     # assumes a default foil and reports its finding as advisory (never gating).

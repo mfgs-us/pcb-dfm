@@ -521,9 +521,15 @@ def _parse_pads(fp: SNode, ref: str, ox: float, oy: float, rot_deg: float,
         through = pad_type in ("thru_hole", "np_thru_hole")
         ax = ox + dx * ca - dy * sa
         ay = oy + dx * sa + dy * ca
+        shape = pad[3] if len(pad) > 3 and isinstance(pad[3], str) else None
+        size = _first(pad, "size")
+        pw, ph = _fatom(size, 0), _fatom(size, 1)
+        pad_rot = _fatom(at, 2) or 0.0   # pad rotation, relative to the footprint
         pads.append(Pad(
             name=name, x_mm=ax, y_mm=ay,
             pad_type=pad_type, through_hole=through,
+            width_mm=pw, height_mm=ph, shape=shape,
+            rotation_deg=(rot_deg or 0.0) + pad_rot,
         ))
         net_name = _resolve_net_name(_first(pad, "net"), num_to_name)
         if net_name:
@@ -561,6 +567,7 @@ def _to_gerber_frame(components: List[Component], nets: Dict[str, Net]) -> None:
             c.y_mm = -c.y_mm
         for p in c.pads:
             p.y_mm = -p.y_mm
+            p.rotation_deg = -p.rotation_deg   # mirror about X flips orientation
         if c.courtyard is not None:
             c.courtyard = [(px, -py) for (px, py) in c.courtyard]  # flip Y
     for net in nets.values():

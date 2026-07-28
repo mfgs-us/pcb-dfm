@@ -326,6 +326,12 @@ GUIDANCE: Dict[str, Remediation] = {
     "coupled_run_length": Remediation(
         "Increase spacing or shorten the parallel run between the two nets.",
         "Long close coupling → crosstalk."),
+    "thermal_pad_via_count": Remediation(
+        "Add a thermal via array under the IC's exposed pad, dropping to a plane.",
+        "No thermal vias → the part runs hot / throttles."),
+    "unrouted_or_partial_net": Remediation(
+        "Route the net -- connect every pin in copper.",
+        "An unrouted net is an open circuit."),
     "signal_plane_adjacency": Remediation(
         "Re-stack so each signal layer is adjacent to a ground/power plane.",
         "A signal layer with no adjacent plane has no clean return path → EMI/SI."),

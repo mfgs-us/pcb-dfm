@@ -300,6 +300,19 @@ GUIDANCE: Dict[str, Remediation] = {
     "polarized_orientation_consistency": Remediation(
         "Check the odd-angle polarized part against its neighbours; fix a flipped placement.",
         "A reversed polarized part fails or is destroyed at power-up."),
+    # --- trace shape / routing review --------------------------------------
+    "trace_right_angle_bends": Remediation(
+        "Replace 90° bends on high-speed traces with 45° chamfers or arcs.",
+        "Right-angle bends are impedance discontinuities / reflection points."),
+    "trace_necking": Remediation(
+        "Keep the trace width constant along the net (widen the necked-down run).",
+        "A neck-down is a current bottleneck / impedance discontinuity."),
+    "meander_spacing": Remediation(
+        "Space length-tuning meander legs ≥ 3× trace width apart.",
+        "Tight meanders self-couple → lost delay and added crosstalk."),
+    "net_via_count": Remediation(
+        "Re-route to cut layer changes on the net (fewer vias).",
+        "Excess vias add inductance and stubs and slow high-speed edges."),
     "mounting_hole_keepout": Remediation(
         "Move components out of the mounting hole's screw-head / standoff keep-out.",
         "A part under the mounting hardware collides with it at assembly."),

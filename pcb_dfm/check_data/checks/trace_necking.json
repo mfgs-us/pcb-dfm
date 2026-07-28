@@ -1,0 +1,34 @@
+{
+  "id": "trace_necking",
+  "category_id": "copper_geometry",
+  "name": "Trace necking / width discontinuity",
+  "description": "Design-review check: a power or controlled-impedance net that necks down mid-route is a current or impedance bottleneck.",
+  "what_it_measures": "Nets whose narrowest sustained routed width is below a fraction of their widest, on power/impedance nets.",
+  "metric": {
+    "kind": "count",
+    "units": "count",
+    "preferred_direction": "minimize",
+    "target": {
+      "max": 0.0
+    },
+    "limits": {
+      "max": 0.0
+    },
+    "scale_min": 0.0,
+    "scale_max": 8.0
+  },
+  "severity_default": "info",
+  "applies_to": [
+    "net"
+  ],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 0.5
+  },
+  "params": {
+    "neck_fraction": 0.5,
+    "min_run_mm": 1.0
+  }
+}

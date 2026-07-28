@@ -338,6 +338,14 @@
     },
     {
       "confidence": "high",
+      "id": "meander_spacing",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
       "id": "microvia_geometry",
       "measured": null,
       "severity": "info",
@@ -395,6 +403,14 @@
     {
       "confidence": "high",
       "id": "mounting_hole_keepout",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
+      "id": "net_via_count",
       "measured": null,
       "severity": "info",
       "status": "not_applicable",
@@ -619,6 +635,22 @@
     {
       "confidence": "heuristic",
       "id": "tombstoning_risk",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
+      "id": "trace_necking",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
+      "id": "trace_right_angle_bends",
       "measured": null,
       "severity": "info",
       "status": "not_applicable",

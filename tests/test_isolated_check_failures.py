@@ -1,11 +1,14 @@
-"""Each of the three checks added this session is tripped by a *minimal*,
-*isolated* edit to a known-clean board.
+"""Each covered check is tripped by a *minimal*, *isolated* edit to a known-clean
+board.
 
-`mini_board.zip` passes all 49 checks. For each new check we apply the smallest
-edit that makes it fail and assert two things:
+`mini_board.zip` passes every check. For each covered check we apply the
+smallest edit that trips it and assert two things:
 
-  1. the target check goes from not-failing to ``fail``; and
-  2. NO other check newly fails (isolation) -- the edit is surgical.
+  1. the target check reaches its worst status (``fail``, or ``warning`` for an
+     advisory check that never fails); and
+  2. NO other check newly *fails* (isolation) -- the edit is surgical. A surgical
+     edit may nudge neighbouring advisories to ``warning``; only a new hard
+     failure breaks isolation.
 
 The isolation criterion compares against a baseline run: a check that was
 already failing (or is unaffected) does not count; only a *new* failure
@@ -75,24 +78,41 @@ def _mutated_map(tmp_path: Path, mutate) -> Dict[str, str]:
     return _status_map(_write_zip(tmp_path, files))
 
 
-def _assert_isolated_failure(
-    baseline: Dict[str, str], mutated: Dict[str, str], target: str
+def _assert_isolated_regression(
+    baseline: Dict[str, str], mutated: Dict[str, str], target: str, worst: str = "fail"
 ) -> None:
-    """The target went to fail, and it is the ONLY newly-failing check."""
-    assert baseline.get(target) != "fail", (
-        f"{target} already failed on the baseline board; the edit proves nothing"
+    """The target reached its worst status, and the edit introduced no unrelated
+    hard failure.
+
+    ``worst`` is the status the target should reach: ``"fail"`` for a hard-reject
+    check, ``"warning"`` for an advisory one (which never fails). Isolation is
+    always measured against *fail*: a surgical edit may nudge neighbouring
+    advisories to ``warning`` (adding copper trips density/floating-copper, say),
+    but it must introduce no new *fail* other than the target itself.
+    """
+    assert baseline.get(target) != worst, (
+        f"{target} already {worst} on the baseline board; the edit proves nothing"
     )
-    assert mutated.get(target) == "fail", (
-        f"expected {target} to fail after the edit, got {mutated.get(target)!r}"
+    assert mutated.get(target) == worst, (
+        f"expected {target} to reach {worst!r} after the edit, "
+        f"got {mutated.get(target)!r}"
     )
     newly_failed = {
         cid for cid, st in mutated.items()
         if st == "fail" and baseline.get(cid) != "fail"
     }
-    assert newly_failed == {target}, (
-        f"edit for {target} was not isolated; newly-failing checks: "
-        f"{sorted(newly_failed)}"
+    allowed = {target} if worst == "fail" else set()
+    assert newly_failed <= allowed, (
+        f"edit for {target} was not isolated; unrelated newly-failing checks: "
+        f"{sorted(newly_failed - allowed)}"
     )
+
+
+def _assert_isolated_failure(
+    baseline: Dict[str, str], mutated: Dict[str, str], target: str
+) -> None:
+    """The target went to fail, and it is the ONLY newly-failing check."""
+    _assert_isolated_regression(baseline, mutated, target, worst="fail")
 
 
 def test_board_outline_continuity_isolated(tmp_path):
@@ -294,3 +314,82 @@ def test_diff_pair_skew_isolated(tmp_path):
     baseline = _status_map(BASE, design_data=load_design_data(payload(20.0, 20.0)))
     mutated = _status_map(BASE, design_data=load_design_data(payload(20.0, 21.5)))
     _assert_isolated_failure(baseline, mutated, "diff_pair_skew")
+
+
+# --------------------------------------------------------------------------
+# #22 -- geometry-trippable checks (a single minimal edit to mini_board).
+#
+# Each edit injects one physical defect and asserts the target reaches its worst
+# status with no unrelated hard failure. The two advisory targets (density,
+# silk-on-copper) never fail, so their worst is "warning"; adding copper to trip
+# them also nudges floating_copper / density, which is allowed (no new *fail*).
+# --------------------------------------------------------------------------
+def test_acid_trap_angle_isolated(tmp_path):
+    # Flash a concave "arrowhead" aperture: its inner notch is an acute concave
+    # copper corner where etchant is trapped. (A stroked trace can't do this --
+    # the round aperture rounds every inner corner.)
+    def mutate(f):
+        _replace_in(f, "board.gtl", "%ADD12C,0.500000*%",
+                    "%ADD12C,0.500000*%\n%AMDART*\n4,1,4,0,0,3,1.2,0.6,0,3,-1.2,0,0,0*\n%\n%ADD33DART*%")
+        _replace_in(f, "board.gtl", "M02*", "D33*\nX13000000Y6000000D03*\nM02*")
+    _assert_isolated_regression(_status_map(BASE), _mutated_map(tmp_path, mutate),
+                                "acid_trap_angle")
+
+
+def test_fillet_radius_milling_isolated(tmp_path):
+    # Cut a rectangular notch into the top edge of the outline: its two inner
+    # corners are sharp concave (zero-radius) corners a router bit can't cut.
+    def mutate(f):
+        _replace_in(f, "board.gko",
+                    "X18000000Y12000000D01*\nX0Y12000000D01*",
+                    "X18000000Y12000000D01*\nX9000000Y12000000D01*\nX9000000Y10000000D01*\n"
+                    "X8000000Y10000000D01*\nX8000000Y12000000D01*\nX0Y12000000D01*")
+    _assert_isolated_regression(_status_map(BASE), _mutated_map(tmp_path, mutate),
+                                "fillet_radius_milling")
+
+
+def test_mask_to_trace_clearance_isolated(tmp_path):
+    # Add a solder-mask opening whose lower edge sits ~5 um from the top edge of
+    # the horizontal signal trace at y=1 -> mask hard against a trace.
+    def mutate(f):
+        _replace_in(f, "board.gts", "M02*", "X5000000Y1730000D03*\nM02*")
+    _assert_isolated_regression(_status_map(BASE), _mutated_map(tmp_path, mutate),
+                                "mask_to_trace_clearance")
+
+
+def test_copper_density_balance_isolated(tmp_path):
+    # A large copper pour in one region imbalances copper across the board. The
+    # check is advisory in the default profile (fails only in strict-plating
+    # mode), so the worst reachable status is "warning".
+    def mutate(f):
+        _replace_in(f, "board.gtl", "%ADD12C,0.500000*%",
+                    "%ADD12C,0.500000*%\n%ADD30R,10.000000X6.000000*%")
+        _replace_in(f, "board.gtl", "M02*", "D30*\nX11000000Y4000000D03*\nM02*")
+    _assert_isolated_regression(_status_map(BASE), _mutated_map(tmp_path, mutate),
+                                "copper_density_balance", worst="warning")
+
+
+def test_silkscreen_on_copper_isolated(tmp_path):
+    # A large exposed-copper region (copper flash + a same-size mask opening) with
+    # a silk line across its centre -> legend printed on bare copper. The centre
+    # keeps the silk clear of the opening edges, so silkscreen_clearance stays
+    # clean and only silkscreen_on_copper (advisory -> warning) trips.
+    def mutate(f):
+        _replace_in(f, "board.gtl", "%ADD12C,0.500000*%",
+                    "%ADD12C,0.500000*%\n%ADD31R,6.000000X5.000000*%")
+        _replace_in(f, "board.gtl", "M02*", "D31*\nX13000000Y4500000D03*\nM02*")
+        _replace_in(f, "board.gts", "%ADD11R,1.200000X1.200000*%",
+                    "%ADD11R,1.200000X1.200000*%\n%ADD32R,6.000000X5.000000*%")
+        _replace_in(f, "board.gts", "M02*", "D32*\nX13000000Y4500000D03*\nM02*")
+        _replace_in(f, "board.gto", "X2000000Y10000000D02*\nX6000000Y10000000D01*",
+                    "X12000000Y4500000D02*\nX14000000Y4500000D01*")
+    _assert_isolated_regression(_status_map(BASE), _mutated_map(tmp_path, mutate),
+                                "silkscreen_on_copper", worst="warning")
+
+
+# Deferred: silkscreen_over_mask_defined_pads. On mini_board it reaches "fail"
+# only with placement data (a BOM/netlist confirming the copper is a real
+# component pad); without it the check is advisory and, on a bare exposed pad,
+# its bbox-overlap estimate did not register the silk overlap that
+# silkscreen_on_copper flags. Isolating it belongs with the placement-carrying
+# base fixture in #24, not a Gerber-only edit here.

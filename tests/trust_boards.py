@@ -70,6 +70,10 @@ class BoardSpec:
     # Checks a correct engine MUST keep clean (status "pass") on this board.
     # Each entry documents a real FP class the #85 pass fixed.
     must_pass: Dict[str, str] = field(default_factory=dict)
+    # Checks a correct engine MUST fire (status "warning") on this board -- the
+    # catch-rate side: the defect is really present, so silence is a miss. Full
+    # pin-type coverage (#86) is what lets the pin-type checks reach these.
+    must_flag: Dict[str, str] = field(default_factory=dict)
 
     def build(self, offset: Tuple[float, float] = (0.0, 0.0)) -> DesignData:
         """Build the DesignData, optionally translating every coordinate by
@@ -212,4 +216,59 @@ def _mcu_core() -> BoardSpec:
         comps=comps, net_meta=net_meta, pin_types=pin_types, must_pass=must_pass)
 
 
-TRUST_BOARDS: List[BoardSpec] = [_mcu_core()]
+# --------------------------------------------------------------------------
+# Board 2: pin-type defects -- the catch-rate anchor.
+# --------------------------------------------------------------------------
+#
+# mcu_core proves the checks stay quiet on clean real-board patterns. This board
+# proves the complement: the pin-type checks FIRE when the defect is really
+# there. Every net below carries full schematic pin types (the coverage #86
+# guarantees on hierarchical boards), so each check reaches its target instead of
+# skipping for missing types -- which is exactly the state the #86 follow-on had
+# to confirm before trusting these checks at full coverage.
+def _pin_defects() -> BoardSpec:
+    comps = [
+        CompSpec("U1", "LOGIC", [
+            ("1", 10.0, 10.0, "VCC"),     ("2", 11.0, 10.0, "GND"),
+            ("3", 12.0, 10.0, "FLOATIN"), ("4", 13.0, 10.0, "BUSC"),
+            ("5", 10.0, 12.0, "ODN"),     ("6", 11.0, 12.0, "OKSIG"),
+            ("7", 12.0, 12.0, "GND"),     ("8", 13.0, 12.0, "GND"),
+        ], footprint="Package_SO:SOIC-8"),
+        CompSpec("U2", "LOGIC", [
+            ("1", 30.0, 10.0, "VCC"),     ("2", 31.0, 10.0, "GND"),
+            ("3", 32.0, 10.0, "FLOATIN"), ("4", 33.0, 10.0, "BUSC"),
+            ("5", 30.0, 12.0, "ODN"),     ("6", 31.0, 12.0, "OKSIG"),
+            ("7", 32.0, 12.0, "GND"),     ("8", 33.0, 12.0, "GND"),
+        ], footprint="Package_SO:SOIC-8"),
+        # U3: one power pin on a dead-end net (supplies nothing), one on VCC (so
+        # the part is powered -- isolates the dead-end finding from "unpowered").
+        CompSpec("U3", "SENSOR", [
+            ("1", 50.0, 10.0, "DEADPWR"), ("2", 51.0, 10.0, "VCC"),
+        ], footprint="Package_TO_SOT_SMD:SOT-23"),
+        CompSpec("C1", "0.1uF", [("1", 10.0, 8.0, "VCC"), ("2", 11.0, 8.0, "GND")]),
+    ]
+    pin_types = {
+        ("U1", "1"): "power_in", ("U1", "2"): "power_in", ("U1", "3"): "input",
+        ("U1", "4"): "output", ("U1", "5"): "open_collector", ("U1", "6"): "output",
+        ("U2", "1"): "power_in", ("U2", "2"): "power_in", ("U2", "3"): "input",
+        ("U2", "4"): "output", ("U2", "5"): "input", ("U2", "6"): "input",
+        ("U3", "1"): "power_in", ("U3", "2"): "power_in",
+    }
+    must_flag = {
+        "net_without_driver":
+            "FLOATIN reaches only IC input pins (U1.3, U2.3) with no driver.",
+        "output_drive_contention":
+            "BUSC is driven by two push-pull outputs (U1.4, U2.4).",
+        "open_drain_pullup":
+            "ODN is open-drain (U1.5) with a consumer (U2.5) and no pull-up to a rail.",
+        "critical_pin_connectivity":
+            "U3.1 is a power_in pin on DEADPWR, a dead-end net that supplies nothing.",
+    }
+    return BoardSpec(
+        name="pin_defects",
+        description="Deliberate pin-type defects -- the catch-rate anchor for the "
+                    "checks #86 unblocks at full coverage.",
+        comps=comps, pin_types=pin_types, must_flag=must_flag)
+
+
+TRUST_BOARDS: List[BoardSpec] = [_mcu_core(), _pin_defects()]

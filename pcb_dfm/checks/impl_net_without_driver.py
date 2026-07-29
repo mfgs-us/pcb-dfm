@@ -44,8 +44,11 @@ def run_net_without_driver(ctx: CheckContext) -> CheckResult:
         # those pins inconsistently, so a net that touches them is left alone.
         if any(rd.part_class.get(c) != "ic" for c in rd.comps_on(net)):
             continue
-        # And only when every pin has a known type (an unparsed hierarchical pin
-        # could be the driver).
+        # And only when every pin has a known type -- an untyped pin could be the
+        # driver. Since #86 walks sub-sheets, hierarchical pins are typed, so this
+        # now guards only genuinely unparsed pads (a reused-sheet instance, or a
+        # part with no schematic symbol); it is a cheap soundness backstop, not
+        # the hierarchical-coverage workaround it began as.
         if any((ref, pad) not in rd.dd.pin_types
                for (ref, pad), n in rd.idx.pad_net.items() if n == net):
             continue

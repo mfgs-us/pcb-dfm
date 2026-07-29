@@ -317,6 +317,91 @@ def test_diff_pair_skew_isolated(tmp_path):
 
 
 # --------------------------------------------------------------------------
+# #23 -- data-gated checks that need routed geometry / a stackup.
+#
+# The baseline sidecar makes the target *active and passing*; the mutated
+# sidecar changes one field to trip it, so activation (which turns on several
+# design-data checks at once) is never what the assertion catches. A thin
+# stackup makes the real Zo ~28 ohm, so the controlled-impedance targets are set
+# to 28 to keep impedance_control passing where it is not the target.
+# --------------------------------------------------------------------------
+_STACKUP = {"er": 4.3, "dielectric_thickness_mm": 0.20, "copper_thickness_mm": 0.035,
+            "dielectric_layers_mm": [0.10, 0.20, 0.20, 0.10]}
+
+
+def test_impedance_control_isolated(tmp_path):
+    # One controlled-impedance net, no routed segments -> only impedance_control
+    # is active. Baseline width lands on target Zo; the mutation widens the trace
+    # so the estimated Z falls far outside tolerance.
+    def sidecar(width_mm: float) -> dict:
+        return {"stackup": _STACKUP,
+                "controlled_impedance": [{"name": "RF", "target_ohm": 28,
+                                          "width_mm": width_mm, "tolerance_pct": 20}]}
+    baseline = _status_map(BASE, design_data=load_design_data(sidecar(0.30)))
+    mutated = _status_map(BASE, design_data=load_design_data(sidecar(0.70)))
+    _assert_isolated_failure(baseline, mutated, "impedance_control")
+
+
+def test_highspeed_stub_length_isolated(tmp_path):
+    # A high-speed net (controlled-impedance) shaped as a straight trunk with one
+    # branch off its middle. The branch is the stub; only its length changes.
+    def sidecar(stub_mm: float) -> dict:
+        return {"stackup": _STACKUP,
+                "controlled_impedance": [{"name": "HS", "target_ohm": 28,
+                                          "width_mm": 0.30, "tolerance_pct": 20}],
+                "nets": {"HS": {"segments": [[[0, -12], [0, 0]], [[0, 0], [0, 12]],
+                                             [[0, 0], [stub_mm, 0]]]}}}
+    # 4 mm stub is clean; 14 mm is a long unterminated branch (limit 10 mm).
+    baseline = _status_map(BASE, design_data=load_design_data(sidecar(4.0)))
+    mutated = _status_map(BASE, design_data=load_design_data(sidecar(14.0)))
+    _assert_isolated_failure(baseline, mutated, "highspeed_stub_length")
+
+
+def test_crosstalk_estimate_isolated(tmp_path):
+    # Two independent high-speed nets (not a diff pair, so crosstalk applies)
+    # running parallel for 25 mm. Only the edge-to-edge spacing changes.
+    def sidecar(gap_mm: float) -> dict:
+        return {"stackup": _STACKUP,
+                "controlled_impedance": [
+                    {"name": "AGG", "target_ohm": 28, "width_mm": 0.30, "tolerance_pct": 20},
+                    {"name": "VIC", "target_ohm": 28, "width_mm": 0.30, "tolerance_pct": 20}],
+                "nets": {"AGG": {"segments": [[[0, 0], [25, 0]]]},
+                         "VIC": {"segments": [[[0, gap_mm], [25, gap_mm]]]}}}
+    # 2 mm apart is negligible coupling; 0.1 mm apart over 25 mm is heavy crosstalk.
+    baseline = _status_map(BASE, design_data=load_design_data(sidecar(2.0)))
+    mutated = _status_map(BASE, design_data=load_design_data(sidecar(0.1)))
+    _assert_isolated_failure(baseline, mutated, "crosstalk_estimate")
+
+
+def test_diff_pair_spacing_isolated(tmp_path):
+    # diff_pair_spacing measures the *variation* of the intra-pair gap, not its
+    # absolute value: a constant gap passes, a gap that steps mid-run fails.
+    # (The step introduces a bend, so trace_right_angle_bends may warn -- an
+    # advisory, allowed; only a new hard failure would break isolation.)
+    def sidecar(n_segments: list) -> dict:
+        return {"nets": {"DP_P": {"segments": [[[0, 0], [20, 0]]]},
+                         "DP_N": {"segments": n_segments}},
+                "diff_pairs": [{"positive": "DP_P", "negative": "DP_N", "target_ohm": 100}]}
+    flat = [[[0, 0.2], [20, 0.2]]]                                   # constant 0.2 mm gap
+    stepped = [[[0, 0.2], [9, 0.2]], [[9, 0.2], [11, 0.4]], [[11, 0.4], [20, 0.4]]]  # 0.2 -> 0.4
+    baseline = _status_map(BASE, design_data=load_design_data(sidecar(flat)))
+    mutated = _status_map(BASE, design_data=load_design_data(sidecar(stepped)))
+    _assert_isolated_failure(baseline, mutated, "diff_pair_spacing")
+
+
+# Deferred to #24 (the richer base fixture):
+#   * return_path_interruptions -- needs a reference-plane pour with a slot the
+#     trace crosses, on >= 2 copper layers. That plane geometry is not
+#     expressible through the JSON sidecar (no fill-region field), so it needs a
+#     built board, not a sidecar mutation.
+#   * component_to_component_spacing -- clusters *Gerber* pad openings and
+#     measures the gap between them; design data only labels the clusters, so a
+#     sidecar/placement mutation cannot move mini_board's fixed ~9 mm pad gap. It
+#     is geometry-gated, not data-gated -- a placement-carrying base fixture
+#     (#24) is the right home.
+
+
+# --------------------------------------------------------------------------
 # #22 -- geometry-trippable checks (a single minimal edit to mini_board).
 #
 # Each edit injects one physical defect and asserts the target reaches its worst

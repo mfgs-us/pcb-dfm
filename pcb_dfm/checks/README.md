@@ -33,7 +33,11 @@
 - [x] copper_to_edge_distance
 - [x] dielectric_thickness_uniformity
 - [x] impedance_control
+- [x] lamination_cycle_count
 - [ ] layer_registration_margin
+- [x] stackup_construction_validity
+- [x] stackup_lamination_validity
+- [x] stackup_layer_order
 
 ## high_speed_si
 - [ ] crosstalk_estimate

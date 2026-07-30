@@ -3,24 +3,44 @@
   "generated": "scripts/build_index.py",
   "checks": [
     {
+      "id": "component_to_component_spacing",
+      "category_id": "assembly",
+      "filename": "component_to_component_spacing.json"
+    },
+    {
+      "id": "polarity_marking_consistency",
+      "category_id": "assembly",
+      "filename": "polarity_marking_consistency.json"
+    },
+    {
+      "id": "solder_paste_area_coverage",
+      "category_id": "assembly",
+      "filename": "solder_paste_area_coverage.json"
+    },
+    {
+      "id": "stencil_aperture_ratio",
+      "category_id": "assembly",
+      "filename": "stencil_aperture_ratio.json"
+    },
+    {
+      "id": "tombstoning_risk",
+      "category_id": "assembly",
+      "filename": "tombstoning_risk.json"
+    },
+    {
+      "id": "wave_solder_shadowing",
+      "category_id": "assembly",
+      "filename": "wave_solder_shadowing.json"
+    },
+    {
       "id": "acid_trap_angle",
       "category_id": "copper_geometry",
       "filename": "acid_trap_angle.json"
     },
     {
-      "id": "aperture_definition_errors",
-      "category_id": "fab_process_compatibility",
-      "filename": "aperture_definition_errors.json"
-    },
-    {
-      "id": "backdrill_stub_length",
-      "category_id": "drill_via_integrity",
-      "filename": "backdrill_stub_length.json"
-    },
-    {
-      "id": "component_to_component_spacing",
-      "category_id": "assembly",
-      "filename": "component_to_component_spacing.json"
+      "id": "acute_trace_angle",
+      "category_id": "copper_geometry",
+      "filename": "acute_trace_angle.json"
     },
     {
       "id": "copper_density_balance",
@@ -33,94 +53,9 @@
       "filename": "copper_sliver_width.json"
     },
     {
-      "id": "copper_thermal_area",
-      "category_id": "thermal_power",
-      "filename": "copper_thermal_area.json"
-    },
-    {
-      "id": "copper_to_edge_distance",
-      "category_id": "fabrication_stackup",
-      "filename": "copper_to_edge_distance.json"
-    },
-    {
-      "id": "crosstalk_estimate",
-      "category_id": "high_speed_si",
-      "filename": "crosstalk_estimate.json"
-    },
-    {
-      "id": "dielectric_thickness_uniformity",
-      "category_id": "fabrication_stackup",
-      "filename": "dielectric_thickness_uniformity.json"
-    },
-    {
-      "id": "diff_pair_skew",
-      "category_id": "high_speed_si",
-      "filename": "diff_pair_skew.json"
-    },
-    {
-      "id": "diff_pair_spacing",
-      "category_id": "high_speed_si",
-      "filename": "diff_pair_spacing.json"
-    },
-    {
-      "id": "drill_aspect_ratio",
-      "category_id": "drill_via_integrity",
-      "filename": "drill_aspect_ratio.json"
-    },
-    {
-      "id": "drill_to_drill_spacing",
-      "category_id": "drill_via_integrity",
-      "filename": "drill_to_drill_spacing.json"
-    },
-    {
-      "id": "drill_wander_budget",
-      "category_id": "yield_prediction",
-      "filename": "drill_wander_budget.json"
-    },
-    {
-      "id": "etch_compensation_margin",
-      "category_id": "yield_prediction",
-      "filename": "etch_compensation_margin.json"
-    },
-    {
-      "id": "fillet_radius_milling",
-      "category_id": "mechanical_outline",
-      "filename": "fillet_radius_milling.json"
-    },
-    {
-      "id": "highspeed_stub_length",
-      "category_id": "high_speed_si",
-      "filename": "highspeed_stub_length.json"
-    },
-    {
-      "id": "impedance_control",
-      "category_id": "fabrication_stackup",
-      "filename": "impedance_control.json"
-    },
-    {
-      "id": "layer_registration_margin",
-      "category_id": "fabrication_stackup",
-      "filename": "layer_registration_margin.json"
-    },
-    {
-      "id": "mask_to_trace_clearance",
-      "category_id": "solder_mask_silkscreen",
-      "filename": "mask_to_trace_clearance.json"
-    },
-    {
       "id": "min_annular_ring",
       "category_id": "copper_geometry",
       "filename": "min_annular_ring.json"
-    },
-    {
-      "id": "min_drill_size",
-      "category_id": "drill_via_integrity",
-      "filename": "min_drill_size.json"
-    },
-    {
-      "id": "min_slot_width",
-      "category_id": "mechanical_outline",
-      "filename": "min_slot_width.json"
     },
     {
       "id": "min_trace_spacing",
@@ -133,29 +68,404 @@
       "filename": "min_trace_width.json"
     },
     {
+      "id": "trace_necking",
+      "category_id": "copper_geometry",
+      "filename": "trace_necking.json"
+    },
+    {
+      "id": "antenna_keepout",
+      "category_id": "design_advisory",
+      "filename": "antenna_keepout.json"
+    },
+    {
+      "id": "bulk_capacitance_present",
+      "category_id": "design_advisory",
+      "filename": "bulk_capacitance_present.json"
+    },
+    {
+      "id": "component_edge_clearance",
+      "category_id": "design_advisory",
+      "filename": "component_edge_clearance.json"
+    },
+    {
+      "id": "courtyard_overlap",
+      "category_id": "design_advisory",
+      "filename": "courtyard_overlap.json"
+    },
+    {
+      "id": "critical_pin_connectivity",
+      "category_id": "design_advisory",
+      "filename": "critical_pin_connectivity.json"
+    },
+    {
+      "id": "crystal_load_caps",
+      "category_id": "design_advisory",
+      "filename": "crystal_load_caps.json"
+    },
+    {
+      "id": "crystal_proximity",
+      "category_id": "design_advisory",
+      "filename": "crystal_proximity.json"
+    },
+    {
+      "id": "debug_port_test_access",
+      "category_id": "design_advisory",
+      "filename": "debug_port_test_access.json"
+    },
+    {
+      "id": "decoupling_adequacy",
+      "category_id": "design_advisory",
+      "filename": "decoupling_adequacy.json"
+    },
+    {
+      "id": "decoupling_proximity",
+      "category_id": "design_advisory",
+      "filename": "decoupling_proximity.json"
+    },
+    {
+      "id": "decoupling_same_side",
+      "category_id": "design_advisory",
+      "filename": "decoupling_same_side.json"
+    },
+    {
+      "id": "differential_pair_completeness",
+      "category_id": "design_advisory",
+      "filename": "differential_pair_completeness.json"
+    },
+    {
+      "id": "duplicate_refdes",
+      "category_id": "design_advisory",
+      "filename": "duplicate_refdes.json"
+    },
+    {
+      "id": "fiducial_coverage",
+      "category_id": "design_advisory",
+      "filename": "fiducial_coverage.json"
+    },
+    {
+      "id": "fine_pitch_fiducials",
+      "category_id": "design_advisory",
+      "filename": "fine_pitch_fiducials.json"
+    },
+    {
+      "id": "floating_copper",
+      "category_id": "design_advisory",
+      "filename": "floating_copper.json"
+    },
+    {
+      "id": "floating_or_single_pin_net",
+      "category_id": "design_advisory",
+      "filename": "floating_or_single_pin_net.json"
+    },
+    {
+      "id": "i2c_pullup_presence",
+      "category_id": "design_advisory",
+      "filename": "i2c_pullup_presence.json"
+    },
+    {
+      "id": "led_series_resistor",
+      "category_id": "design_advisory",
+      "filename": "led_series_resistor.json"
+    },
+    {
+      "id": "mounting_hole_keepout",
+      "category_id": "design_advisory",
+      "filename": "mounting_hole_keepout.json"
+    },
+    {
+      "id": "open_drain_pullup",
+      "category_id": "design_advisory",
+      "filename": "open_drain_pullup.json"
+    },
+    {
+      "id": "outline_sharp_corners",
+      "category_id": "design_advisory",
+      "filename": "outline_sharp_corners.json"
+    },
+    {
+      "id": "polarized_orientation_consistency",
+      "category_id": "design_advisory",
+      "filename": "polarized_orientation_consistency.json"
+    },
+    {
+      "id": "power_feed_robustness",
+      "category_id": "design_advisory",
+      "filename": "power_feed_robustness.json"
+    },
+    {
+      "id": "power_ground_trace_width",
+      "category_id": "design_advisory",
+      "filename": "power_ground_trace_width.json"
+    },
+    {
+      "id": "rail_name_aliasing",
+      "category_id": "design_advisory",
+      "filename": "rail_name_aliasing.json"
+    },
+    {
+      "id": "reference_designator_coverage",
+      "category_id": "design_advisory",
+      "filename": "reference_designator_coverage.json"
+    },
+    {
+      "id": "reset_pullup_presence",
+      "category_id": "design_advisory",
+      "filename": "reset_pullup_presence.json"
+    },
+    {
+      "id": "schematic_layout_consistency",
+      "category_id": "design_advisory",
+      "filename": "schematic_layout_consistency.json"
+    },
+    {
+      "id": "self_crossing_trace",
+      "category_id": "design_advisory",
+      "filename": "self_crossing_trace.json"
+    },
+    {
+      "id": "silkscreen_off_board",
+      "category_id": "design_advisory",
+      "filename": "silkscreen_off_board.json"
+    },
+    {
+      "id": "tall_part_edge_clearance",
+      "category_id": "design_advisory",
+      "filename": "tall_part_edge_clearance.json"
+    },
+    {
+      "id": "teardrop_presence",
+      "category_id": "design_advisory",
+      "filename": "teardrop_presence.json"
+    },
+    {
+      "id": "test_point_coverage",
+      "category_id": "design_advisory",
+      "filename": "test_point_coverage.json"
+    },
+    {
+      "id": "unconnected_pads",
+      "category_id": "design_advisory",
+      "filename": "unconnected_pads.json"
+    },
+    {
+      "id": "unpowered_ic",
+      "category_id": "design_advisory",
+      "filename": "unpowered_ic.json"
+    },
+    {
+      "id": "unrouted_or_partial_net",
+      "category_id": "design_advisory",
+      "filename": "unrouted_or_partial_net.json"
+    },
+    {
+      "id": "backdrill_stub_length",
+      "category_id": "drill_via_integrity",
+      "filename": "backdrill_stub_length.json"
+    },
+    {
+      "id": "drill_aspect_ratio",
+      "category_id": "drill_via_integrity",
+      "filename": "drill_aspect_ratio.json"
+    },
+    {
+      "id": "drill_to_drill_spacing",
+      "category_id": "drill_via_integrity",
+      "filename": "drill_to_drill_spacing.json"
+    },
+    {
+      "id": "microvia_geometry",
+      "category_id": "drill_via_integrity",
+      "filename": "microvia_geometry.json"
+    },
+    {
+      "id": "min_drill_size",
+      "category_id": "drill_via_integrity",
+      "filename": "min_drill_size.json"
+    },
+    {
+      "id": "npth_to_copper_clearance",
+      "category_id": "drill_via_integrity",
+      "filename": "npth_to_copper_clearance.json"
+    },
+    {
+      "id": "orphan_or_redundant_via",
+      "category_id": "drill_via_integrity",
+      "filename": "orphan_or_redundant_via.json"
+    },
+    {
+      "id": "via_tenting",
+      "category_id": "drill_via_integrity",
+      "filename": "via_tenting.json"
+    },
+    {
+      "id": "via_to_copper_clearance",
+      "category_id": "drill_via_integrity",
+      "filename": "via_to_copper_clearance.json"
+    },
+    {
+      "id": "aperture_definition_errors",
+      "category_id": "fab_process_compatibility",
+      "filename": "aperture_definition_errors.json"
+    },
+    {
       "id": "missing_tooling_holes",
       "category_id": "fab_process_compatibility",
       "filename": "missing_tooling_holes.json"
     },
     {
-      "id": "plane_fragmentation",
-      "category_id": "thermal_power",
-      "filename": "plane_fragmentation.json"
+      "id": "silkscreen_over_mask_defined_pads",
+      "category_id": "fab_process_compatibility",
+      "filename": "silkscreen_over_mask_defined_pads.json"
     },
     {
-      "id": "plating_uniformity",
-      "category_id": "yield_prediction",
-      "filename": "plating_uniformity.json"
+      "id": "unsupported_hole_types",
+      "category_id": "fab_process_compatibility",
+      "filename": "unsupported_hole_types.json"
     },
     {
-      "id": "polarity_marking_consistency",
-      "category_id": "assembly",
-      "filename": "polarity_marking_consistency.json"
+      "id": "copper_balance_plating",
+      "category_id": "fabrication_stackup",
+      "filename": "copper_balance_plating.json"
+    },
+    {
+      "id": "copper_to_edge_distance",
+      "category_id": "fabrication_stackup",
+      "filename": "copper_to_edge_distance.json"
+    },
+    {
+      "id": "dielectric_thickness_uniformity",
+      "category_id": "fabrication_stackup",
+      "filename": "dielectric_thickness_uniformity.json"
+    },
+    {
+      "id": "impedance_control",
+      "category_id": "fabrication_stackup",
+      "filename": "impedance_control.json"
+    },
+    {
+      "id": "lamination_cycle_count",
+      "category_id": "fabrication_stackup",
+      "filename": "lamination_cycle_count.json"
+    },
+    {
+      "id": "layer_registration_margin",
+      "category_id": "fabrication_stackup",
+      "filename": "layer_registration_margin.json"
+    },
+    {
+      "id": "signal_plane_adjacency",
+      "category_id": "fabrication_stackup",
+      "filename": "signal_plane_adjacency.json"
+    },
+    {
+      "id": "stackup_construction_validity",
+      "category_id": "fabrication_stackup",
+      "filename": "stackup_construction_validity.json"
+    },
+    {
+      "id": "stackup_lamination_validity",
+      "category_id": "fabrication_stackup",
+      "filename": "stackup_lamination_validity.json"
+    },
+    {
+      "id": "stackup_layer_order",
+      "category_id": "fabrication_stackup",
+      "filename": "stackup_layer_order.json"
+    },
+    {
+      "id": "stackup_symmetry",
+      "category_id": "fabrication_stackup",
+      "filename": "stackup_symmetry.json"
+    },
+    {
+      "id": "coupled_run_length",
+      "category_id": "high_speed_si",
+      "filename": "coupled_run_length.json"
+    },
+    {
+      "id": "crosstalk_estimate",
+      "category_id": "high_speed_si",
+      "filename": "crosstalk_estimate.json"
+    },
+    {
+      "id": "diff_pair_skew",
+      "category_id": "high_speed_si",
+      "filename": "diff_pair_skew.json"
+    },
+    {
+      "id": "diff_pair_spacing",
+      "category_id": "high_speed_si",
+      "filename": "diff_pair_spacing.json"
+    },
+    {
+      "id": "highspeed_stub_length",
+      "category_id": "high_speed_si",
+      "filename": "highspeed_stub_length.json"
+    },
+    {
+      "id": "meander_spacing",
+      "category_id": "high_speed_si",
+      "filename": "meander_spacing.json"
+    },
+    {
+      "id": "net_via_count",
+      "category_id": "high_speed_si",
+      "filename": "net_via_count.json"
+    },
+    {
+      "id": "net_without_driver",
+      "category_id": "high_speed_si",
+      "filename": "net_without_driver.json"
+    },
+    {
+      "id": "output_drive_contention",
+      "category_id": "high_speed_si",
+      "filename": "output_drive_contention.json"
     },
     {
       "id": "return_path_interruptions",
       "category_id": "high_speed_si",
       "filename": "return_path_interruptions.json"
+    },
+    {
+      "id": "trace_right_angle_bends",
+      "category_id": "high_speed_si",
+      "filename": "trace_right_angle_bends.json"
+    },
+    {
+      "id": "board_outline_continuity",
+      "category_id": "mechanical_outline",
+      "filename": "board_outline_continuity.json"
+    },
+    {
+      "id": "castellated_edge_plating",
+      "category_id": "mechanical_outline",
+      "filename": "castellated_edge_plating.json"
+    },
+    {
+      "id": "fillet_radius_milling",
+      "category_id": "mechanical_outline",
+      "filename": "fillet_radius_milling.json"
+    },
+    {
+      "id": "min_slot_width",
+      "category_id": "mechanical_outline",
+      "filename": "min_slot_width.json"
+    },
+    {
+      "id": "tab_routing_mousebites",
+      "category_id": "mechanical_outline",
+      "filename": "tab_routing_mousebites.json"
+    },
+    {
+      "id": "trace_over_cutout",
+      "category_id": "mechanical_outline",
+      "filename": "trace_over_cutout.json"
+    },
+    {
+      "id": "mask_to_trace_clearance",
+      "category_id": "solder_mask_silkscreen",
+      "filename": "mask_to_trace_clearance.json"
     },
     {
       "id": "silkscreen_clearance",
@@ -173,11 +483,6 @@
       "filename": "silkscreen_on_copper.json"
     },
     {
-      "id": "silkscreen_over_mask_defined_pads",
-      "category_id": "fab_process_compatibility",
-      "filename": "silkscreen_over_mask_defined_pads.json"
-    },
-    {
       "id": "solder_mask_expansion",
       "category_id": "solder_mask_silkscreen",
       "filename": "solder_mask_expansion.json"
@@ -188,14 +493,19 @@
       "filename": "solder_mask_web.json"
     },
     {
-      "id": "solder_paste_area_coverage",
-      "category_id": "assembly",
-      "filename": "solder_paste_area_coverage.json"
+      "id": "copper_thermal_area",
+      "category_id": "thermal_power",
+      "filename": "copper_thermal_area.json"
     },
     {
-      "id": "tab_routing_mousebites",
-      "category_id": "mechanical_outline",
-      "filename": "tab_routing_mousebites.json"
+      "id": "plane_fragmentation",
+      "category_id": "thermal_power",
+      "filename": "plane_fragmentation.json"
+    },
+    {
+      "id": "thermal_pad_via_count",
+      "category_id": "thermal_power",
+      "filename": "thermal_pad_via_count.json"
     },
     {
       "id": "thermal_relief_spoke_width",
@@ -203,34 +513,24 @@
       "filename": "thermal_relief_spoke_width.json"
     },
     {
-      "id": "tombstoning_risk",
-      "category_id": "assembly",
-      "filename": "tombstoning_risk.json"
-    },
-    {
-      "id": "unsupported_hole_types",
-      "category_id": "fab_process_compatibility",
-      "filename": "unsupported_hole_types.json"
-    },
-    {
       "id": "via_in_pad_thermal_balance",
       "category_id": "thermal_power",
       "filename": "via_in_pad_thermal_balance.json"
     },
     {
-      "id": "via_tenting",
-      "category_id": "drill_via_integrity",
-      "filename": "via_tenting.json"
+      "id": "drill_wander_budget",
+      "category_id": "yield_prediction",
+      "filename": "drill_wander_budget.json"
     },
     {
-      "id": "via_to_copper_clearance",
-      "category_id": "drill_via_integrity",
-      "filename": "via_to_copper_clearance.json"
+      "id": "etch_compensation_margin",
+      "category_id": "yield_prediction",
+      "filename": "etch_compensation_margin.json"
     },
     {
-      "id": "wave_solder_shadowing",
-      "category_id": "assembly",
-      "filename": "wave_solder_shadowing.json"
+      "id": "plating_uniformity",
+      "category_id": "yield_prediction",
+      "filename": "plating_uniformity.json"
     }
   ]
 }

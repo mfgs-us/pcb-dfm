@@ -97,6 +97,7 @@ def _ensure_impls_loaded() -> None:
         impl_highspeed_stub_length,  # noqa: F401
         impl_i2c_pullup_presence,  # noqa: F401
         impl_impedance_control,  # noqa: F401
+        impl_lamination_cycle_count,  # noqa: F401
         impl_layer_registration_margin,  # noqa: F401
         impl_led_series_resistor,  # noqa: F401
         impl_mask_to_trace_clearance,  # noqa: F401
@@ -137,6 +138,9 @@ def _ensure_impls_loaded() -> None:
         impl_solder_mask_expansion,  # noqa: F401
         impl_solder_mask_web,  # noqa: F401
         impl_solder_paste_area_coverage,  # noqa: F401
+        impl_stackup_construction_validity,  # noqa: F401
+        impl_stackup_lamination_validity,  # noqa: F401
+        impl_stackup_layer_order,  # noqa: F401
         impl_stackup_symmetry,  # noqa: F401
         impl_stencil_aperture_ratio,  # noqa: F401
         impl_tab_routing_mousebites,  # noqa: F401

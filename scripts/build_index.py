@@ -6,10 +6,12 @@ SCHEMA_VERSION = "1.0.0"
 
 
 def main() -> None:
-    # Resolve repo root as parent of this script directory
+    # Resolve repo root as parent of this script directory. The check JSONs live
+    # under the package (they ship as package data); this script predated that
+    # move and pointed at a top-level `checks/` that no longer exists.
     script_path = Path(__file__).resolve()
     repo_root = script_path.parent.parent
-    checks_dir = repo_root / "checks"
+    checks_dir = repo_root / "pcb_dfm" / "check_data" / "checks"
     index_path = checks_dir / "index.json"
 
     if not checks_dir.is_dir():

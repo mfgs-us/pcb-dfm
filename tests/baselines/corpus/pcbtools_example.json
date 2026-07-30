@@ -338,6 +338,14 @@
     },
     {
       "confidence": "high",
+      "id": "lamination_cycle_count",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
       "id": "layer_registration_margin",
       "measured": 0.1989,
       "severity": "info",
@@ -651,6 +659,30 @@
     {
       "confidence": "heuristic",
       "id": "solder_paste_area_coverage",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
+      "id": "stackup_construction_validity",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
+      "id": "stackup_lamination_validity",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
+      "id": "stackup_layer_order",
       "measured": null,
       "severity": "info",
       "status": "not_applicable",

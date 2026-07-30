@@ -85,6 +85,46 @@ Legend:
 | Dielectric thickness uniformity | 🔬 | `dielectric_thickness_uniformity` |
 | Layer-to-layer registration margin | 🟡 | `layer_registration_margin` |
 | Stackup symmetry / warpage balance | 🔬 | `stackup_symmetry` |
+| **Stackup construction validity** | 🔬 | `stackup_construction_validity` *(new)* |
+| **Layer order vs layer naming** | 🔬 | `stackup_layer_order` *(new)* |
+| **Core / prepreg lamination validity** | 🔬 | `stackup_lamination_validity` *(new)* |
+| **Implied lamination cycles / build class** | 🔬 | `lamination_cycle_count` *(new, informational)* |
+
+### The structural group — `stackup_construction_validity`, `stackup_layer_order`, `stackup_lamination_validity`, `lamination_cycle_count`
+
+The four checks above the divider read the stackup's *numbers*. These four read
+its *shape*, and none of them needs artwork:
+
+`stackup_construction_validity` is the precondition the rest of the domain
+silently assumed. `stackup_symmetry` pairs mirror layers and `microvia_geometry`
+slices the layers between two coppers — both assume strict copper/dielectric
+alternation top-to-bottom, and neither verified it, so a malformed stack produced
+a confident number from nonsense. It rejects copper-against-copper, a stack whose
+outer surface is not copper, duplicate layer names, and implausible thickness/Er
+values; adjacent dielectrics (two prepreg sheets) are explicitly *not* a fault,
+and an odd copper count is an observation that never changes the status.
+
+`stackup_layer_order` cross-examines the physical order against what the layers
+call themselves — inner ordinals must ascend top-to-bottom, the outer layers must
+name the top and bottom sides, numbering must have no gaps. A mirrored or
+transposed build passes every geometric check in this document and comes back
+electrically wrong, so nothing else here can see it. Unrecognised naming reports
+`not_applicable` rather than guessing. The IPC-2581 adapter now also orders by the
+declared stackup sequence attribute instead of trusting document order.
+
+`stackup_lamination_validity` needs the core/prepreg distinction, which every
+adapter used to collapse into a single `dielectric` kind. Threading it through
+(KiCad layer type, IPC-2581 layer function, ODB++ `DIELECTRIC_TYPE`, sidecar
+`material`) enables the real rules — at least one core, no core-to-core
+lamination, enough prepreg to bond — and **fixes a blind spot in
+`stackup_symmetry`, which now compares material across the mid-plane**: a core
+mirrored by a prepreg of equal thickness used to pass, and that is exactly the
+construction asymmetry that warps.
+
+`lamination_cycle_count` derives the HDI build class (`1+N+1`, `2+N+2`) and press
+count from the via spans. Informational only and never worse than a pass: the
+derivation is objective, but "too many cycles" is a cost judgment, not a
+manufacturability rule.
 
 ## 7. High-speed signal integrity
 

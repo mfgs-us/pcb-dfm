@@ -129,10 +129,34 @@ GUIDANCE: Dict[str, Remediation] = {
         "Even out dielectric thicknesses or choose a symmetric stackup.",
         "Impedance drift and board warp."),
     "stackup_symmetry": Remediation(
-        "Mirror the layer construction (copper weights and dielectric "
-        "thicknesses) about the board mid-plane.",
+        "Mirror the layer construction (copper weights, dielectric thicknesses "
+        "and core/prepreg materials) about the board mid-plane.",
         "An unbalanced stackup warps on reflow → fab reject/re-quote and "
         "assembly coplanarity problems."),
+    "stackup_construction_validity": Remediation(
+        "Fix the declared stack so copper and dielectric alternate, both outer "
+        "surfaces are copper, layer names are unique, and thickness/Er values are "
+        "physical. If the stack looks right in your CAD tool, the export or the "
+        "sidecar is wrong.",
+        "A malformed stack cannot be built as described, and every other stackup "
+        "check silently computes its number from it → fab query at CAM, plus "
+        "unreliable impedance/symmetry/via-depth results."),
+    "stackup_layer_order": Remediation(
+        "Reorder the stackup to match its layer names (top first, inner ordinals "
+        "ascending, bottom last), or rename the layers to match the physical "
+        "order — whichever the CAD tool actually got wrong.",
+        "A mirrored or transposed build passes every geometric check and comes "
+        "back electrically wrong → full scrap of the lot."),
+    "stackup_lamination_validity": Remediation(
+        "Rebuild the stack with at least one core, prepreg between every pair of "
+        "cores, and enough prepreg (≥ 0.1 mm / two sheets) to bond them.",
+        "Cores that cannot bond delaminate, and a resin-starved bond fails "
+        "thermal cycling → fab re-quote or field failures."),
+    "lamination_cycle_count": Remediation(
+        "Informational: no action required. To reduce cost, reduce the build-up "
+        "depth (fewer stacked microvia levels) or eliminate buried-via spans so "
+        "the board needs fewer press cycles.",
+        "None — this reports the build class a quote is priced on, not a defect."),
 
     # --- mechanical / outline / thermal -----------------------------------
     "board_outline_continuity": Remediation(

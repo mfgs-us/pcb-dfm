@@ -56,10 +56,57 @@ def test_stackup_keeps_electrical_layers_in_order():
     got = [(lyr.name, lyr.kind) for lyr in d.stackup.layers]
     assert got == [
         ("top", "copper"),
-        ("core1", "dielectric"),
+        ("pp1", "dielectric"),
         ("gnd", "copper"),      # POWER_GROUND is copper
+        ("core1", "dielectric"),
+        ("pwr", "copper"),
+        ("pp2", "dielectric"),
         ("bot", "copper"),
     ]
+
+
+def test_stackup_carries_thickness_er_and_material():
+    """Thickness / Er / material come off the optional matrix stackup fields.
+
+    Before these were read, every thickness-based stackup check reported
+    not_applicable on an ODB++ job -- indistinguishable from the user supplying no
+    design data at all.
+    """
+    d = from_odbpp(_JOB)
+    by_name = {lyr.name: lyr for lyr in d.stackup.layers}
+
+    # THICKNESS is microns on a matrix layer record.
+    assert by_name["pp1"].thickness_mm == pytest.approx(0.100)
+    assert by_name["core1"].thickness_mm == pytest.approx(0.700)
+    assert by_name["pp1"].er == pytest.approx(4.2)
+    assert by_name["core1"].er == pytest.approx(4.4)
+
+    # Copper comes from CU_WEIGHT in ounces, not THICKNESS.
+    assert by_name["top"].thickness_mm == pytest.approx(0.0348)
+    assert by_name["gnd"].thickness_mm == pytest.approx(0.0174)
+
+    # The core/prepreg distinction survives, so the lamination rules can see it.
+    assert by_name["core1"].material == "core"
+    assert by_name["pp1"].material == "prepreg"
+    assert by_name["top"].material is None  # copper has no dielectric material
+
+
+def test_stackup_without_optional_fields_degrades_to_none(tmp_path):
+    """A matrix carrying only NAME/TYPE/ROW must yield no fabricated numbers."""
+    job = tmp_path / "bare"
+    (job / "matrix").mkdir(parents=True)
+    (job / "matrix" / "matrix").write_text(
+        "STEP {\n    COL=1\n    NAME=pcb\n}\n"
+        "LAYER {\n    ROW=1\n    TYPE=SIGNAL\n    NAME=top\n}\n"
+        "LAYER {\n    ROW=2\n    TYPE=DIELECTRIC\n    NAME=d1\n}\n"
+        "LAYER {\n    ROW=3\n    TYPE=SIGNAL\n    NAME=bot\n}\n"
+    )
+    d = from_odbpp(job)
+    assert [lyr.name for lyr in d.stackup.layers] == ["top", "d1", "bot"]
+    assert all(lyr.thickness_mm is None for lyr in d.stackup.layers)
+    assert all(lyr.er is None for lyr in d.stackup.layers)
+    assert all(lyr.material is None for lyr in d.stackup.layers)
+    assert d.stackup.total_thickness_mm() is None
 
 
 def test_stackup_excludes_non_electrical_layers():

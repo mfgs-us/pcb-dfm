@@ -18,7 +18,8 @@ Supported subset
 Deliberately scoped to what the checks consume, mirroring how ``ipc2581.py``
 handles its own format:
 
-  * **stackup** -- layer order and copper/dielectric roles from ``matrix``
+  * **stackup** -- layer order, copper/dielectric roles, and (when the exporter
+    emits them) per-layer thickness, Er and core/prepreg material, from ``matrix``
   * **nets** -- names from ``eda/data``
   * **components** -- reference designator, side, and per-pin locations from the
     component layers, which feeds pad identification and net labelling
@@ -53,6 +54,8 @@ from ..design_model import (
 )
 
 _INCH_TO_MM = 25.4
+# 1 oz/ft^2 of copper is 1.37 mil of foil.
+_OZ_COPPER_MM = 0.0348
 
 # matrix/matrix is a block format: LAYER { ... } with KEY=VALUE lines.
 _BLOCK_RE = re.compile(r"(\w+)\s*\{([^}]*)\}", re.DOTALL)
@@ -115,8 +118,53 @@ def _blocks(text: str, kind: str) -> List[Dict[str, str]]:
     return out
 
 
+def _fnum(block: Dict[str, str], *keys: str) -> Optional[float]:
+    """First parseable positive float among ``keys``, or None."""
+    for k in keys:
+        raw = block.get(k)
+        if raw is None:
+            continue
+        try:
+            v = float(str(raw).strip())
+        except ValueError:
+            continue
+        if v > 0:
+            return v
+    return None
+
+
+def _layer_material(block: Dict[str, str], ltype: str) -> Optional[str]:
+    """Dielectric sub-kind (core/prepreg) from the layer TYPE or DIELECTRIC_TYPE.
+
+    ODB++ states it in either place depending on the exporter: the TYPE itself may
+    be CORE/PREPREG, or TYPE is the generic DIELECTRIC with DIELECTRIC_TYPE
+    carrying the specific material.
+    """
+    for token in (ltype, (block.get("DIELECTRIC_TYPE") or "").upper()):
+        if token == "CORE":
+            return "core"
+        if token == "PREPREG":
+            return "prepreg"
+    return None
+
+
 def _parse_matrix(matrix_file: Path) -> Tuple[Optional[Stackup], List[str]]:
-    """Layer stack and the step names declared in ``matrix/matrix``."""
+    """Layer stack and the step names declared in ``matrix/matrix``.
+
+    Thickness / Er / material are read from the optional stackup fields on each
+    LAYER record when the exporter emits them. They are genuinely optional in
+    ODB++ -- plenty of jobs carry only NAME/TYPE/ROW -- so every field degrades to
+    None rather than a fabricated default, and the thickness-based stackup checks
+    stay `not_applicable` exactly as they did before rather than consuming a made-
+    up number.
+
+    Units: THICKNESS on a matrix layer record is taken as **microns**, the ODB++
+    stackup convention, and is the one assumption here that a vendor job could
+    contradict. It is deliberately narrow -- ``CU_WEIGHT`` (unambiguous, ounces)
+    is preferred for copper when present -- and the module's verification caveat
+    above applies: this is implemented to the documented format, not validated
+    against a vendor export.
+    """
     text = _read(matrix_file)
     steps = [b.get("NAME", "") for b in _blocks(text, "STEP") if b.get("NAME")]
 
@@ -126,17 +174,36 @@ def _parse_matrix(matrix_file: Path) -> Tuple[Optional[Stackup], List[str]]:
         if not name:
             continue
         ltype = (b.get("TYPE") or "").upper()
+        material: Optional[str] = None
         if ltype in _COPPER_TYPES:
             kind = "copper"
         elif ltype in _DIELECTRIC_TYPES:
             kind = "dielectric"
+            material = _layer_material(b, ltype)
         else:
             continue  # mask, silk, drill, component: not part of the stack
         try:
             row = int(b.get("ROW", "0"))
         except ValueError:
             row = 0
-        layers.append((row, StackupLayer(name=name, kind=kind)))
+
+        thickness_mm: Optional[float] = None
+        if kind == "copper":
+            oz = _fnum(b, "CU_WEIGHT", "COPPER_WEIGHT")
+            if oz is not None:
+                thickness_mm = oz * _OZ_COPPER_MM
+        if thickness_mm is None:
+            um = _fnum(b, "THICKNESS", "LAYER_THICKNESS")
+            if um is not None:
+                thickness_mm = um / 1000.0
+
+        layers.append((row, StackupLayer(
+            name=name,
+            kind=kind,
+            thickness_mm=thickness_mm,
+            er=_fnum(b, "DIELECTRIC_CONSTANT", "EPSILON_R", "ER") if kind == "dielectric" else None,
+            material=material,
+        )))
 
     layers.sort(key=lambda t: t[0])
     stack = Stackup(layers=[lyr for _row, lyr in layers]) if layers else None

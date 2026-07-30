@@ -1,0 +1,28 @@
+{
+  "id": "stackup_construction_validity",
+  "category_id": "fabrication_stackup",
+  "name": "Stackup construction validity",
+  "description": "Structural validity of the declared layer stack: copper and dielectric must alternate, both outer surfaces must be copper, layer names must be unique, and thickness/Er values must be physically plausible. Every other stackup check assumes a well-formed stack; this is the check that verifies it. Requires a design-data stackup; not evaluable from bare Gerbers.",
+  "what_it_measures": "Count of structural faults in the ordered layer stack (0 when the stack is a physically possible build).",
+  "metric": {
+    "kind": "count",
+    "units": "count",
+    "preferred_direction": "minimize",
+    "target": { "max": 0.0 },
+    "limits": { "max": 0.0 },
+    "scale_min": 0.0,
+    "scale_max": 5.0
+  },
+  "severity_default": "error",
+  "applies_to": ["stackup", "core", "prepreg", "copper"],
+  "params": {
+    "er_min": 2.0,
+    "er_max": 10.0
+  },
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 1.0
+  }
+}

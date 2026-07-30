@@ -1,0 +1,22 @@
+{
+  "id": "lamination_cycle_count",
+  "category_id": "fabrication_stackup",
+  "name": "Implied lamination cycles (build class)",
+  "description": "Derives the HDI build class (1+N+1, 2+N+2, ...) and the implied number of press cycles from the via spans and the layer stack. Informational only: the derivation is objective, but 'too many cycles' is a cost judgment rather than a manufacturability rule, so this check never fails or warns.",
+  "what_it_measures": "Number of lamination (press) cycles the via spans imply for this stackup.",
+  "metric": {
+    "kind": "count",
+    "units": "count",
+    "preferred_direction": "minimize",
+    "scale_min": 1.0,
+    "scale_max": 5.0
+  },
+  "severity_default": "info",
+  "applies_to": ["stackup", "via"],
+  "scoring": {
+    "enabled": false,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 0.0
+  }
+}

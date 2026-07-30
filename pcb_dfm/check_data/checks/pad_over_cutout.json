@@ -1,0 +1,24 @@
+{
+  "id": "pad_over_cutout",
+  "category_id": "mechanical_outline",
+  "name": "Pad over board cutout",
+  "description": "A component pad overlapping an internal board void: nothing to solder to, and unsupported copper at the milled edge. Pads only -- a component body over a cutout is often correct (that is what mid-mount means), and a pad inside an opening its own footprint declared is excluded. Requires component pad geometry and an outline with cutouts.",
+  "what_it_measures": "Count of component pads whose copper extent overlaps an internal cutout (0 when no pad sits over a void).",
+  "metric": {
+    "kind": "count",
+    "units": "count",
+    "preferred_direction": "minimize",
+    "target": { "max": 0.0 },
+    "limits": { "max": 0.0 },
+    "scale_min": 0.0,
+    "scale_max": 5.0
+  },
+  "severity_default": "warning",
+  "applies_to": ["component", "pad", "cutout"],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 1.0
+  }
+}

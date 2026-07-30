@@ -1,0 +1,27 @@
+{
+  "id": "component_cutout_present",
+  "category_id": "mechanical_outline",
+  "name": "Component-required cutout present",
+  "description": "A footprint that needs a milled opening (mid-mount connector, SD-card holder, buzzer) declares it on Edge.Cuts inside the footprint. This verifies the board outline actually has a matching cutout there. One-directional: a board cutout that no component declared is not a finding. Requires design data carrying footprint graphics; not evaluable from bare Gerbers.",
+  "what_it_measures": "Count of footprint-declared cutouts with no matching opening in the board outline (0 when every declared cutout was milled).",
+  "metric": {
+    "kind": "count",
+    "units": "count",
+    "preferred_direction": "minimize",
+    "target": { "max": 0.0 },
+    "limits": { "max": 0.0 },
+    "scale_min": 0.0,
+    "scale_max": 3.0
+  },
+  "severity_default": "error",
+  "applies_to": ["component", "outline", "cutout"],
+  "params": {
+    "area_ratio_tolerance": 6.0
+  },
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 1.0
+  }
+}

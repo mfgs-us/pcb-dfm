@@ -1,21 +1,26 @@
-"""Design advisory: component pads too close to the board edge.
+"""Design advisory: component pads too close to a board edge.
 
-A part's body extends beyond its pads, so pads near the outline mean the
-component overhangs or sits in the depaneling stress zone -- handling damage,
-connector overhang, break-off cracks. A larger keep-back is expected for parts
-than for bare copper (which copper_to_edge_distance already covers at the fab
-minimum). Advisory only.
+A part's body extends beyond its pads, so pads near an edge mean the component
+overhangs or sits in the depaneling stress zone -- handling damage, connector
+overhang, break-off cracks. A larger keep-back is expected for parts than for bare
+copper (which copper_to_edge_distance already covers at the fab minimum). Advisory
+only.
+
+"Edge" means the real outline: the boundary contour *and* any internal cutout.
+This measured to the board's bounding box until #107, which made it blind twice
+over -- to cutouts, and to any concave boundary, so a part sitting in a notch or
+outside an L-shaped edge read as comfortably interior.
 """
 
 from __future__ import annotations
 
-from typing import Optional
+from typing import List, Optional, Tuple
 
 from ..engine.check_runner import register_check
 from ..engine.context import CheckContext
 from ..geometry import queries
 from ..results import CheckResult, MetricResult, Violation, ViolationLocation
-from ._design_advisory import is_pad_like, na
+from ._design_advisory import dist_to_edges, is_pad_like, na, outline_contours, point_inside
 
 
 @register_check("component_edge_clearance")
@@ -24,9 +29,35 @@ def run_component_edge_clearance(ctx: CheckContext) -> CheckResult:
     recommended = float(limits.get("recommended_min", 0.5))
     absolute = float(limits.get("absolute_min", 0.3))
 
-    board = queries.get_board_bounds(ctx.geometry)
-    if board is None:
-        return na(ctx, "No board outline to measure component-to-edge clearance.", units="mm")
+    boundary, cutouts = outline_contours(ctx)
+    if boundary is None:
+        # No assembled outline contour (unclosed or missing outline layer): fall
+        # back to the bounding box rather than skipping the check entirely.
+        board = queries.get_board_bounds(ctx.geometry)
+        if board is None:
+            return na(ctx, "No board outline to measure component-to-edge clearance.",
+                      units="mm")
+        boundary = [(board.min_x, board.min_y), (board.max_x, board.min_y),
+                    (board.max_x, board.max_y), (board.min_x, board.max_y)]
+        cutouts = []
+
+    def clearance(b) -> float:
+        """Pad-bounds to nearest real edge; negative when the pad crosses one.
+
+        Measured from the bbox corners of the pad, so a pad that reaches an edge
+        with any part of itself is caught, not just one whose centre is close.
+        """
+        corners: List[Tuple[float, float]] = [
+            (b.min_x, b.min_y), (b.max_x, b.min_y),
+            (b.max_x, b.max_y), (b.min_x, b.max_y),
+        ]
+        d = min(min(dist_to_edges(x, y, boundary) for x, y in corners),
+                *( [min(dist_to_edges(x, y, cut) for x, y in corners)
+                    for cut in cutouts] or [float("inf")] ))
+        # Outside the boundary, or inside a cutout => the pad overhangs an edge.
+        outside = any(not point_inside(boundary, x, y) for x, y in corners)
+        in_void = any(point_inside(cut, x, y) for cut in cutouts for x, y in corners)
+        return -d if (outside or in_void) else d
 
     min_clear: Optional[float] = None
     loc: Optional[ViolationLocation] = None
@@ -35,9 +66,7 @@ def run_component_edge_clearance(ctx: CheckContext) -> CheckResult:
             if not is_pad_like(poly):
                 continue
             b = poly.bounds()
-            # Distance from this pad to each board edge; negative => overhang.
-            d = min(b.min_x - board.min_x, board.max_x - b.max_x,
-                    b.min_y - board.min_y, board.max_y - b.max_y)
+            d = clearance(b)
             if min_clear is None or d < min_clear:
                 min_clear = d
                 loc = ViolationLocation(

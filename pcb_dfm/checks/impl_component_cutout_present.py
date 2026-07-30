@@ -1,19 +1,30 @@
-"""Footprint declares a board cutout that the outline does not have.
+"""The artwork is missing a cutout the design data declares.
 
-A mid-mount USB-C, an SD-card holder, a buzzer, a recessed connector: each needs
-a milled opening, and the requirement travels *with the footprint* -- in KiCad the
-footprint draws the opening it needs on ``Edge.Cuts`` inside its own graphics.
+A mid-mount USB-C, an SD-card holder, a buzzer or a recessed connector needs a
+milled opening, and in KiCad the footprint states that requirement by drawing the
+opening on ``Edge.Cuts`` inside its own graphics.
 
-Forgetting to propagate that into the board outline is silent at every stage this
-project already checks. The artwork is legal, the copper is legal, the outline is
-a valid closed contour. The boards arrive with no opening, the connector will not
-seat, and the lot is scrap.
+**Scope -- read this before extending the check.** KiCad plots a footprint's
+Edge.Cuts graphics straight into the board outline layer. Verified empirically:
+adding an Edge.Cuts rect inside a footprint takes the plotted outline from one
+closed contour to two, the second at exactly the footprint's position. There is no
+"propagate the footprint cutout to the board outline" step for a designer to
+forget, so when the design data and the artwork come from the same board file --
+which is what this engine does by default on a KiCad input -- this check passes
+trivially and always.
 
-No library knowledge is needed to catch it, which is the point: the footprint
-states its own requirement. Nothing here guesses that "a part named like a
-mid-mount USB-C probably needs a cutout" -- that inference is a documented
-non-goal (``docs/cutout_check_domains.md`` §4), because being wrong about it
-claims missing milling on a board that is missing none.
+What it therefore catches is a **design-data vs artwork mismatch**: a fab package
+that predates the board file it is paired with. Old Gerbers plus an updated board
+declaring a new opening is a real and expensive failure (the fab mills the old
+outline), and it is invisible to every other check because both halves are
+internally valid.
+
+What it does NOT catch, and cannot: a footprint that *should* declare an opening
+and does not. A reverse-mount LED whose library footprint never drew its light
+window is a part-knowledge fact, not a geometric one -- see
+``docs/cutout_check_domains.md`` §4/§5. Nothing here guesses that "a part named
+like a mid-mount USB-C probably needs a cutout"; being wrong about that claims
+missing milling on a board that is missing none.
 
 Deliberately one-directional: a board cutout that no component asked for is NOT a
 finding. Ventilation, mechanical clearance, mounting and antenna keep-outs are all

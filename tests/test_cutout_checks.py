@@ -1,15 +1,20 @@
 """Correctness tests for the cutout-aware component checks.
 
-  * ``component_cutout_present`` -- a footprint declares an opening on Edge.Cuts
-    that the board outline never got (#105)
+  * ``component_cutout_present`` -- the artwork is missing a cutout the design
+    data declares, i.e. a fab package out of sync with the board (#105)
   * ``pad_over_cutout``          -- a pad sitting over an internal void (#106)
   * the #107 fix: ``tall_part_edge_clearance`` and ``component_edge_clearance``
     treating internal cutouts (and a concave boundary) as real board edges
 
-The KiCad ingest half is exercised against a real board file, because the whole
-premise of #105 is that the requirement is already in the design file -- a
-synthetic ``Component`` with the field pre-filled would not prove the footprint
-graphics are read, transformed and Y-flipped correctly.
+The KiCad ingest half is exercised against a real board file, because the
+requirement is read out of the design file -- a synthetic ``Component`` with the
+field pre-filled would not prove the footprint graphics are read, transformed and
+Y-flipped correctly.
+
+The last three tests pin the *scope* of #105, which was narrowed after testing it
+on a real board: KiCad plots a footprint's Edge.Cuts graphics into the outline
+layer itself, so same-source runs pass trivially and a footprint that declares
+nothing is invisible to the check by construction.
 """
 
 from __future__ import annotations
@@ -310,3 +315,57 @@ def test_tall_part_near_the_outer_boundary_still_flagged(tmp_path):
     path = _outline_gerber(tmp_path, _BOUNDARY, [_OPENING])
     r = _run("tall_part_edge_clearance", _tall(1.0, 15.0), path)
     assert r.status == "warning"
+
+
+# --------------------------------------------------------------------------
+# Scope of component_cutout_present: what it can and cannot detect.
+#
+# These pin the empirical finding that rescoped the check. KiCad plots a
+# footprint's Edge.Cuts graphics INTO the board outline layer, so there is no
+# "propagate the cutout" step to forget: when design data and artwork come from
+# one board file the check passes trivially. Its real subject is a fab package
+# out of sync with the board it is paired with.
+# --------------------------------------------------------------------------
+def test_declared_cutout_is_satisfied_when_artwork_comes_from_the_same_design():
+    """Same-source is the common case and must never be a finding.
+
+    Modelled directly: the outline carries the opening the footprint declares,
+    which is what KiCad's own plot produces.
+    """
+    dd = _comp_with_cutout()
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        path = _outline_gerber(Path(td), _BOUNDARY, [_OPENING])
+        assert _run("component_cutout_present", dd, path).status == "pass"
+
+
+def test_stale_artwork_against_an_updated_design_fails():
+    """The failure this check actually exists for: the package predates the board.
+
+    The design declares an opening; the artwork it was paired with does not have
+    it, so the fab would mill the old outline. Both halves are internally valid,
+    which is why nothing else catches it.
+    """
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        stale = _outline_gerber(Path(td), _BOUNDARY)   # exported before the change
+        r = _run("component_cutout_present", _comp_with_cutout(), stale)
+    assert r.status == "fail"
+    assert "J1" in r.violations[0].message
+
+
+def test_a_footprint_that_declares_nothing_is_never_a_finding():
+    """The limit of the check, stated as a test.
+
+    A reverse-mount LED whose library footprint never drew its light window
+    declares no cutout, so there is nothing to compare and nothing to report --
+    catching that needs part knowledge, not geometry (docs §4/§5).
+    """
+    dd = DesignData(source="test")
+    dd.components = [Component(ref="D1", footprint="droyd:LED_SK6812MINI-E",
+                               x_mm=20.0, y_mm=15.0)]
+    import tempfile
+    with tempfile.TemporaryDirectory() as td:
+        path = _outline_gerber(Path(td), _BOUNDARY)    # no opening anywhere
+        r = _run("component_cutout_present", dd, path)
+    assert r.status == "not_applicable"

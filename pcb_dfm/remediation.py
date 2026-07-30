@@ -160,11 +160,11 @@ GUIDANCE: Dict[str, Remediation] = {
 
     # --- mechanical / outline / thermal -----------------------------------
     "component_cutout_present": Remediation(
-        "Propagate the footprint's Edge.Cuts opening into the board outline (in "
-        "KiCad the footprint graphic does not become a board cutout on its own), "
-        "or use a footprint variant that does not need one.",
-        "The part cannot seat: a mid-mount connector or card holder has nowhere to "
-        "sit \u2192 the assembled lot is scrap."),
+        "Re-export the fab package from the current board file: the design declares "
+        "an opening the supplied artwork does not have, so the two are out of sync. "
+        "If the artwork is correct, the footprint's Edge.Cuts graphic is stale.",
+        "The fab mills the outline it was sent, not the one the design intends "
+        "\u2192 a mid-mount part has nowhere to seat and the lot is scrap."),
     "pad_over_cutout": Remediation(
         "Move the pad off the void, or shrink/reposition the cutout. If the part is "
         "meant to sit in the opening, its footprint should declare the cutout so the "

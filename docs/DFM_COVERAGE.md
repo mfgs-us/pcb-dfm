@@ -76,7 +76,7 @@ Legend:
 | Internal corner radius vs router bit | ✅ | `fillet_radius_milling` |
 | Depaneling tabs / mouse-bites | ✅ | `tab_routing_mousebites` |
 | Tooling / fiducial holes present | ✅ | `missing_tooling_holes` |
-| **Component-required cutout present** | 🔬 | `component_cutout_present` *(new)* |
+| **Declared cutout present in artwork** | 🔬 | `component_cutout_present` *(new)* |
 | **Pad over a board cutout** | 🟡 | `pad_over_cutout` *(new)* |
 
 ### Cutouts and the components that need them
@@ -85,13 +85,19 @@ Internal cutouts were already treated as real board edges on the copper side
 (`copper_to_edge_distance`, `trace_over_cutout`), but nothing related a cutout to
 a *component* in either direction.
 
-`component_cutout_present` closes the expensive direction. A mid-mount connector,
-SD-card holder or buzzer declares the opening it needs on `Edge.Cuts` inside its
-own footprint; if that never reaches the board outline, every check still passes
-and the boards arrive with no opening. The footprint states its own requirement,
-so no library guessing is involved — inferring "this part probably needs a cutout"
-from footprint names is a documented non-goal. One-directional: a cutout nobody
-declared is legitimate (ventilation, clearance, mounting).
+`component_cutout_present` compares the openings the *design data* declares (KiCad
+footprints state them as `Edge.Cuts` graphics inside the footprint) against the
+*supplied artwork*. Scope is narrower than it first appears, and was corrected by
+testing it on a real board: KiCad plots those footprint graphics into the outline
+layer itself, so a same-source run passes trivially. What it catches is a fab
+package out of sync with the board file it is paired with — old Gerbers against an
+updated design, where the fab mills the outline it was given and both halves look
+internally valid.
+
+It does **not** detect a footprint that should declare an opening and does not — a
+reverse-mount LED whose library footprint never drew its light window is part
+knowledge, not geometry (`docs/cutout_check_domains.md` §5). One-directional: a
+cutout nobody declared is legitimate (ventilation, clearance, mounting).
 
 `pad_over_cutout` extends `trace_over_cutout` to pads. Scope is pads only, never
 bodies: a component body over a cutout is what "mid-mount" means, and a pad in an

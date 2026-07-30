@@ -27,53 +27,61 @@ only, which is why §4 below is spec'd as a non-goal rather than a check.
 
 ---
 
-## 1. Footprint declares a cutout the board does not have — `component_cutout_present`  [#105] [DONE]
+## 1. Artwork missing a cutout the design declares — `component_cutout_present`  [#105] [DONE, RESCOPED]
 
-**Why:** a mid-mount USB-C, an SD-card holder, a buzzer, a recessed connector —
-each needs a milled opening, and the requirement travels *with the footprint*: in
-KiCad the footprint draws its required cutout on `Edge.Cuts` inside its own
-graphics. Forgetting to propagate that into the board outline is silent at every
-stage we currently check. The artwork is legal, the copper is legal, the outline
-is a valid closed contour — and the boards arrive with no opening, the connector
-will not seat, and the lot is scrap.
+**Originally spec'd as** "a footprint declares a cutout and the board outline
+never got it — the milling was not propagated". **That premise was wrong**, and
+testing the built check against a real board (droyd-wireless-umi-revmin) is what
+showed it.
 
-No library knowledge is needed to catch it, which is what makes this worth
-building: **the footprint states its own requirement.**
+**What was measured.** Adding an `Edge.Cuts` rect *inside* a footprint and
+plotting the board takes the outline layer from one closed contour to two, the
+second at exactly the footprint's position:
 
-**Inputs — the data is already parsed and thrown away.** `_courtyard_hull`
-(`kicad.py:405`) walks each footprint's `fp_line` / `fp_rect` / `fp_circle` /
-`fp_poly` graphics and discards everything that fails its `on_crtyd(g)` filter.
-Widening that to also collect `Edge.Cuts` graphics per footprint yields the
-required cutout; the rotate-and-translate to board coordinates is the same
-transform the courtyard already gets (`kicad.py:416-423`).
+```
+board.kicad_pcb            closed contours: 1   (20..112 x -40..-75)
++ footprint Edge.Cuts      closed contours: 2   (+ 71.20..72.80 x -54.00..-56.00)
+```
 
-**Two implementation traps, both already visible in the existing code:**
+**KiCad plots a footprint's Edge.Cuts graphics straight into the board outline
+layer.** There is no propagation step for a designer to forget. When design data
+and artwork come from the same board file — the default path for a KiCad input —
+this check passes trivially and always.
 
-- **Do not convex-hull it.** `_courtyard_hull` returns a hull because a keep-out
-  only needs to be conservative. A cutout is a real polygon: it can be concave (an
-  L-shaped or notched opening), and one footprint can declare *several* separate
-  cutouts. Collect closed contours, not a point cloud.
-- **Y-flip.** `_courtyard_hull` is documented as working "in the KiCad frame (Y
-  flipped to Gerber later, with pads)", and that flip happens at
-  `kicad.py:572-582`, where pads and `courtyard` are each mirrored. A cutout
-  polygon has to be flipped in the same block or it lands mirrored about the
-  board's X axis — and on a symmetric board it will look almost right.
+**What it does catch**, verified: old Gerbers paired with an updated board file
+reports `fail` (`D1 at (72.0, -55.0)`). A fab package out of sync with the design
+it is sent alongside is a real and expensive failure — the fab mills the outline
+it was given — and it is invisible to every other check because both halves are
+internally valid. That is a narrower subject than originally claimed, and the
+check, its JSON, its remediation and this section now say so.
 
-**Rule:** for each cutout a footprint declares, is there a matching interior
-contour in the board outline at that location (centroid inside, and area within a
-tolerance)? A declared cutout with no match fails: the milling was not propagated.
+**What it cannot catch, by construction:** a footprint that *should* declare an
+opening and does not. See §5 — that is the case a real board actually had.
+
+**Inputs:** `Component.required_cutouts`, collected by `_footprint_cutouts`
+(`kicad.py`) from each footprint's Edge.Cuts graphics, versus the interior
+contours of the supplied artwork. Two things the collector does deliberately
+differently from the courtyard beside it:
+
+- **no convex hull** — an opening can be concave (L-shaped, notched), and a hull
+  would claim milled area that is not milled;
+- **one entry per closed contour** — a footprint may declare several separate
+  openings, and loose `fp_line`s that do not close are dimension or centre marks,
+  not openings.
+
+Cutouts ride the same Y-flip as pads and courtyard (`_to_gerber_frame`); missing
+it lands them mirrored about X, which on a symmetric board looks almost right.
+
+**Rule:** centroid containment plus an area-ratio bound, not shape equality — an
+opening milled slightly larger, or with rounded router corners, is still the right
+opening.
 
 **One-directional, deliberately.** A board cutout with no component asking for it
-is *not* a defect — ventilation, mechanical clearance, mounting, antenna
-keep-outs are all legitimate. Only the missing direction is a finding.
+is *not* a defect — ventilation, mechanical clearance, mounting and antenna
+keep-outs are all legitimate.
 
-**Metric:** count of declared-but-absent cutouts (dimensionless, target 0).
-**Category:** `mechanical_outline`. **Severity:** `error` — an unbuildable
-assembly, not a margin.
-
-**Availability:** KiCad carries footprint `Edge.Cuts`; ODB++ has its rout layer;
-bare Gerbers carry the cutout but no component-requirement data, so they report
-`not_applicable`. A 🔬 data-gated check.
+**Metric:** count of declared-but-absent cutouts (target 0). **Category:**
+`mechanical_outline`. **Severity:** `error` — the wrong outline gets milled.
 
 ---
 
@@ -144,16 +152,39 @@ than blessing it.
 
 ---
 
-## 4. Non-goal: inferring "this part needs a cutout" from its footprint name
+## 4. Non-goal: inferring a cutout requirement from a footprint *name*
 
-Recognising mid-mount USB-C, SD holders and similar from library/footprint
-strings would extend §1 to sources that carry no footprint `Edge.Cuts`. It is
-deliberately **not** specified.
+Recognising mid-mount USB-C, SD holders and similar from library/footprint name
+substrings. Deliberately **not** specified.
 
 `classify_component` (`design_intel.py:119`) does infer from footprint strings,
 but only coarse classes (capacitor, resistor, LED, diode) where a wrong guess
-costs little. Here a wrong guess tells someone their board is missing milling when
+costs little. A wrong guess here tells someone their board is missing milling when
 it is not — on any board using a through-hole or edge-mount variant of a
-similarly-named part. That is the folklore line this project holds, and §1 does
-not need to cross it: the footprint already states the requirement, objectively,
-for the sources that matter.
+similarly-named part.
+
+## 5. Open: the case a real board actually had — part-level cutout requirements
+
+`droyd-wireless-umi-revmin` places `droyd:LED_SK6812MINI-E`, a reverse-mount LED
+that emits *through* the board and needs a window milled under it. The board has
+no window. The footprint declares no cutout — only a courtyard, silk and four pads
+— so §1 is blind to it, and §4 rules out guessing from the name.
+
+Neither the artwork nor the design data says a window is required: it is a fact
+about the *part*. Two ways to close it, and they are not equivalent:
+
+1. **Fix the library footprint.** Draw the window on Edge.Cuts in
+   `droyd:LED_SK6812MINI-E`. KiCad then mills it on every board using that
+   footprint, and no check is needed — the requirement becomes geometry. This is
+   the right fix for the boards that exist today.
+2. **An MPN-keyed rule table** (would need its own issue). Distinct from §4 in the
+   way that matters: an exact manufacturer-part-number match with a datasheet
+   citation per entry is a sourced fact, not a name heuristic — and a custom
+   footprint name like `LED_SK6812MINI-E` carries the MPN literally. It would
+   catch this class *before* someone remembers to fix the library, at the cost of
+   a table that only covers the parts in it, and it needs a BOM or a footprint
+   name carrying the MPN.
+
+Worth recording from the same experiment: once that window exists on revmin,
+`copper_to_edge_distance` and `fillet_radius_milling` both fail — there is copper
+hard against where the opening would be milled. The library fix is not free.

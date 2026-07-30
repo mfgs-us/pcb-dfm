@@ -54,10 +54,15 @@ def _stackup_from_dict(d: Dict[str, Any]) -> Stackup:
     the sidecar provided.
 
     An explicit ordered ``layers`` list wins when present: each entry is
-    ``{"kind": "copper"|"dielectric", "thickness_mm": float, "er"?: float}`` in
-    physical top-to-bottom order. This is the only form that preserves the
-    interleaved stack order that symmetry/registration checks need; the flat
-    fields above cannot express it.
+    ``{"kind": "copper"|"dielectric", "thickness_mm": float, "er"?: float,
+    "material"?: "core"|"prepreg"}`` in physical top-to-bottom order. This is the
+    only form that preserves the interleaved stack order that symmetry/
+    registration checks need; the flat fields above cannot express it.
+
+    ``material`` is optional and only meaningful on dielectrics. An unrecognised
+    value is dropped rather than passed through, so a typo reads as "the source
+    did not say" instead of silently becoming a material the checks would then
+    reason about.
     """
     ordered = d.get("layers")
     if isinstance(ordered, list) and ordered:
@@ -70,11 +75,13 @@ def _stackup_from_dict(d: Dict[str, Any]) -> Stackup:
                 continue
             th = ly.get("thickness_mm")
             er_v = ly.get("er")
+            mat = ly.get("material")
             layers.append(StackupLayer(
                 name=ly.get("name", f"{kind}_{i + 1}"),
                 kind=kind,
                 thickness_mm=float(th) if isinstance(th, (int, float)) else None,
                 er=float(er_v) if isinstance(er_v, (int, float)) else None,
+                material=mat if mat in ("core", "prepreg") and kind == "dielectric" else None,
             ))
         if layers:
             return Stackup(layers=layers)

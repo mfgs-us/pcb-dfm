@@ -131,3 +131,76 @@ def test_dielectric_uniformity_pass_from_ipc2581():
     r = _run("dielectric_thickness_uniformity", IPC)
     assert r.status == "pass"
     assert r.metric.measured_value == pytest.approx(0.0, abs=1e-6)
+
+
+# --------------------------------------------------------------------------
+# Stackup material (core/prepreg) and declared layer sequence
+# --------------------------------------------------------------------------
+
+def test_sidecar_layers_carry_core_prepreg_material():
+    dd = load_design_data({"stackup": {"layers": [
+        {"kind": "copper", "thickness_mm": 0.035, "name": "F.Cu"},
+        {"kind": "dielectric", "thickness_mm": 0.1, "material": "prepreg", "name": "pp1"},
+        {"kind": "copper", "thickness_mm": 0.017, "name": "In1.Cu"},
+        {"kind": "dielectric", "thickness_mm": 0.7, "material": "core", "name": "core1"},
+        {"kind": "copper", "thickness_mm": 0.035, "name": "B.Cu"},
+    ]}})
+    mats = [ly.material for ly in dd.stackup.layers]
+    assert mats == [None, "prepreg", None, "core", None]
+    assert dd.stackup.has_material_data() is True
+    assert [ly.name for ly in dd.stackup.cores()] == ["core1"]
+    assert [ly.name for ly in dd.stackup.prepregs()] == ["pp1"]
+
+
+def test_sidecar_rejects_an_unrecognised_material():
+    """A typo must read as "the source did not say", not become a material the
+    lamination rules would then reason about."""
+    dd = load_design_data({"stackup": {"layers": [
+        {"kind": "copper", "thickness_mm": 0.035},
+        {"kind": "dielectric", "thickness_mm": 0.1, "material": "preprg"},
+        {"kind": "copper", "thickness_mm": 0.035},
+    ]}})
+    assert dd.stackup.layers[1].material is None
+    assert dd.stackup.has_material_data() is False
+
+
+def test_ipc2581_stackup_is_ordered_by_declared_sequence(tmp_path):
+    """IPC-2581 carries an explicit stackup sequence; document order is only a
+    proxy for it. A file that lists layers out of order must still yield the
+    physical stack."""
+    xml = tmp_path / "seq.xml"
+    xml.write_text(
+        '<IPC-2581>'
+        '<Content>'
+        '<LayerRef><Layer name="TOP" layerFunction="CONDUCTOR"/>'
+        '<Layer name="D1" layerFunction="PREPREG"/>'
+        '<Layer name="BOT" layerFunction="CONDUCTOR"/></LayerRef>'
+        '<Stackup name="stk" overallThickness="0.270">'
+        '<StackupGroup name="grp">'
+        '<StackupLayer layerOrGroupRef="BOT" thickness="0.035" sequence="3"/>'
+        '<StackupLayer layerOrGroupRef="TOP" thickness="0.035" sequence="1"/>'
+        '<StackupLayer layerOrGroupRef="D1" thickness="0.200" '
+        'dielectricConstant="4.3" sequence="2"/>'
+        '</StackupGroup></Stackup></Content></IPC-2581>',
+        encoding="utf-8",
+    )
+    dd = load_design_data(xml)
+    assert [ly.name for ly in dd.stackup.layers] == ["TOP", "D1", "BOT"]
+    assert dd.stackup.layers[1].material == "prepreg"
+
+
+def test_ipc2581_partial_sequence_keeps_document_order(tmp_path):
+    """All-or-nothing: a partially sequenced stack cannot be ordered without
+    inventing positions, so it stays in document order for stackup_layer_order to
+    have an opinion about."""
+    xml = tmp_path / "partial.xml"
+    xml.write_text(
+        '<IPC-2581><Content>'
+        '<Stackup name="stk"><StackupGroup name="grp">'
+        '<StackupLayer layerOrGroupRef="BOT" thickness="0.035" sequence="3"/>'
+        '<StackupLayer layerOrGroupRef="TOP" thickness="0.035"/>'
+        '</StackupGroup></Stackup></Content></IPC-2581>',
+        encoding="utf-8",
+    )
+    dd = load_design_data(xml)
+    assert [ly.name for ly in dd.stackup.layers] == ["BOT", "TOP"]

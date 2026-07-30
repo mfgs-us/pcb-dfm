@@ -7,3 +7,6 @@ ignore*
 !testdata/*.zip
 dist/
 build/
+
+# kicad-cli writes a project-local settings file next to any board it plots.
+testdata/*.kicad_prl

@@ -1,0 +1,27 @@
+{
+  "id": "stackup_lamination_validity",
+  "category_id": "fabrication_stackup",
+  "name": "Core / prepreg lamination validity",
+  "description": "Lamination rules that turn on the core/prepreg distinction: a build needs at least one cured core to register against, cores cannot laminate directly to each other (prepreg is the adhesive), and the prepreg bonding two cores must be thick enough not to starve. Requires per-layer material data; not_applicable when the stackup does not state core vs prepreg.",
+  "what_it_measures": "Count of lamination construction faults (0 when the build is valid).",
+  "metric": {
+    "kind": "count",
+    "units": "count",
+    "preferred_direction": "minimize",
+    "target": { "max": 0.0 },
+    "limits": { "max": 0.0 },
+    "scale_min": 0.0,
+    "scale_max": 4.0
+  },
+  "severity_default": "warning",
+  "applies_to": ["stackup", "core", "prepreg"],
+  "params": {
+    "min_prepreg_bond_mm": 0.1
+  },
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 1.0
+  }
+}

@@ -180,15 +180,25 @@ def _parse_stackup(root: SNode) -> Optional[Stackup]:
         ltype = (_atoms(type_node)[0].lower() if type_node and _atoms(type_node) else "")
         thickness = _fatom(_first(ly, "thickness"))
         er = _fatom(_first(ly, "epsilon_r"))
+        material: Optional[str] = None
         if "copper" in ltype:
             kind = "copper"
         elif any(k in ltype for k in ("core", "prepreg", "dielectric")):
             kind = "dielectric"
+            # Keep the core/prepreg distinction KiCad states. It drives the
+            # lamination rules and makes a core-mirrors-prepreg build visible as
+            # the construction asymmetry it is; collapsing it to "dielectric"
+            # threw that away.
+            if "core" in ltype:
+                material = "core"
+            elif "prepreg" in ltype:
+                material = "prepreg"
         else:
             # solder mask / silkscreen / paste layers are not part of the
             # electrical stack the checks reason about.
             continue
-        layers.append(StackupLayer(name=name, kind=kind, thickness_mm=thickness, er=er))
+        layers.append(StackupLayer(name=name, kind=kind, thickness_mm=thickness,
+                                   er=er, material=material))
     return Stackup(layers=layers) if layers else None
 
 

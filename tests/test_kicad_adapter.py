@@ -67,6 +67,16 @@ def test_stackup_copper_and_dielectric(tmp_path):
     assert math.isclose(su.total_thickness_mm(), 1.58, abs_tol=1e-9)
 
 
+def test_stackup_keeps_the_core_prepreg_distinction(tmp_path):
+    """KiCad states the dielectric type; collapsing core/prepreg to one "dielectric"
+    kind made a core-mirrors-prepreg build invisible to stackup_symmetry."""
+    su = load_design_data(_write_project(tmp_path)).stackup
+    assert [ly.material for ly in su.dielectric_layers()] == ["core"]
+    assert su.has_material_data() is True
+    # Copper layers carry no dielectric material.
+    assert all(ly.material is None for ly in su.copper_layers())
+
+
 def test_nets_routes_and_netclass(tmp_path):
     dd = load_design_data(_write_project(tmp_path))
     # Net 0 (unconnected) is dropped; the three named nets remain.

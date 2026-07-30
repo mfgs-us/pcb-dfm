@@ -25,7 +25,7 @@ from __future__ import annotations
 import math
 import xml.etree.ElementTree as ET
 from pathlib import Path
-from typing import Dict, List, Optional, Union
+from typing import Dict, List, Optional, Tuple, Union
 
 from ..design_model import (
     ControlledImpedanceSpec,
@@ -86,22 +86,49 @@ def _parse_stackup(root: ET.Element) -> Optional[Stackup]:
             func_map[name] = func.upper()
 
     layers: List[StackupLayer] = []
+    sequences: List[Optional[float]] = []
     for sl in _find_all(stackup_els[0], "StackupLayer"):
         ref = sl.attrib.get("layerOrGroupRef") or sl.attrib.get("name") or f"layer_{len(layers)}"
         thickness = _fattr(sl, "thickness", "thicknessMm", "thickness_mm")
         er = _fattr(sl, "dielectricConstant", "er", "epsilonR")
+        sequences.append(_fattr(sl, "sequence", "sequenceNumber", "layerSequence"))
         func = (sl.attrib.get("type") or sl.attrib.get("layerFunction")
                 or func_map.get(ref, "")).upper()
 
+        material: Optional[str] = None
         if func in _COPPER_FUNCS:
             kind = "copper"
         elif func in _DIELECTRIC_FUNCS:
             kind = "dielectric"
+            # Keep the specific dielectric function rather than flattening every
+            # member of _DIELECTRIC_FUNCS to one kind: core vs prepreg drives the
+            # lamination rules and mid-plane construction symmetry.
+            if func == "CORE":
+                material = "core"
+            elif func in ("PREPREG", "DIELPREPREG"):
+                material = "prepreg"
         else:
             # No explicit function: an Er implies dielectric, otherwise copper.
+            # This is a guess, and on a stackup that declares no functions at all
+            # it yields an all-copper stack -- which `stackup_construction_validity`
+            # is there to catch rather than let the numeric checks consume.
             kind = "dielectric" if er is not None else "copper"
 
-        layers.append(StackupLayer(name=ref, kind=kind, thickness_mm=thickness, er=er))
+        layers.append(StackupLayer(name=ref, kind=kind, thickness_mm=thickness,
+                                   er=er, material=material))
+
+    # Order by the declared sequence when the file states one for every layer.
+    # Document order is only a proxy for physical order; IPC-2581 carries the real
+    # thing, and `stackup_layer_order` validates the stack against its own layer
+    # names, so trusting document order while ignoring the sequence attribute
+    # would be backwards. All-or-nothing on purpose: a partially sequenced stack
+    # cannot be ordered without inventing positions for the rest, so it keeps
+    # document order and the order check gets to have an opinion about it.
+    if layers and all(seq is not None for seq in sequences):
+        ordered_pairs: List[Tuple[float, StackupLayer]] = [
+            (float(seq), lyr) for seq, lyr in zip(sequences, layers) if seq is not None
+        ]
+        layers = [lyr for _seq, lyr in sorted(ordered_pairs, key=lambda t: t[0])]
 
     return Stackup(layers=layers) if layers else None
 

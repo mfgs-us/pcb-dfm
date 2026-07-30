@@ -1,0 +1,24 @@
+{
+  "id": "stackup_layer_order",
+  "category_id": "fabrication_stackup",
+  "name": "Stackup layer order vs naming",
+  "description": "Cross-examines the physical layer order against what the layers call themselves: inner-layer ordinals must ascend top-to-bottom, the outer layers must name the top and bottom sides, and the numbering must have no gaps. A mirrored or transposed stack passes every geometric check while producing an electrically wrong board. Unrecognised naming conventions report not_applicable rather than guessing.",
+  "what_it_measures": "Count of disagreements between the stackup's physical order and its own layer names (0 when they agree).",
+  "metric": {
+    "kind": "count",
+    "units": "count",
+    "preferred_direction": "minimize",
+    "target": { "max": 0.0 },
+    "limits": { "max": 0.0 },
+    "scale_min": 0.0,
+    "scale_max": 4.0
+  },
+  "severity_default": "error",
+  "applies_to": ["stackup", "copper"],
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 1.0
+  }
+}

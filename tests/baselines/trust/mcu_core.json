@@ -103,6 +103,10 @@
     "metric": 0.0,
     "status": "pass"
   },
+  "pad_over_cutout": {
+    "metric": null,
+    "status": "not_applicable"
+  },
   "polarized_orientation_consistency": {
     "metric": null,
     "status": "not_applicable"

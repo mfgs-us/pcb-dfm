@@ -9,6 +9,7 @@ are worth a designer's attention.
 
 from __future__ import annotations
 
+import math
 from typing import List, Optional, Tuple
 
 from ..engine.context import CheckContext
@@ -97,29 +98,71 @@ def _poly_area(verts: List[Tuple[float, float]]) -> float:
     return abs(s) * 0.5
 
 
-def board_contour_verts(ctx: CheckContext) -> Optional[List[Tuple[float, float]]]:
-    """The largest closed board-outline contour as a list of (x, y), or None.
+def outline_contours(ctx: CheckContext) -> Tuple[
+        Optional[List[Tuple[float, float]]], List[List[Tuple[float, float]]]]:
+    """``(boundary, interior_cutouts)`` from the outline layer.
 
-    Uses the same contour assembly as copper_to_edge_distance (#18): stray
-    dimension lines / plot marks are open chains and dropped; the largest closed
-    contour is the board boundary.
+    One contour assembly for every check that needs board edges, so the boundary
+    and the cutouts can never disagree about what the board is. Same rule as
+    copper_to_edge_distance (#18): stray dimension lines and plot marks are open
+    chains and get dropped; the largest closed contour is the boundary and the
+    smaller ones are internal cutouts and slots -- which are **also real edges**,
+    a fact the copper-facing checks already honour and the component-facing ones
+    did not.
     """
     ingest = getattr(ctx, "ingest", None)
     outline_files = [
         f for f in (getattr(ingest, "files", None) or [])
         if getattr(f, "layer_type", None) == "outline"
     ]
-    best: Optional[List[Tuple[float, float]]] = None
-    best_area = -1.0
+    rings: List[Tuple[float, List[Tuple[float, float]]]] = []
     for f in outline_files:
         for verts in outline_contours_mm(f.path):
-            if len(verts) < 3:
-                continue
-            a = _poly_area(verts)
-            if a > best_area:
-                best_area = a
-                best = verts
+            if len(verts) >= 3:
+                rings.append((_poly_area(verts), verts))
+    if not rings:
+        return None, []
+    rings.sort(key=lambda t: t[0], reverse=True)
+    return rings[0][1], [verts for _a, verts in rings[1:]]
+
+
+def board_contour_verts(ctx: CheckContext) -> Optional[List[Tuple[float, float]]]:
+    """The largest closed board-outline contour as a list of (x, y), or None.
+
+    Boundary only. Prefer ``outline_contours`` when the check reasons about board
+    *edges*, since an internal cutout is one.
+    """
+    return outline_contours(ctx)[0]
+
+
+def dist_to_edges(x: float, y: float, verts: List[Tuple[float, float]]) -> float:
+    """Shortest distance from a point to a closed polygon's edges."""
+    best = float("inf")
+    n = len(verts)
+    for i in range(n):
+        x1, y1 = verts[i]
+        x2, y2 = verts[(i + 1) % n]
+        dx, dy = x2 - x1, y2 - y1
+        if dx == 0 and dy == 0:
+            d = math.hypot(x - x1, y - y1)
+        else:
+            t = max(0.0, min(1.0, ((x - x1) * dx + (y - y1) * dy) / (dx * dx + dy * dy)))
+            d = math.hypot(x - (x1 + t * dx), y - (y1 + t * dy))
+        best = min(best, d)
     return best
+
+
+def in_declared_cutout(comp, x: float, y: float) -> bool:
+    """True when (x, y) falls in a cutout this component's own footprint declared.
+
+    A mid-mount connector sitting in its own opening is the design working as
+    intended, not a defect. Every cutout-aware component check needs this
+    discriminator, so it lives here rather than being re-derived per check.
+    """
+    for poly in (getattr(comp, "required_cutouts", None) or []):
+        if len(poly) >= 3 and point_inside(poly, x, y):
+            return True
+    return False
 
 
 def point_inside(verts: List[Tuple[float, float]], x: float, y: float) -> bool:

@@ -1,0 +1,35 @@
+{
+  "id": "component_cutout_present",
+  "category_id": "mechanical_outline",
+  "name": "Declared cutout present in artwork",
+  "description": "Verifies the supplied artwork contains every board cutout the design data declares (KiCad footprints state a required opening as Edge.Cuts graphics inside the footprint). KiCad plots those graphics into the outline layer itself, so this passes trivially when design data and artwork come from the same board file; what it catches is a fab package out of sync with the board it was paired with -- old Gerbers against an updated design. It does NOT detect a footprint that should declare an opening and does not; that is part knowledge, not geometry. One-directional: a cutout no component declared is legitimate. Requires design data carrying footprint graphics.",
+  "what_it_measures": "Count of design-declared cutouts with no matching opening in the artwork's board outline (0 when the artwork matches the design).",
+  "metric": {
+    "kind": "count",
+    "units": "count",
+    "preferred_direction": "minimize",
+    "target": {
+      "max": 0.0
+    },
+    "limits": {
+      "max": 0.0
+    },
+    "scale_min": 0.0,
+    "scale_max": 3.0
+  },
+  "severity_default": "error",
+  "applies_to": [
+    "component",
+    "outline",
+    "cutout"
+  ],
+  "params": {
+    "area_ratio_tolerance": 6.0
+  },
+  "scoring": {
+    "enabled": true,
+    "strategy": "binary",
+    "pass_threshold": 100,
+    "weight": 1.0
+  }
+}

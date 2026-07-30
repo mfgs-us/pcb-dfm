@@ -402,6 +402,123 @@ def _convex_hull(points: List[Tuple[float, float]]) -> List[Tuple[float, float]]
     return lower[:-1] + upper[:-1]
 
 
+def _footprint_cutouts(fp: SNode, ox: float, oy: float, rot_deg: float
+                       ) -> List[List[Tuple[float, float]]]:
+    """Board openings a footprint declares on ``Edge.Cuts``, in absolute space.
+
+    A mid-mount USB-C, an SD-card holder or a buzzer states the milled opening it
+    needs by drawing it on Edge.Cuts *inside the footprint*. That requirement has
+    to reach the board outline or the part cannot seat, and nothing downstream of
+    the artwork can tell that it was dropped -- which is what
+    ``component_cutout_present`` is for.
+
+    Unlike ``_courtyard_hull`` this returns real polygons, one per closed contour:
+
+      * **no convex hull** -- an opening can be concave (L-shaped, notched), and a
+        hull would silently claim milled area that is not milled;
+      * **one entry per contour** -- a footprint may declare several separate
+        openings, and merging them would compare each against the wrong shape.
+
+    Rects/circles/polys are self-contained shapes. Loose ``fp_line`` segments are
+    chained end to end and only CLOSED loops are kept, the same rule
+    ``outline_contours_mm`` applies to a stroked Gerber outline: an unclosed chain
+    is a dimension or centre mark, not an opening.
+
+    In the KiCad frame -- flipped into the artwork frame later by
+    ``_to_gerber_frame``, with pads and the courtyard.
+    """
+    a = math.radians(rot_deg or 0.0)
+    ca, sa = math.cos(a), math.sin(a)
+
+    def xf(lx: float, ly: float) -> Tuple[float, float]:
+        return (ox + lx * ca - ly * sa, oy + lx * sa + ly * ca)
+
+    def on_edge_cuts(g: SNode) -> bool:
+        ln = _first(g, "layer")
+        return bool(ln and _atoms(ln) and _atoms(ln)[0] == "Edge.Cuts")
+
+    def pt(node: Optional[SNode]) -> Optional[Tuple[float, float]]:
+        x, y = _fatom(node, 0), _fatom(node, 1)
+        return (x, y) if x is not None and y is not None else None
+
+    polys: List[List[Tuple[float, float]]] = []
+    segments: List[Tuple[Tuple[float, float], Tuple[float, float]]] = []
+
+    for g in _tagged(fp, "fp_rect"):
+        if not on_edge_cuts(g):
+            continue
+        s, e = pt(_first(g, "start")), pt(_first(g, "end"))
+        if s and e:
+            polys.append([xf(s[0], s[1]), xf(e[0], s[1]), xf(e[0], e[1]), xf(s[0], e[1])])
+
+    for g in _tagged(fp, "fp_circle"):
+        if not on_edge_cuts(g):
+            continue
+        c, e = pt(_first(g, "center")), pt(_first(g, "end"))
+        if c and e:
+            r = math.hypot(e[0] - c[0], e[1] - c[1])
+            if r > 0:
+                steps = 32
+                polys.append([
+                    xf(c[0] + r * math.cos(2 * math.pi * i / steps),
+                       c[1] + r * math.sin(2 * math.pi * i / steps))
+                    for i in range(steps)
+                ])
+
+    for g in _tagged(fp, "fp_poly"):
+        if not on_edge_cuts(g):
+            continue
+        pts = _first(g, "pts")
+        if not pts:
+            continue
+        ring = [xf(*p) for p in (pt(xy) for xy in _tagged(pts, "xy")) if p]
+        if len(ring) >= 3:
+            polys.append(ring)
+
+    for g in _tagged(fp, "fp_line"):
+        if not on_edge_cuts(g):
+            continue
+        s, e = pt(_first(g, "start")), pt(_first(g, "end"))
+        if s and e:
+            segments.append((xf(*s), xf(*e)))
+
+    polys.extend(_closed_loops(segments))
+    return [p for p in polys if len(p) >= 3]
+
+
+def _closed_loops(segments: List[Tuple[Tuple[float, float], Tuple[float, float]]],
+                  tol: float = 1e-3) -> List[List[Tuple[float, float]]]:
+    """Chain loose segments end-to-end, returning only the loops that close."""
+    if not segments:
+        return []
+
+    def key(p: Tuple[float, float]) -> Tuple[int, int]:
+        return (round(p[0] / tol), round(p[1] / tol))
+
+    remaining = list(segments)
+    loops: List[List[Tuple[float, float]]] = []
+
+    while remaining:
+        start, end = remaining.pop(0)
+        ring = [start, end]
+        extended = True
+        while extended and key(ring[0]) != key(ring[-1]):
+            extended = False
+            for i, (a, b) in enumerate(remaining):
+                if key(a) == key(ring[-1]):
+                    ring.append(b)
+                elif key(b) == key(ring[-1]):
+                    ring.append(a)
+                else:
+                    continue
+                remaining.pop(i)
+                extended = True
+                break
+        if len(ring) > 3 and key(ring[0]) == key(ring[-1]):
+            loops.append(ring[:-1])   # drop the duplicated closing point
+    return loops
+
+
 def _courtyard_hull(fp: SNode, ox: float, oy: float, rot_deg: float
                     ) -> Optional[List[Tuple[float, float]]]:
     """Absolute convex-hull outline of a footprint's courtyard graphics
@@ -500,10 +617,12 @@ def _parse_components(root: SNode, nets: Dict[str, Net],
                 if (x is not None and y is not None) else [])
         courtyard = (_courtyard_hull(fp, x, y, rot)
                      if (x is not None and y is not None) else None)
+        required_cutouts = (_footprint_cutouts(fp, x, y, rot)
+                            if (x is not None and y is not None) else [])
         comps.append(Component(
             ref=ref, value=value, footprint=footprint,
             x_mm=x, y_mm=y, rotation_deg=rot, side=_side_of_layer(layer),
-            pads=pads, courtyard=courtyard,
+            pads=pads, courtyard=courtyard, required_cutouts=required_cutouts,
         ))
     return comps
 
@@ -580,6 +699,9 @@ def _to_gerber_frame(components: List[Component], nets: Dict[str, Net]) -> None:
             p.rotation_deg = -p.rotation_deg   # mirror about X flips orientation
         if c.courtyard is not None:
             c.courtyard = [(px, -py) for (px, py) in c.courtyard]  # flip Y
+        if c.required_cutouts:
+            c.required_cutouts = [[(px, -py) for (px, py) in poly]
+                                  for poly in c.required_cutouts]
     for net in nets.values():
         for pt in net.points:
             pt.y_mm = -pt.y_mm

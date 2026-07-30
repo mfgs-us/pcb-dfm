@@ -66,6 +66,14 @@
     },
     {
       "confidence": "high",
+      "id": "component_cutout_present",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
       "id": "component_edge_clearance",
       "measured": 0.2616,
       "severity": "warning",
@@ -494,6 +502,14 @@
       "measured": null,
       "severity": "info",
       "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
+      "id": "pad_over_cutout",
+      "measured": 0.0,
+      "severity": "info",
+      "status": "pass",
       "violations": 1
     },
     {

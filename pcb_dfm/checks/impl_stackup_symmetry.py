@@ -10,9 +10,17 @@ without a design-data stackup this reports not_applicable.
 The measure is construction symmetry: pair each layer at position *k* from the
 top with the layer at position *k* from the bottom. In a balanced build those
 mirror partners share a kind (copper mirrors copper, dielectric mirrors
-dielectric) and a thickness. We report the largest thickness mismatch across
-the mirror pairs, in microns; a kind mismatch (a structurally lopsided stack)
-is always a failure regardless of thickness.
+dielectric), a *material* (core mirrors core, prepreg mirrors prepreg) and a
+thickness. We report the largest thickness mismatch across the mirror pairs, in
+microns; a kind or material mismatch (a structurally lopsided stack) is always a
+failure regardless of thickness.
+
+The material comparison matters on its own: a core mirrored by a prepreg of the
+same thickness is symmetric by the numbers and asymmetric in the way that
+actually warps, because cured core and pressed prepreg shrink differently. That
+case passed silently until the adapters stopped collapsing core/prepreg into one
+"dielectric" kind. Stacks that carry no material data are unaffected -- the
+comparison only fires when both mirror partners state theirs.
 """
 
 from __future__ import annotations
@@ -95,6 +103,17 @@ def run_stackup_symmetry(ctx: CheckContext) -> CheckResult:
             # A kind mismatch dominates; keep scanning only to report the worst
             # thickness deviation among comparable pairs, but this already fails.
             continue
+
+        # Material asymmetry: cured core against pressed prepreg is a real
+        # construction imbalance even at identical thickness. Only compared when
+        # both partners state a material -- an unknown material is not evidence of
+        # a mismatch, and most stackups still carry none.
+        a_mat = getattr(a, "material", None)
+        b_mat = getattr(b, "material", None)
+        if a_mat and b_mat and a_mat != b_mat and structural_mismatch is None:
+            structural_mismatch = (
+                f"layer {i + 1} ({a_mat}) mirrors layer {n - i} ({b_mat})"
+            )
 
         if a.thickness_mm is None or b.thickness_mm is None:
             continue

@@ -22,11 +22,22 @@ Segment = Tuple[Point, Point]
 
 @dataclass
 class StackupLayer:
-    """One physical layer in the board stack."""
+    """One physical layer in the board stack.
+
+    ``material`` is the dielectric *sub-kind*: ``"core"`` (cured laminate with
+    copper already bonded to it) or ``"prepreg"`` (uncured glass/resin sheet that
+    becomes the adhesive during lamination). The distinction drives real
+    lamination rules -- cores do not bond to each other, and a build with no core
+    has nothing rigid to register to -- and it is a genuine construction
+    asymmetry when a core mirrors a prepreg across the mid-plane, even at equal
+    thickness. ``None`` means the source did not say; every rule that reads it
+    must degrade rather than guess.
+    """
     name: str
     kind: str  # "copper" | "dielectric"
     thickness_mm: Optional[float] = None
     er: Optional[float] = None  # dielectric constant (dielectric layers only)
+    material: Optional[str] = None  # "core" | "prepreg" (dielectric layers only)
 
 
 @dataclass
@@ -39,6 +50,21 @@ class Stackup:
 
     def copper_layers(self) -> List[StackupLayer]:
         return [ly for ly in self.layers if ly.kind == "copper"]
+
+    def cores(self) -> List[StackupLayer]:
+        return [ly for ly in self.dielectric_layers() if ly.material == "core"]
+
+    def prepregs(self) -> List[StackupLayer]:
+        return [ly for ly in self.dielectric_layers() if ly.material == "prepreg"]
+
+    def has_material_data(self) -> bool:
+        """True when at least one dielectric names its material (core/prepreg).
+
+        Checks gate on this instead of assuming: every adapter collapsed the
+        distinction until it was threaded through, so most stackups in the wild
+        still carry no material at all.
+        """
+        return any(ly.material in ("core", "prepreg") for ly in self.dielectric_layers())
 
     def dielectric_thicknesses_mm(self) -> List[float]:
         return [ly.thickness_mm for ly in self.dielectric_layers()

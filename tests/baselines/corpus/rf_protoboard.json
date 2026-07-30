@@ -66,8 +66,16 @@
     },
     {
       "confidence": "high",
+      "id": "component_cutout_present",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
       "id": "component_edge_clearance",
-      "measured": 0.7358,
+      "measured": 0.6858,
       "severity": "info",
       "status": "pass",
       "violations": 1
@@ -491,6 +499,14 @@
     {
       "confidence": "high",
       "id": "output_drive_contention",
+      "measured": null,
+      "severity": "info",
+      "status": "not_applicable",
+      "violations": 1
+    },
+    {
+      "confidence": "high",
+      "id": "pad_over_cutout",
       "measured": null,
       "severity": "info",
       "status": "not_applicable",

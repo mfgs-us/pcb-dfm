@@ -76,6 +76,32 @@ Legend:
 | Internal corner radius vs router bit | ✅ | `fillet_radius_milling` |
 | Depaneling tabs / mouse-bites | ✅ | `tab_routing_mousebites` |
 | Tooling / fiducial holes present | ✅ | `missing_tooling_holes` |
+| **Component-required cutout present** | 🔬 | `component_cutout_present` *(new)* |
+| **Pad over a board cutout** | 🟡 | `pad_over_cutout` *(new)* |
+
+### Cutouts and the components that need them
+
+Internal cutouts were already treated as real board edges on the copper side
+(`copper_to_edge_distance`, `trace_over_cutout`), but nothing related a cutout to
+a *component* in either direction.
+
+`component_cutout_present` closes the expensive direction. A mid-mount connector,
+SD-card holder or buzzer declares the opening it needs on `Edge.Cuts` inside its
+own footprint; if that never reaches the board outline, every check still passes
+and the boards arrive with no opening. The footprint states its own requirement,
+so no library guessing is involved — inferring "this part probably needs a cutout"
+from footprint names is a documented non-goal. One-directional: a cutout nobody
+declared is legitimate (ventilation, clearance, mounting).
+
+`pad_over_cutout` extends `trace_over_cutout` to pads. Scope is pads only, never
+bodies: a component body over a cutout is what "mid-mount" means, and a pad in an
+opening its own footprint declared is excluded outright.
+
+The same change made `tall_part_edge_clearance` and `component_edge_clearance`
+measure to internal cutouts as well as the boundary. `component_edge_clearance`
+also moved off the board *bounding box* onto the real outline contour, so it is
+no longer blind to concave boards — and its numbers now agree with
+`copper_to_edge_distance` about where the edge is.
 
 ## 6. Stackup / impedance / registration
 

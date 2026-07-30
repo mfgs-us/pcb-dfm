@@ -23,11 +23,11 @@ every check is `not_applicable` without its inputs, states a metric with
 target/limit, and follows the tier rules. No folklore — objective, sourced rules
 only, which is why §4 below is spec'd as a non-goal rather than a check.
 
-**Status (2026-07):** all three spec'd and filed (#105–#107); none built.
+**Status (2026-07):** all three spec'd, filed (#105–#107) and **built**.
 
 ---
 
-## 1. Footprint declares a cutout the board does not have — `component_cutout_present`  [#105]
+## 1. Footprint declares a cutout the board does not have — `component_cutout_present`  [#105] [DONE]
 
 **Why:** a mid-mount USB-C, an SD-card holder, a buzzer, a recessed connector —
 each needs a milled opening, and the requirement travels *with the footprint*: in
@@ -77,7 +77,7 @@ bare Gerbers carry the cutout but no component-requirement data, so they report
 
 ---
 
-## 2. Pads over a cutout — `pad_over_cutout`  [#106]
+## 2. Pads over a cutout — `pad_over_cutout`  [#106] [DONE]
 
 **Why:** `trace_over_cutout` covers traces crossing an internal void. A *pad* over
 a void is the same defect and is not covered: there is nothing to solder to, and
@@ -112,7 +112,7 @@ real boards with cutouts, then reconsider.
 
 ---
 
-## 3. Component edge checks cannot see cutouts — `tall_part_edge_clearance` / `component_edge_clearance` fix  [#107]
+## 3. Component edge checks cannot see cutouts — `tall_part_edge_clearance` / `component_edge_clearance` fix  [#107] [DONE]
 
 **Why:** an internal cutout is a real board edge — `copper_to_edge_distance` and
 `trace_over_cutout` both treat it as one. The component-facing checks do not, and

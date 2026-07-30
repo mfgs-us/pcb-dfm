@@ -159,6 +159,18 @@ GUIDANCE: Dict[str, Remediation] = {
         "None — this reports the build class a quote is priced on, not a defect."),
 
     # --- mechanical / outline / thermal -----------------------------------
+    "component_cutout_present": Remediation(
+        "Propagate the footprint's Edge.Cuts opening into the board outline (in "
+        "KiCad the footprint graphic does not become a board cutout on its own), "
+        "or use a footprint variant that does not need one.",
+        "The part cannot seat: a mid-mount connector or card holder has nowhere to "
+        "sit \u2192 the assembled lot is scrap."),
+    "pad_over_cutout": Remediation(
+        "Move the pad off the void, or shrink/reposition the cutout. If the part is "
+        "meant to sit in the opening, its footprint should declare the cutout so the "
+        "pad is recognised as intentional.",
+        "No laminate under the pad to solder to, and unsupported copper at the "
+        "milled edge \u2192 open joints and lifted pads."),
     "board_outline_continuity": Remediation(
         "Join the board outline into a single closed loop (close the gap between "
         "the dangling endpoints on the outline/Edge.Cuts layer).",

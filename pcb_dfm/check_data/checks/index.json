@@ -443,6 +443,11 @@
       "filename": "castellated_edge_plating.json"
     },
     {
+      "id": "component_cutout_present",
+      "category_id": "mechanical_outline",
+      "filename": "component_cutout_present.json"
+    },
+    {
       "id": "fillet_radius_milling",
       "category_id": "mechanical_outline",
       "filename": "fillet_radius_milling.json"
@@ -451,6 +456,11 @@
       "id": "min_slot_width",
       "category_id": "mechanical_outline",
       "filename": "min_slot_width.json"
+    },
+    {
+      "id": "pad_over_cutout",
+      "category_id": "mechanical_outline",
+      "filename": "pad_over_cutout.json"
     },
     {
       "id": "tab_routing_mousebites",

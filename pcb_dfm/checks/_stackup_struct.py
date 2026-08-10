@@ -37,8 +37,14 @@ from ..results import CheckResult, MetricResult, Violation
 _MIN_LAYERS = 3
 _MIN_COPPER = 2
 
-_TOP_TOKENS = ("f.cu", "top", "l1", "layer1", "cmp", "component")
+_TOP_TOKENS = ("f.cu", "top", "cmp", "component")
 _BOTTOM_TOKENS = ("b.cu", "bot", "bottom", "sol", "solder")
+
+# "L1" / "Layer1" name the top side. Kept out of _TOP_TOKENS because those are
+# prefix-matched, and a prefix match reads "L12" as "L1" -- which reports a
+# correctly ordered L1..L12 build as transposed. The trailing digits have to be
+# consumed for the ordinal to mean anything.
+_TOP_ORDINAL_RE = re.compile(r"^(?:l|layer)[\s_\-]*0*1(?!\d)", re.IGNORECASE)
 
 # "In1.Cu" / "In10.Cu" (KiCad), "L3" / "Layer3", "SIG2" / "IN2" / "INNER2".
 _INNER_RE = re.compile(
@@ -98,6 +104,8 @@ def layer_side(name: Optional[str]) -> Optional[str]:
     if not name:
         return None
     low = str(name).strip().lower()
+    if _TOP_ORDINAL_RE.match(low):
+        return "top"
     for tok in _TOP_TOKENS:
         if low == tok or low.startswith(tok):
             return "top"

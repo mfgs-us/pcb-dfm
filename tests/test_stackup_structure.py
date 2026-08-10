@@ -207,6 +207,18 @@ def test_l_numbering_convention_is_understood():
     assert r.status == "pass"
 
 
+def test_double_digit_l_numbering_is_not_read_as_the_top_layer():
+    """L10-L19 must not prefix-match the "L1" top-side token. A correctly ordered
+    12-layer build named L1..L12 was reported as transposed."""
+    layers = []
+    for i in range(1, 13):
+        if i > 1:
+            layers.append(di(f"d{i}"))
+        layers.append(cu(f"L{i}"))
+    r = run("stackup_layer_order", layers)
+    assert r.status == "pass", [v.message for v in r.violations]
+
+
 def test_unrecognised_naming_is_not_applicable():
     layers = [cu("alpha"), di("d1"), cu("beta"), di("d2"), cu("gamma")]
     r = run("stackup_layer_order", layers)

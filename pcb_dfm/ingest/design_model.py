@@ -297,6 +297,13 @@ class Component:
     # source carries a courtyard layer; used for assembly-collision (overlap)
     # checks. A polygon (not a bbox) so a rotated part's keep-out is exact.
     courtyard: Optional[List[Tuple[float, float]]] = None
+    # Board openings the FOOTPRINT itself declares (KiCad Edge.Cuts graphics
+    # inside the footprint): a mid-mount connector, an SD-card holder or a buzzer
+    # states its required cutout this way. Absolute board space, one entry per
+    # closed contour -- a footprint may declare several, and each is a real
+    # polygon (possibly concave), NOT a convex hull like `courtyard`, because the
+    # opening has to be compared against the milled shape.
+    required_cutouts: List[List[Tuple[float, float]]] = field(default_factory=list)
 
     def pin1(self) -> Optional["Pad"]:
         """The pin-1 pad, if identifiable."""

@@ -47,8 +47,10 @@
 - [ ] return_path_interruptions
 
 ## mechanical_outline
+- [x] component_cutout_present
 - [ ] fillet_radius_milling
 - [ ] min_slot_width
+- [x] pad_over_cutout
 - [ ] tab_routing_mousebites
 
 ## solder_mask_silkscreen

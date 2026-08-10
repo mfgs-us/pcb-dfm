@@ -159,6 +159,18 @@ GUIDANCE: Dict[str, Remediation] = {
         "None — this reports the build class a quote is priced on, not a defect."),
 
     # --- mechanical / outline / thermal -----------------------------------
+    "component_cutout_present": Remediation(
+        "Re-export the fab package from the current board file: the design declares "
+        "an opening the supplied artwork does not have, so the two are out of sync. "
+        "If the artwork is correct, the footprint's Edge.Cuts graphic is stale.",
+        "The fab mills the outline it was sent, not the one the design intends "
+        "\u2192 a mid-mount part has nowhere to seat and the lot is scrap."),
+    "pad_over_cutout": Remediation(
+        "Move the pad off the void, or shrink/reposition the cutout. If the part is "
+        "meant to sit in the opening, its footprint should declare the cutout so the "
+        "pad is recognised as intentional.",
+        "No laminate under the pad to solder to, and unsupported copper at the "
+        "milled edge \u2192 open joints and lifted pads."),
     "board_outline_continuity": Remediation(
         "Join the board outline into a single closed loop (close the gap between "
         "the dangling endpoints on the outline/Edge.Cuts layer).",

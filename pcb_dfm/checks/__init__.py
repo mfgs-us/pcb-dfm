@@ -63,6 +63,7 @@ def _ensure_impls_loaded() -> None:
         impl_board_outline_continuity,  # noqa: F401
         impl_bulk_capacitance_present,  # noqa: F401
         impl_castellated_edge_plating,  # noqa: F401
+        impl_component_cutout_present,  # noqa: F401
         impl_component_edge_clearance,  # noqa: F401
         impl_component_to_component_spacing,  # noqa: F401
         impl_copper_balance_plating,  # noqa: F401
@@ -117,6 +118,7 @@ def _ensure_impls_loaded() -> None:
         impl_orphan_or_redundant_via,  # noqa: F401
         impl_outline_sharp_corners,  # noqa: F401
         impl_output_drive_contention,  # noqa: F401
+        impl_pad_over_cutout,  # noqa: F401
         impl_plane_fragmentation,  # noqa: F401
         impl_plating_uniformity,  # noqa: F401
         impl_polarity_marking_consistency,  # noqa: F401

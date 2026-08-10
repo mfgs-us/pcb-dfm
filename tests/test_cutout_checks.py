@@ -200,6 +200,18 @@ def test_declared_cutout_missing_fails(tmp_path):
     assert "J1" in r.violations[0].message
 
 
+def test_a_concave_declared_cutout_is_matched_by_its_own_milling(tmp_path):
+    """An L-shaped opening milled exactly as declared must pass. The vertex
+    average of a concave ring lands in the notch -- outside the polygon -- so
+    matching on it reported a correctly milled opening as missing."""
+    ell = [(16.0, 11.0), (26.0, 11.0), (26.0, 15.0),
+           (20.0, 15.0), (20.0, 21.0), (16.0, 21.0)]
+    path = _outline_gerber(tmp_path, _BOUNDARY, [ell])
+    r = _run("component_cutout_present", _comp_with_cutout(ell), path)
+    assert r.status == "pass", [v.message for v in r.violations]
+    assert r.metric.measured_value == 0.0
+
+
 def test_cutout_milled_somewhere_else_still_fails(tmp_path):
     elsewhere = [(2.0, 2.0), (8.0, 2.0), (8.0, 6.0), (2.0, 6.0)]
     path = _outline_gerber(tmp_path, _BOUNDARY, [elsewhere])

@@ -42,37 +42,11 @@ from ..results import CheckResult, Violation, ViolationLocation
 from ._design_advisory import (
     _poly_area,
     count_metric,
+    interior_point,
     na,
     outline_contours,
     point_inside,
 )
-
-
-def _interior_point(poly: List[Tuple[float, float]]) -> Tuple[float, float]:
-    """A point that actually lies inside ``poly``, concave rings included.
-
-    The vertex average is not good enough: for an L-shaped opening -- a mid-mount
-    connector or an SD-card holder, exactly the parts that declare cutouts -- it
-    lands in the notch, outside the polygon, and the opening then reads as missing
-    however precisely it was milled. So the average is only a candidate here; the
-    triangle centroids give a fallback that survives concavity, and containment
-    decides. The average is still returned as a last resort for a degenerate ring,
-    where no point is inside anything.
-    """
-    n = len(poly)
-    avg = (sum(p[0] for p in poly) / n, sum(p[1] for p in poly) / n)
-
-    candidates = [avg]
-    for i in range(n):
-        ax, ay = poly[i]
-        bx, by = poly[(i + 1) % n]
-        cx_, cy_ = poly[(i + 2) % n]
-        candidates.append(((ax + bx + cx_) / 3.0, (ay + by + cy_) / 3.0))
-
-    for px, py in candidates:
-        if point_inside(poly, px, py):
-            return (px, py)
-    return avg
 
 
 def _matches(required: List[Tuple[float, float]],
@@ -86,7 +60,7 @@ def _matches(required: List[Tuple[float, float]],
     sanity bound so a part sitting inside one huge unrelated void does not count as
     satisfied.
     """
-    cx, cy = _interior_point(required)
+    cx, cy = interior_point(required)
     want = _poly_area(required)
     for cut in cutouts:
         if not point_inside(cut, cx, cy):
@@ -133,7 +107,7 @@ def run_component_cutout_present(ctx: CheckContext) -> CheckResult:
             if _matches(required, cutouts, area_tol):
                 satisfied += 1
             else:
-                cx, cy = _interior_point(required)
+                cx, cy = interior_point(required)
                 missing.append((comp.ref or "?", cx, cy))
 
     if not missing:

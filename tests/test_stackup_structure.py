@@ -278,6 +278,41 @@ def test_thin_prepreg_bond_between_cores_fails():
     assert any("prepreg bonds the cores" in v.message for v in r.violations)
 
 
+def test_cores_separated_only_by_copper_still_fail():
+    """Copper foil is not an adhesive. Grouping by contiguous dielectric run made
+    this unreachable: every run in a well-formed stack holds one dielectric."""
+    layers = [
+        cu("F.Cu"), di("core1", 0.5, 4.4, "core"),
+        cu("In1.Cu"), di("core2", 0.5, 4.4, "core"), cu("B.Cu"),
+    ]
+    r = run("stackup_lamination_validity", layers)
+    assert r.status == "fail"
+    assert any("do not bond to one another" in v.message for v in r.violations)
+
+
+def test_thin_bond_between_cores_across_copper_is_caught():
+    layers = [
+        cu("F.Cu"), di("core1", 0.4, 4.4, "core"), cu("In1.Cu"),
+        di("bond", 0.04, 4.2, "prepreg"), cu("In2.Cu"),
+        di("core2", 0.4, 4.4, "core"), cu("B.Cu"),
+    ]
+    r = run("stackup_lamination_validity", layers)
+    assert r.status == "fail"
+    assert any("prepreg bonds the cores" in v.message for v in r.violations)
+
+
+def test_unknown_dielectric_between_cores_skips_the_rule():
+    """Same degradation rule as the no-core case: it may be the prepreg."""
+    layers = [
+        cu("F.Cu"), di("core1", 0.4, 4.4, "core"), cu("In1.Cu"),
+        di("mystery", 0.2, 4.2, None), cu("In2.Cu"),
+        di("core2", 0.4, 4.4, "core"), cu("B.Cu"),
+    ]
+    r = run("stackup_lamination_validity", layers)
+    assert r.status == "pass"
+    assert any("may be it" in v.message for v in r.violations)
+
+
 def test_unknown_material_skips_the_core_rule_rather_than_failing():
     """A dielectric that states no material could be the core, so no fault."""
     layers = [
@@ -333,6 +368,46 @@ def test_never_worse_than_pass():
     r = run("lamination_cycle_count", FOUR_LAYER, vias)
     assert r.status == "pass"
     assert r.severity in ("info", None)
+
+
+SIX_LAYER = [
+    cu("L1"), di("d1"), cu("L2"), di("d2"), cu("L3"), di("d3"),
+    cu("L4"), di("d4"), cu("L5"), di("d5"), cu("L6"),
+]
+
+
+def test_stacked_microvias_report_their_full_depth():
+    """Level 2 does not touch a surface, so testing only surface-touching spans
+    called a 2+N+2 build 1+N+1."""
+    vias = [
+        _via("L1", "L2", "micro", x=1.0), _via("L2", "L3", "micro", x=2.0),
+        _via("L6", "L5", "micro", x=3.0), _via("L5", "L4", "micro", x=4.0),
+    ]
+    r = run("lamination_cycle_count", SIX_LAYER, vias)
+    assert r.metric.measured_value == 3.0
+    assert any("2+N+2" in v.message for v in r.violations)
+
+
+def test_an_orphan_inner_microvia_is_not_buildup():
+    """A level that does not chain back to the surface is not sequential
+    build-up, so it must not inflate the depth."""
+    r = run("lamination_cycle_count", SIX_LAYER, [_via("L3", "L4", "micro")])
+    assert r.metric.measured_value == 1.0
+
+
+def test_a_blind_via_adds_no_press_cycle():
+    """It is drilled to depth after lamination. Counting it as build-up turned
+    one F.Cu->In2 blind via into a 3-cycle board."""
+    r = run("lamination_cycle_count", SIX_LAYER, [_via("L1", "L3", "blind")])
+    assert r.metric.measured_value == 1.0
+    assert any("no press cycle of their own" in v.message for v in r.violations)
+
+
+def test_a_buried_sub_lamination_adds_to_the_buildup_rather_than_replacing_it():
+    vias = [_via("F.Cu", "In1.Cu", "micro", x=1.0),
+            _via("In1.Cu", "In2.Cu", "buried", x=2.0)]
+    r = run("lamination_cycle_count", FOUR_LAYER, vias)
+    assert r.metric.measured_value == 3.0
 
 
 def test_no_vias_is_not_applicable():

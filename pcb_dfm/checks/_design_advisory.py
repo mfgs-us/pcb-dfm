@@ -170,6 +170,51 @@ def point_inside(verts: List[Tuple[float, float]], x: float, y: float) -> bool:
     return _point_in_polygon(x, y, [Point2D(x=vx, y=vy) for (vx, vy) in verts])
 
 
+def interior_point(poly: List[Tuple[float, float]]) -> Tuple[float, float]:
+    """A point that actually lies inside ``poly``, concave rings included.
+
+    The vertex average is not good enough on its own: for an L-shaped opening --
+    a mid-mount connector or an SD-card holder, exactly the parts that declare
+    cutouts -- it lands in the notch, outside the polygon. So the average is only
+    a candidate here; the triangle centroids give a fallback that survives
+    concavity, and containment decides. The average is still returned as a last
+    resort for a degenerate ring, where no point is inside anything.
+    """
+    n = len(poly)
+    avg = (sum(p[0] for p in poly) / n, sum(p[1] for p in poly) / n)
+
+    candidates = [avg]
+    for i in range(n):
+        ax, ay = poly[i]
+        bx, by = poly[(i + 1) % n]
+        cx, cy = poly[(i + 2) % n]
+        candidates.append(((ax + bx + cx) / 3.0, (ay + by + cy) / 3.0))
+
+    for px, py in candidates:
+        if point_inside(poly, px, py):
+            return (px, py)
+    return avg
+
+
+def cutout_is_declared(comp, cut: List[Tuple[float, float]]) -> bool:
+    """True when ``cut`` is an opening this component's own footprint declared.
+
+    ``in_declared_cutout`` answers "is this *point* in a declared opening", which
+    is the wrong question when a pad straddles the lip of its own opening: the pad
+    overlaps the void while its centre sits on laminate, so the mid-mount
+    exemption misses and the part is flagged. Keying on *which void was hit*
+    instead keeps the exemption without weakening it -- a pad over some unrelated
+    vent hole still matches nothing here.
+    """
+    for poly in (getattr(comp, "required_cutouts", None) or []):
+        if len(poly) < 3:
+            continue
+        px, py = interior_point(poly)
+        if point_inside(cut, px, py):
+            return True
+    return False
+
+
 def poly_area_mm2(poly) -> float:
     if hasattr(poly, "area_mm2"):
         return float(poly.area_mm2)

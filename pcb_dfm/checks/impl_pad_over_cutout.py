@@ -28,6 +28,7 @@ from ..results import CheckResult, ViolationLocation
 from ._design_advisory import (
     advisory,
     count_metric,
+    cutout_is_declared,
     in_declared_cutout,
     na,
     outline_contours,
@@ -97,9 +98,15 @@ def run_pad_over_cutout(ctx: CheckContext) -> CheckResult:
             for cut in cutouts:
                 if not _overlaps(corners, cut):
                     continue
-                # A pad inside an opening this component's own footprint declared
-                # is the mid-mount case working as designed.
-                if in_declared_cutout(comp, pad.x_mm, pad.y_mm):
+                # A pad interacting with an opening this component's own footprint
+                # declared is the mid-mount case working as designed. Test the
+                # cutout, not the pad centre: a pad that overhangs the lip of its
+                # own opening overlaps the void while its centre is still on
+                # laminate, and centre-testing flagged exactly that. The centre
+                # test stays as a fallback for a component whose declared ring did
+                # not survive into the artwork.
+                if (cutout_is_declared(comp, cut)
+                        or in_declared_cutout(comp, pad.x_mm, pad.y_mm)):
                     continue
                 bad.append((comp.ref or "?", pad.name, pad.x_mm, pad.y_mm))
                 break

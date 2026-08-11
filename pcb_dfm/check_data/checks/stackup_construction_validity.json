@@ -16,8 +16,8 @@
   "severity_default": "error",
   "applies_to": ["stackup", "core", "prepreg", "copper"],
   "params": {
-    "er_min": 2.0,
-    "er_max": 10.0
+    "er_min": 1.8,
+    "er_max": 20.0
   },
   "scoring": {
     "enabled": true,

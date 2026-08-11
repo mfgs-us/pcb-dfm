@@ -73,32 +73,44 @@ def run_stackup_lamination_validity(ctx: CheckContext):
                 "at least one cured core to register and press against."
             )
 
-    # 2. Core-to-core adjacency, walking the dielectric runs between coppers. Two
-    #    cores with only copper between them still needs prepreg somewhere in that
-    #    run, so the run -- not the raw layer list -- is the right unit.
-    for run in _dielectric_runs(layers):
-        mats = [getattr(ly, "material", None) for ly in run]
-        if mats.count("core") >= 2 and "prepreg" not in mats:
-            names = ", ".join(f"'{getattr(ly, 'name', '?')}'" for ly in run)
-            faults.append(
-                f"Two cores laminate directly against each other ({names}) with no "
-                f"prepreg between them. Cores are already cured and do not bond to "
-                f"one another; prepreg is the adhesive."
-            )
+    # 2/3. Walk consecutive core pairs and look at what lies between them.
+    #      Copper is not a bonding agent -- two cores separated only by a foil
+    #      still have nothing holding them together -- so the pair, not a run of
+    #      touching dielectrics, is the unit. Grouping by contiguous dielectric
+    #      run instead made both rules unreachable on any well-formed stack:
+    #      every run there is length 1, so no run ever held two cores.
+    for core_a, core_b, between in _core_pairs(layers):
+        mats = [getattr(ly, "material", None) for ly in between]
+        names = f"'{getattr(core_a, 'name', '?')}' and '{getattr(core_b, 'name', '?')}'"
 
-        # 3. Prepreg bond thickness between cores, when the run has both and every
-        #    prepreg in it states a thickness.
-        if mats.count("core") >= 2 and "prepreg" in mats:
-            preg = [ly for ly in run if getattr(ly, "material", None) == "prepreg"]
-            thicknesses = [ly.thickness_mm for ly in preg if ly.thickness_mm is not None]
-            if len(thicknesses) == len(preg) and thicknesses:
-                total = sum(thicknesses)
-                if total < min_bond_mm:
-                    faults.append(
-                        f"Only {total * 1000.0:.0f} um of prepreg bonds the cores in "
-                        f"this run (recommended >= {min_bond_mm * 1000.0:.0f} um). A "
-                        f"thin single sheet risks a resin-starved bond."
-                    )
+        if "prepreg" not in mats:
+            if any(m not in ("core", "prepreg") for m in mats):
+                # An unnamed dielectric between them could be the prepreg. Same
+                # degradation rule as the no-core case: skip, do not assume.
+                notes.append(
+                    f"{names} have no declared prepreg between them, but an "
+                    f"intervening dielectric states no material and may be it. "
+                    f"Core-to-core rule skipped rather than assumed."
+                )
+            else:
+                faults.append(
+                    f"Two cores laminate directly against each other ({names}) with "
+                    f"no prepreg between them. Cores are already cured and do not "
+                    f"bond to one another; prepreg is the adhesive."
+                )
+            continue
+
+        # Bond thickness, only when every prepreg between them states one.
+        preg = [ly for ly in between if getattr(ly, "material", None) == "prepreg"]
+        thicknesses = [ly.thickness_mm for ly in preg if ly.thickness_mm is not None]
+        if len(thicknesses) == len(preg) and thicknesses:
+            total = sum(thicknesses)
+            if total < min_bond_mm:
+                faults.append(
+                    f"Only {total * 1000.0:.0f} um of prepreg bonds the cores "
+                    f"{names} (recommended >= {min_bond_mm * 1000.0:.0f} um). A "
+                    f"thin single sheet risks a resin-starved bond."
+                )
 
     if unknown and cores:
         notes.append(
@@ -116,22 +128,18 @@ def run_stackup_lamination_validity(ctx: CheckContext):
     )
 
 
-def _dielectric_runs(layers) -> List[List]:
-    """Consecutive dielectric layers, grouped into the runs between copper layers.
+def _core_pairs(layers) -> List[tuple]:
+    """``(core, next_core, dielectrics_between)`` for each consecutive core pair.
 
-    A run is what actually gets pressed together, so it is the unit the bonding
-    rules apply to. A single dielectric between two coppers is a run of one and
-    can never violate a core-to-core rule.
+    Copper is skipped rather than treated as a separator: a foil between two cores
+    is not what bonds them, so ``[core, In1.Cu, core]`` is as much a core-to-core
+    lamination as ``[core, core]`` is. Only dielectrics are reported as "between",
+    since they are what the bonding rules weigh.
     """
-    runs: List[List] = []
-    current: List = []
-    for ly in layers:
-        if ly.kind == "dielectric":
-            current.append(ly)
-        else:
-            if current:
-                runs.append(current)
-            current = []
-    if current:
-        runs.append(current)
-    return runs
+    dielectrics = [ly for ly in layers if ly.kind == "dielectric"]
+    core_idx = [i for i, ly in enumerate(dielectrics)
+                if getattr(ly, "material", None) == "core"]
+    return [
+        (dielectrics[a], dielectrics[b], dielectrics[a + 1:b])
+        for a, b in zip(core_idx, core_idx[1:])
+    ]

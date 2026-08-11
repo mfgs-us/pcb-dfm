@@ -25,6 +25,7 @@ from typing import List, Tuple
 import pytest
 
 from pcb_dfm.checks import _ensure_impls_loaded
+from pcb_dfm.checks._design_advisory import in_declared_cutout
 from pcb_dfm.checks.definitions import load_check_definition
 from pcb_dfm.engine.check_runner import get_check_runner
 from pcb_dfm.engine.context import CheckContext
@@ -283,6 +284,36 @@ def test_pad_partly_over_the_cutout_edge_is_flagged(tmp_path):
     path = _outline_gerber(tmp_path, _BOUNDARY, [_OPENING])
     r = _run("pad_over_cutout", _dd_with_pad(17.0, 15.0), path)
     assert r.status == "warning"
+
+
+def test_pad_overhanging_the_lip_of_its_own_declared_cutout_is_intentional(tmp_path):
+    """The mid-mount exclusion has to key on which void was hit, not on the pad
+    centre: a pad that overhangs the lip of its own opening overlaps the void
+    while its centre is still on laminate."""
+    path = _outline_gerber(tmp_path, _BOUNDARY, [_OPENING])
+    dd = _dd_with_pad(16.7, 15.0, declared=True)     # centre outside, extent over
+    assert not in_declared_cutout(dd.components[0], 16.7, 15.0)
+    r = _run("pad_over_cutout", dd, path)
+    assert r.status == "pass", [v.message for v in r.violations]
+
+
+def test_pad_at_the_lip_of_someone_elses_cutout_is_still_flagged(tmp_path):
+    """The exclusion must not widen into "this component declares something
+    somewhere". A vent hole is nobody's declared opening."""
+    vent = [(30.0, 20.0), (35.0, 20.0), (35.0, 25.0), (30.0, 25.0)]
+    path = _outline_gerber(tmp_path, _BOUNDARY, [_OPENING, vent])
+    r = _run("pad_over_cutout", _dd_with_pad(30.2, 22.0, declared=True), path)
+    assert r.status == "warning"
+
+
+def test_a_second_board_profile_is_not_treated_as_a_cutout(tmp_path):
+    """A panelised outline carries several board profiles. Sorting by area and
+    calling everything below the largest an interior void made the second profile
+    milled-away material, and every pad on it a finding."""
+    second = [(50.0, 0.0), (80.0, 0.0), (80.0, 20.0), (50.0, 20.0)]
+    path = _outline_gerber(tmp_path, _BOUNDARY, [second])
+    r = _run("pad_over_cutout", _dd_with_pad(60.0, 10.0), path)
+    assert r.status == "not_applicable", [v.message for v in r.violations]
 
 
 def test_board_without_cutouts_is_not_applicable(tmp_path):

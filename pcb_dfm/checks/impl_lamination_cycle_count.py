@@ -43,6 +43,27 @@ def _ordinal(positions: Dict[str, int], name: Optional[str]) -> Optional[int]:
     return positions.get(str(name).strip().lower())
 
 
+def _reach(spans: List[tuple], start: int, forward: bool) -> int:
+    """How far microvia levels chain inward from a surface copper layer.
+
+    Each level is drilled and plated on the foil the level before it added, so
+    they only count when they connect back to the surface: L1->L2 then L2->L3 is
+    a 2-deep build-up, while a lone L2->L3 with nothing above it is not build-up
+    at all. Iterating to a fixed point handles stacked and staggered spans, and
+    spans arriving in any order.
+    """
+    frontier = start
+    changed = True
+    while changed:
+        changed = False
+        for lo, hi in spans:
+            if forward and lo <= frontier < hi:
+                frontier, changed = hi, True
+            elif not forward and lo < frontier <= hi:
+                frontier, changed = lo, True
+    return frontier
+
+
 @register_check("lamination_cycle_count")
 def run_lamination_cycle_count(ctx: CheckContext) -> CheckResult:
     layers, reason = ordered_stack(ctx)
@@ -61,11 +82,9 @@ def run_lamination_cycle_count(ctx: CheckContext) -> CheckResult:
     positions = _copper_positions(layers)
     total_copper = sum(1 for ly in layers if ly.kind == "copper")
 
-    # Microvia build-up depth: how many copper layers in from each surface the
-    # microvia spans reach. That count is the N+N prefix/suffix.
-    top_buildup = 0
-    bottom_buildup = 0
+    micro_spans: List[tuple] = []
     buried_spans: List[tuple] = []
+    blind_spans: List[tuple] = []
     unresolved = 0
 
     for v in vias:
@@ -77,30 +96,29 @@ def run_lamination_cycle_count(ctx: CheckContext) -> CheckResult:
             continue
         lo, hi = min(a, b), max(a, b)
         if v.via_type == "micro":
-            if lo == 1:
-                top_buildup = max(top_buildup, hi - 1)
-            elif hi == total_copper:
-                bottom_buildup = max(bottom_buildup, total_copper - lo)
+            micro_spans.append((lo, hi))
         elif v.via_type == "buried":
             buried_spans.append((lo, hi))
         elif v.via_type == "blind":
-            # A blind via is drilled after its outer foil is on, so it does not
-            # itself add a press cycle -- but it does mean the outer layers are a
-            # separate build-up step from the core.
-            if lo == 1:
-                top_buildup = max(top_buildup, hi - 1)
-            elif hi == total_copper:
-                bottom_buildup = max(bottom_buildup, total_copper - lo)
+            # Drilled to depth after its outer foil is on, so it needs no press of
+            # its own. Recorded for the note, deliberately not counted as build-up:
+            # counting it turned one F.Cu->In2 blind via into "2+N+0, 3 cycles".
+            blind_spans.append((lo, hi))
 
-    # Cycles: one press for the core, one more for each build-up layer added per
+    # Build-up depth is how far the microvia levels reach in from each surface.
+    # It has to be walked, not read off a single span: a stacked 2+N+2 build is
+    # L1->L2 *plus* L2->L3, and testing only spans that touch a surface dropped
+    # the second level and called the board 1+N+1.
+    top_buildup = _reach(micro_spans, start=1, forward=True) - 1
+    bottom_buildup = total_copper - _reach(micro_spans, start=total_copper,
+                                           forward=False)
+
+    # Cycles: one press for the core, one more for each build-up level added per
     # side (they go on one at a time), and one for a buried-via sub-core that has
-    # to be pressed before anything is laminated onto it.
+    # to be pressed, drilled and plated before anything laminates onto it. The
+    # sub-lamination is an extra press whether or not there is also build-up.
     buildup = max(top_buildup, bottom_buildup)
-    cycles = 1 + buildup
-    if buried_spans and buildup == 0:
-        # A buried span with no build-up is still a sub-lamination: press the
-        # inner core set, drill and plate it, then press the outer foils on.
-        cycles = 2
+    cycles = 1 + buildup + (1 if buried_spans else 0)
 
     inner = max(0, total_copper - top_buildup - bottom_buildup)
     build_class = (
@@ -125,7 +143,12 @@ def run_lamination_cycle_count(ctx: CheckContext) -> CheckResult:
         notes.append(
             f"{len(buried_spans)} buried via span(s) require the inner layers to be "
             f"pressed, drilled and plated as a sub-lamination before the outer layers "
-            f"are added."
+            f"are added -- one press cycle on top of the build-up."
+        )
+    if blind_spans:
+        notes.append(
+            f"{len(blind_spans)} blind via span(s) are drilled to depth after "
+            f"lamination, so they add no press cycle of their own."
         )
     if unresolved:
         notes.append(

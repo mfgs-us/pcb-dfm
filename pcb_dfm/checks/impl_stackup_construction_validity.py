@@ -29,9 +29,15 @@ from ..engine.context import CheckContext
 from ._stackup_struct import fault_result, na, ordered_stack
 
 # Physically plausible bounds for a laminate dielectric constant. Outside these a
-# value is a data error (a units mix-up or a placeholder), not a exotic material.
-_ER_MIN = 2.0
-_ER_MAX = 10.0
+# value is a data error (a units mix-up or a placeholder), not an exotic material.
+#
+# Deliberately wide. The band exists to catch a Dk of 4300 (permittivity in the
+# wrong units), and a wide band still catches that. A tight one instead rejects
+# real laminates: ceramic-filled RF cores run to Dk ~10.2 (Rogers RO3010, AD1000)
+# and PTFE foams down toward 2.1, so 2-10 called a correct RF stackup a data
+# error at error severity.
+_ER_MIN = 1.8
+_ER_MAX = 20.0
 
 
 def _params(ctx: CheckContext) -> dict:

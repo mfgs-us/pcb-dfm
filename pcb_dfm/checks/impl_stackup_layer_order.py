@@ -94,8 +94,22 @@ def run_stackup_layer_order(ctx: CheckContext):
         # Gaps: In1, In2, In4 means a layer is absent from the declared stack.
         # Distinct from stackup_artwork_consistency, which counts artwork films;
         # this reads what the names themselves imply.
+        #
+        # Only when EVERY inner layer parsed. A hole in the surviving ordinals is
+        # otherwise indistinguishable from a layer that simply named itself
+        # something else: 'F.Cu / In1.Cu / GND / PWR / In4.Cu / B.Cu' parses {1, 4}
+        # and is complete, but read as "missing [2, 3]" -- an error-severity fault
+        # on a correctly ordered stack.
+        inner_total = max(0, len(copper) - 2)
         ordinals = sorted(idx for _pos, idx in inner_pairs)
-        if len(ordinals) >= 2 and ordinals == sorted(set(ordinals)):
+        if len(inner_pairs) < inner_total:
+            notes.append(
+                f"{inner_total - len(inner_pairs)} of {inner_total} inner copper "
+                f"layer(s) do not use a recognised numbering convention, so the "
+                f"gap rule was skipped; only the ordering of the named ones was "
+                f"checked."
+            )
+        elif len(ordinals) >= 2 and ordinals == sorted(set(ordinals)):
             expected = list(range(ordinals[0], ordinals[-1] + 1))
             missing = [o for o in expected if o not in ordinals]
             if missing:

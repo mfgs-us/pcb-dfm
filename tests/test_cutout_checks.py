@@ -306,6 +306,16 @@ def test_pad_at_the_lip_of_someone_elses_cutout_is_still_flagged(tmp_path):
     assert r.status == "warning"
 
 
+def test_a_second_board_profile_is_not_treated_as_a_cutout(tmp_path):
+    """A panelised outline carries several board profiles. Sorting by area and
+    calling everything below the largest an interior void made the second profile
+    milled-away material, and every pad on it a finding."""
+    second = [(50.0, 0.0), (80.0, 0.0), (80.0, 20.0), (50.0, 20.0)]
+    path = _outline_gerber(tmp_path, _BOUNDARY, [second])
+    r = _run("pad_over_cutout", _dd_with_pad(60.0, 10.0), path)
+    assert r.status == "not_applicable", [v.message for v in r.violations]
+
+
 def test_board_without_cutouts_is_not_applicable(tmp_path):
     path = _outline_gerber(tmp_path, _BOUNDARY)
     r = _run("pad_over_cutout", _dd_with_pad(20.0, 15.0), path)

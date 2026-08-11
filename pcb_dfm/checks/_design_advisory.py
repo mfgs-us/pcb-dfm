@@ -109,6 +109,11 @@ def outline_contours(ctx: CheckContext) -> Tuple[
     smaller ones are internal cutouts and slots -- which are **also real edges**,
     a fact the copper-facing checks already honour and the component-facing ones
     did not.
+
+    "Smaller" is not enough on its own to make a ring interior: a panelised
+    outline carries several board profiles, and a second profile is not a void in
+    the first. Only rings that actually lie inside the boundary are returned as
+    cutouts, since the callers treat every one of them as milled-away material.
     """
     ingest = getattr(ctx, "ingest", None)
     outline_files = [
@@ -123,7 +128,12 @@ def outline_contours(ctx: CheckContext) -> Tuple[
     if not rings:
         return None, []
     rings.sort(key=lambda t: t[0], reverse=True)
-    return rings[0][1], [verts for _a, verts in rings[1:]]
+    boundary = rings[0][1]
+    cutouts = [
+        verts for _a, verts in rings[1:]
+        if point_inside(boundary, *interior_point(verts))
+    ]
+    return boundary, cutouts
 
 
 def board_contour_verts(ctx: CheckContext) -> Optional[List[Tuple[float, float]]]:

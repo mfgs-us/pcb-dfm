@@ -116,6 +116,15 @@ def test_impossible_er_fails():
     assert any("physically impossible" in v.message for v in r.violations)
 
 
+def test_ceramic_filled_rf_laminate_is_not_a_data_error():
+    """Rogers RO3010 / AD1000 run to Dk ~10.2. A 2-10 band called a correct RF
+    stackup a data error; the band exists to catch a Dk of 4300, which a wide
+    band still catches."""
+    layers = [cu("F.Cu"), di("ro3010", 0.5, 10.2, "core"), cu("B.Cu")]
+    r = run("stackup_construction_validity", layers)
+    assert r.status == "pass", [v.message for v in r.violations]
+
+
 def test_er_in_wrong_units_fails():
     # 4300 instead of 4.3 -- a units/scale error, not an exotic laminate.
     layers = [cu("F.Cu"), di("pp1", 0.1, 4300.0), cu("In1.Cu"), di("pp2", 0.1, 4.2), cu("B.Cu")]
@@ -199,6 +208,16 @@ def test_gap_in_inner_numbering_fails():
     r = run("stackup_layer_order", layers)
     assert r.status == "fail"
     assert any("gaps" in v.message for v in r.violations)
+
+
+def test_unparsed_inner_names_skip_the_gap_rule():
+    """GND/PWR name themselves, not an ordinal. Running the gap rule over only
+    the layers that parsed reported a complete 6-layer stack as missing [2, 3]."""
+    layers = [cu("F.Cu"), di("d1"), cu("In1.Cu"), di("d2"), cu("GND"), di("d3"),
+              cu("PWR"), di("d4"), cu("In4.Cu"), di("d5"), cu("B.Cu")]
+    r = run("stackup_layer_order", layers)
+    assert r.status == "pass", [v.message for v in r.violations]
+    assert any("gap rule was skipped" in v.message for v in r.violations)
 
 
 def test_l_numbering_convention_is_understood():

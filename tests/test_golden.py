@@ -81,14 +81,24 @@ _CORPUS_BOARDS = _corpus_entries()
 @pytest.mark.parametrize("name,board", _CORPUS_BOARDS, ids=[n for n, _ in _CORPUS_BOARDS])
 def test_golden_corpus(name, board):
     from pcb_dfm.engine.run import run_dfm_on_gerber_zip
+    from pcb_dfm.ingest.kicad_native import GEOMETRY_SOURCE_KICAD_NATIVE
 
     # Feed the board's own design data when it ships some, so the golden covers
     # the net-aware and footprint-aware paths rather than only the artwork ones.
     sidecar = _TESTDATA / f"{board.stem}.ipc"
     design_data = str(sidecar) if sidecar.is_file() else None
 
+    # Pinned to the native renderer so the baseline is a property of THIS
+    # code, not of the host: under "auto" the digest silently depends on
+    # whether kicad-cli is installed, and baselining kicad-cli's output would
+    # also make a KiCad point release look like an engine regression.
     digest = boards.result_digest(
-        run_dfm_on_gerber_zip(board, ruleset_id="default", design_data=design_data)
+        run_dfm_on_gerber_zip(
+            board,
+            ruleset_id="default",
+            design_data=design_data,
+            kicad_render=GEOMETRY_SOURCE_KICAD_NATIVE,
+        )
     )
     baseline = _BASELINES / "corpus" / f"{name}.json"
 

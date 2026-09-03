@@ -53,12 +53,55 @@ def _discovered_registers(design_data, ingest_result) -> bool:
     return register_to_board(design_data, drills) is not None
 
 
+#: ``kicad_render="auto"`` -- let the engine pick: KiCad's own plotter when it
+#: is installed, the built-in native renderer otherwise. The two other accepted
+#: values are the ``GEOMETRY_SOURCE_KICAD_*`` constants, which pin the choice.
+KICAD_RENDER_AUTO = "auto"
+
+
+def _select_kicad_render(kicad_render: str) -> str:
+    """Which renderer a KiCad input gets: the one asked for, or for ``auto``,
+    kicad-cli when installed and the native renderer otherwise.
+
+    Kept separate from the run so the choice is testable without KiCad
+    installed. An explicit request for a renderer that is not available fails
+    loudly rather than falling back: a caller that pinned the source did so
+    because the source matters to it.
+    """
+    from ..ingest import kicad_export
+    from ..ingest.kicad_export import GEOMETRY_SOURCE_KICAD_CLI
+    from ..ingest.kicad_native import GEOMETRY_SOURCE_KICAD_NATIVE
+
+    if kicad_render == KICAD_RENDER_AUTO:
+        return (
+            GEOMETRY_SOURCE_KICAD_CLI
+            if kicad_export.kicad_cli_path() is not None
+            else GEOMETRY_SOURCE_KICAD_NATIVE
+        )
+    if kicad_render == GEOMETRY_SOURCE_KICAD_CLI:
+        if kicad_export.kicad_cli_path() is None:
+            raise ValueError(
+                f"kicad_render={GEOMETRY_SOURCE_KICAD_CLI!r} was requested but "
+                f"kicad-cli is not installed; use "
+                f"{GEOMETRY_SOURCE_KICAD_NATIVE!r} or {KICAD_RENDER_AUTO!r}"
+            )
+        return GEOMETRY_SOURCE_KICAD_CLI
+    if kicad_render == GEOMETRY_SOURCE_KICAD_NATIVE:
+        return GEOMETRY_SOURCE_KICAD_NATIVE
+    raise ValueError(
+        f"unknown kicad_render: {kicad_render!r} (expected "
+        f"{KICAD_RENDER_AUTO!r}, {GEOMETRY_SOURCE_KICAD_CLI!r} or "
+        f"{GEOMETRY_SOURCE_KICAD_NATIVE!r})"
+    )
+
+
 def run_dfm_on_gerber_zip(
     gerber_zip: Path,
     ruleset_id: str,
     design_id: str = "board",
     design_data=None,
     bom=None,
+    kicad_render: str = KICAD_RENDER_AUTO,
 ) -> DfmResult:
     """
     High level entry point:
@@ -72,12 +115,20 @@ def run_dfm_on_gerber_zip(
     designator, enriching component identity for the assembly checks.
 
     ``gerber_zip`` may also be a KiCad board or project directory. In that case
-    KiCad's own plotter is invoked to produce the artwork (which fills zones, so
-    poured copper is real rather than whatever fill state the file was saved
-    in), and the board file doubles as the design-data source. The result then
-    records ``geometry_source="kicad-cli-export"``: such a run answers "is this
-    design manufacturable", not "is this fabrication package correct", because
-    an export performed here cannot contain the user's export-time mistakes.
+    the artwork is produced from the board file (zones are filled, so poured
+    copper is real rather than whatever fill state the file was saved in), and
+    the board file doubles as the design-data source. The result then records
+    ``geometry_source="kicad-cli-export"`` or ``"kicad-native"``: such a run
+    answers "is this design manufacturable", not "is this fabrication package
+    correct", because an export performed here cannot contain the user's
+    export-time mistakes.
+
+    ``kicad_render`` picks which renderer does that. The default ``"auto"``
+    uses KiCad's own plotter when kicad-cli is installed and the built-in
+    native renderer otherwise -- so the geometry depends on what is installed
+    on the machine. Pass ``"kicad-cli-export"`` or ``"kicad-native"`` to pin it
+    when that matters (a reproducible baseline, or comparing what KiCad exports
+    against what the board file itself says). Ignored for Gerber input.
     """
     from ..ingest.design_data import discover_design_data, load_design_data
 
@@ -86,7 +137,6 @@ def run_dfm_on_gerber_zip(
         GEOMETRY_SOURCE_GERBER,
         GEOMETRY_SOURCE_KICAD_CLI,
         export_gerber_zip,
-        kicad_cli_path,
         looks_like_kicad_project,
     )
     from ..ingest.kicad_native import (
@@ -97,16 +147,15 @@ def run_dfm_on_gerber_zip(
     geometry_source = GEOMETRY_SOURCE_GERBER
     if looks_like_kicad_project(gerber_zip):
         source_project = Path(gerber_zip)
-        # Prefer KiCad's own plotter when it is installed: it applies the
-        # project's real plot settings, so the artwork matches what the user
-        # would actually export. The native renderer needs nothing installed but
-        # is our reading of the board file, not KiCad's.
-        if kicad_cli_path() is not None:
+        # Under "auto" we prefer KiCad's own plotter when it is installed: it
+        # applies the project's real plot settings, so the artwork matches what
+        # the user would actually export. The native renderer needs nothing
+        # installed but is our reading of the board file, not KiCad's.
+        geometry_source = _select_kicad_render(kicad_render)
+        if geometry_source == GEOMETRY_SOURCE_KICAD_CLI:
             gerber_zip = export_gerber_zip(source_project)
-            geometry_source = GEOMETRY_SOURCE_KICAD_CLI
         else:
             gerber_zip = render_to_gerber_zip(source_project)
-            geometry_source = GEOMETRY_SOURCE_KICAD_NATIVE
         # The board file is also the richest design-data source available, so
         # use it unless the caller supplied something explicitly.
         if design_data is None:

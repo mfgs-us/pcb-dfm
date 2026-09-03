@@ -21,6 +21,7 @@ import pytest
 
 pytest.importorskip("gerbonara", reason="gerbonara not installed")
 
+from pcb_dfm.ingest.kicad_export import kicad_cli_path  # noqa: E402
 from pcb_dfm.ingest.kicad_native import (  # noqa: E402
     GEOMETRY_SOURCE_KICAD_NATIVE,
     render_to_gerber_zip,
@@ -177,10 +178,20 @@ def test_zone_fill_is_rendered_at_its_true_area(tmp_path):
 # End to end
 # --------------------------------------------------------------------------
 def test_running_straight_from_a_board_file_records_its_provenance(tmp_path):
-    """`pcb-dfm run board.kicad_pcb` with nothing installed."""
+    """`pcb-dfm run board.kicad_pcb` on the native renderer.
+
+    Pinned with ``kicad_render`` rather than left to "auto": under auto this
+    test only exercised the native path on machines with no KiCad installed,
+    so it passed in CI and failed on a developer's laptop for no reason but
+    what happened to be on PATH.
+    """
     from pcb_dfm.engine.run import run_dfm_on_gerber_zip
 
-    res = run_dfm_on_gerber_zip(_write(tmp_path, _ZONE_FILLED), ruleset_id="default")
+    res = run_dfm_on_gerber_zip(
+        _write(tmp_path, _ZONE_FILLED),
+        ruleset_id="default",
+        kicad_render=GEOMETRY_SOURCE_KICAD_NATIVE,
+    )
     assert res.summary.geometry_source == GEOMETRY_SOURCE_KICAD_NATIVE
     assert any("export-time" in w for w in res.warnings), (
         "a design-file run must not imply it audited the user's fab package"
@@ -221,3 +232,73 @@ def test_unparseable_kicad_board_raises_actionable_error(tmp_path):
     msg = str(ei.value)
     assert "20211014" in msg          # names the file version
     assert "kicad-cli" in msg         # actionable guidance
+
+
+# --------------------------------------------------------------------------
+# Renderer selection
+#
+# Which renderer a KiCad input gets used to depend purely on whether kicad-cli
+# happened to be on the machine, so CI (no KiCad) and a developer laptop (KiCad
+# installed) each exercised one branch and neither exercised both. These cover
+# the choice itself, with no KiCad needed either way.
+# --------------------------------------------------------------------------
+def test_auto_prefers_kicad_cli_when_it_is_installed(monkeypatch):
+    from pcb_dfm.engine.run import KICAD_RENDER_AUTO, _select_kicad_render
+    from pcb_dfm.ingest import kicad_export
+
+    monkeypatch.setattr(kicad_export, "kicad_cli_path", lambda: "/usr/bin/kicad-cli")
+    assert _select_kicad_render(KICAD_RENDER_AUTO) == kicad_export.GEOMETRY_SOURCE_KICAD_CLI
+
+
+def test_auto_falls_back_to_the_native_renderer(monkeypatch):
+    from pcb_dfm.engine.run import KICAD_RENDER_AUTO, _select_kicad_render
+    from pcb_dfm.ingest import kicad_export
+
+    monkeypatch.setattr(kicad_export, "kicad_cli_path", lambda: None)
+    assert _select_kicad_render(KICAD_RENDER_AUTO) == GEOMETRY_SOURCE_KICAD_NATIVE
+
+
+def test_pinning_a_renderer_overrides_what_is_installed(monkeypatch):
+    """The point of the parameter: a pinned source does not vary by host."""
+    from pcb_dfm.engine.run import _select_kicad_render
+    from pcb_dfm.ingest import kicad_export
+
+    for installed in ("/usr/bin/kicad-cli", None):
+        monkeypatch.setattr(kicad_export, "kicad_cli_path", lambda: installed)
+        assert _select_kicad_render(GEOMETRY_SOURCE_KICAD_NATIVE) == GEOMETRY_SOURCE_KICAD_NATIVE
+
+
+def test_asking_for_kicad_cli_without_kicad_fails_loudly(monkeypatch):
+    """Silently falling back is what made the provenance bug invisible."""
+    from pcb_dfm.engine.run import _select_kicad_render
+    from pcb_dfm.ingest import kicad_export
+
+    monkeypatch.setattr(kicad_export, "kicad_cli_path", lambda: None)
+    with pytest.raises(ValueError, match="kicad-cli is not installed"):
+        _select_kicad_render(kicad_export.GEOMETRY_SOURCE_KICAD_CLI)
+
+
+def test_an_unknown_renderer_is_rejected():
+    from pcb_dfm.engine.run import _select_kicad_render
+
+    with pytest.raises(ValueError, match="unknown kicad_render"):
+        _select_kicad_render("imagemagick")
+
+
+@pytest.mark.skipif(kicad_cli_path() is None, reason="kicad-cli not installed")
+def test_the_kicad_cli_path_runs_end_to_end(tmp_path):
+    """The kicad-cli tier, on machines that have KiCad.
+
+    Skipped rather than silently untested: CI has no KiCad, so this branch was
+    previously covered only by accident on developer machines.
+    """
+    from pcb_dfm.engine.run import run_dfm_on_gerber_zip
+    from pcb_dfm.ingest.kicad_export import GEOMETRY_SOURCE_KICAD_CLI
+
+    res = run_dfm_on_gerber_zip(
+        _write(tmp_path, _ZONE_FILLED),
+        ruleset_id="default",
+        kicad_render=GEOMETRY_SOURCE_KICAD_CLI,
+    )
+    assert res.summary.geometry_source == GEOMETRY_SOURCE_KICAD_CLI
+    assert any("export-time" in w for w in res.warnings)

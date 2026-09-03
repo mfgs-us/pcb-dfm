@@ -31,6 +31,7 @@ def _cmd_run(args: argparse.Namespace) -> int:
         design_id=args.design_id,
         design_data=args.design_data,
         bom=args.bom,
+        kicad_render=args.kicad_render,
     )
 
     if args.format == "json":
@@ -52,6 +53,9 @@ def _cmd_run(args: argparse.Namespace) -> int:
     return 0
 
 
+#: Values accepted by --kicad-render (see engine.run.run_dfm_on_gerber_zip).
+_KICAD_RENDER_CHOICES = ("auto", "kicad-cli-export", "kicad-native")
+
 _STATUS_ORDER = {"pass": 0, "warning": 1, "fail": 2}
 _FAIL_ON_LEVEL = {"never": 99, "warning": 1, "fail": 2}
 
@@ -69,6 +73,7 @@ def _cmd_gate(args: argparse.Namespace) -> int:
         design_id=args.design_id,
         design_data=args.design_data,
         bom=args.bom,
+        kicad_render=args.kicad_render,
     )
 
     def _write(path, text):
@@ -168,6 +173,8 @@ def build_parser() -> argparse.ArgumentParser:
                        help="design-data source: a KiCad project dir/.kicad_pcb, a JSON sidecar, or IPC-2581 XML (stackup / nets / placement)")
     p_run.add_argument("--bom", default=None,
                        help="BOM CSV, merged onto placement by refdes (part id / DNP for assembly checks)")
+    p_run.add_argument("--kicad-render", choices=_KICAD_RENDER_CHOICES, default="auto",
+                       help="which renderer turns a KiCad board into artwork: auto (kicad-cli when installed, else the built-in native renderer), or pin one for a reproducible result")
     p_run.add_argument("--format", choices=["text", "markdown", "json", "html"], default="text")
     p_run.add_argument("-o", "--output", default=None)
     p_run.set_defaults(func=_cmd_run)
@@ -179,6 +186,8 @@ def build_parser() -> argparse.ArgumentParser:
     p_gate.add_argument("--design-data", default=None)
     p_gate.add_argument("--bom", default=None,
                         help="BOM CSV, merged onto placement by refdes")
+    p_gate.add_argument("--kicad-render", choices=_KICAD_RENDER_CHOICES, default="auto",
+                        help="which renderer turns a KiCad board into artwork: auto (kicad-cli when installed, else the built-in native renderer), or pin one for a reproducible result")
     p_gate.add_argument("--fail-on", choices=["never", "warning", "fail"], default="fail",
                         help="exit non-zero when overall status reaches this level")
     p_gate.add_argument("--min-score", type=float, default=None,
